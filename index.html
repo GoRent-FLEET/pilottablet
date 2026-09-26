@@ -61,10 +61,10 @@ html,body{height:100%;overflow:hidden;max-width:100%;background:var(--bg);color:
 .vc-meta{font-size:10px;color:var(--g5);margin-top:2px;}
 
 /* FLOW */
-.fhdr{background:#C7E9C0;border-radius:var(--r);padding:12px 16px;margin-bottom:12px;border-left:4px solid #12803c;color:#0b3a22;}
-.fhdr-fn{font-size:20px;font-weight:800;color:#0b3a22;}
+.fhdr{background:#C7E9C0;border-radius:var(--r);padding:8px 12px;margin-bottom:8px;border-left:4px solid #12803c;color:#0b3a22;}
+.fhdr-fn{font-size:18px;font-weight:800;color:#0b3a22;}
 .fhdr-fn span{font-size:13px;font-weight:400;color:#3d5c49;margin-left:8px;}
-.fhdr-cl{font-size:15px;color:#123d27;margin-top:4px;}
+.fhdr-cl{font-size:14px;color:#123d27;margin-top:2px;}
 .name-edit{margin-left:8px;border-radius:6px;padding:3px 8px;font-size:14px;line-height:1;cursor:pointer;border:1px solid var(--g3);background:var(--g0);}
 .fhdr .name-edit{border:1px solid rgba(11,58,34,.35);background:rgba(255,255,255,.85);color:#0b3a22;}
 .fhdr a,.fhdr .wa-chip{color:#0b6b33!important;}
@@ -2787,10 +2787,9 @@ function drawCO(){
             '<span class="fhdr-cl" style="font-size:13px;margin-top:0;white-space:nowrap;">\uD83D\uDCC5 '+(_cov.pu||'?')+' \u2192 '+(_cov.rt||'?')
               +(rentalDays(_cov)?'<span style="margin-left:6px;padding:2px 9px;border-radius:6px;background:rgba(11,58,34,.12);font-weight:800;color:#0b3a22;">'+rentalDays(_cov)+' days</span>':'')+'</span>'+
           '</div>'+
-          '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;">'+hdrTripChips(_cov)
+          '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:5px;">'+hdrTripChips(_cov)
             +'<span style="font-size:11px;font-weight:900;color:#7a3f00;padding:4px 10px;background:#ffffff;border:1px solid rgba(11,58,34,.25);border-radius:7px;white-space:nowrap;">\uD83E\uDDF9 '+_bx(co.prepBy||(APP_USER&&APP_USER.name)||'\u2014')+'</span>'
             +'</div>'+
-          ((co.contract&&placeChips(co.contract.pickup_location,co.contract.return_location))?'<div style="margin-top:4px;">'+placeChips(co.contract.pickup_location,co.contract.return_location)+'</div>':'')+
 
         '</div>'+
         '<div style="text-align:right">'+
@@ -2819,7 +2818,7 @@ function drawCO(){
       var tyreKm=(_cov.tyres&&_cov.tyres.lastKm&&_cov.tyres.intKm)?(_cov.tyres.lastKm+_cov.tyres.intKm-_cov.odo):null;
       var tyreTxt=tyreKm!==null?(tyreKm<=0?'⚠ Tyres DUE':'Tyres in '+tyreKm+' km'):'';
       var tyreCol=tyreKm!==null&&tyreKm<=0?'var(--rl)':tyreKm!==null&&tyreKm<2000?'var(--al)':'#3d5c49';
-      return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:8px 14px;border-top:1px solid rgba(11,58,34,.15);">'
+      return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:6px 12px;border-top:1px solid rgba(11,58,34,.15);">'
         +(function(){
           var missing=!licExp, bad=licExp&&licDiff<0, soon=licExp&&licDiff<=DISC_WARN_DAYS;
           var bg=missing||bad?'#d13636':soon?'#e08a00':'#ffffff';
@@ -6315,12 +6314,6 @@ function waChip(v){
   var ph=(v&&(v.phone||v.wa))||'';
   if(!ph)return '';
   return '<a href="https://wa.me/'+waNumber(ph)+'" target="_blank" class="wa-chip" style="color:#0d7a35;text-decoration:none;font-weight:800;">📱 '+_bx(ph)+'</a>';
-}
-function placeChips(pickup,ret){
-  var out='';
-  if(pickup&&pickup!==OFFICE_PLACE)out+='<span class="insp-flash" style="display:inline-block;background:var(--rg);border:1px solid var(--re);color:var(--rl);border-radius:8px;padding:2px 8px;font-size:12px;font-weight:900;margin-right:6px;">📍 COLLECT: '+_bx(pickup)+'</span>';
-  if(ret&&ret!==OFFICE_PLACE)out+='<span class="insp-flash" style="display:inline-block;background:var(--rg);border:1px solid var(--re);color:var(--rl);border-radius:8px;padding:2px 8px;font-size:12px;font-weight:900;">🚩 RETURN: '+_bx(ret)+'</span>';
-  return out;
 }
 function bkKey(v){return v?(v.fn+'_'+v.pu):'';}
 function curBkKey(fn){
