@@ -3501,8 +3501,8 @@ function coStep1(){
 
       <!-- Text details -->
       <div style="font-size:14px;font-weight:700;color:var(--g5);text-transform:uppercase;letter-spacing:.4px;margin:12px 0 8px;">② Check the details — correct anything read wrongly</div>
-      <div class="fg">
-        <div class="fi">
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
+        <div class="fi" style="flex:2 1 320px;min-width:240px;">
           <label>${isPrimary?'Full legal name (as on passport) *':'Full name (as on passport) *'}</label>
           ${isPrimary&&co.v.cl?`<div style="font-size:13px;color:var(--am);background:var(--ag);border:1px solid var(--am);border-radius:6px;padding:5px 10px;margin-bottom:6px;">
             📋 Booking name: <strong style="color:var(--al)">${co.v.cl}</strong> — verify and enter full legal name as per passport below
@@ -3514,18 +3514,18 @@ function coStep1(){
           ${isPrimary?`<datalist id="cl-names-list">${(typeof clientList!=='undefined'?clientList:[]).map(c=>`<option value="${c.full_name}">`).join('')}</datalist>`:''}
           ${isPrimary?`<div style="font-size:13px;color:var(--g5);margin-top:3px;">This name goes on the rental contract — use the passport spelling.</div>`:''}
         </div>
-        <div class="fi"><label>Date of birth</label>
-          <input id="dob${i}" inputmode="numeric" autocomplete="off" value="${d.dob||''}" placeholder="DD/MM/YYYY" maxlength="10"
-            oninput="dobType(this,${i})" style="border-color:${dobAge(d.dob)?'var(--gb)':'var(--g3)'}">
-          <div id="dob-note${i}" style="font-size:12px;font-weight:800;margin-top:3px;color:${dobAge(d.dob)?'var(--se)':'var(--rl)'};">${dobNote(d.dob)}</div>
+        <div class="fi" style="flex:1 1 200px;min-width:170px;"><label>Passport number</label>
+          <input value="${d.passport||''}" placeholder="Passport #" oninput="co.drivers[${i}].passport=this.value">
         </div>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
         <div class="fi" style="flex:1 1 150px;min-width:130px;"><label>Nationality</label>
           <input value="${d.nationality||''}" placeholder="e.g. German" oninput="co.drivers[${i}].nationality=this.value">
         </div>
-        <div class="fi" style="flex:1 1 160px;min-width:140px;"><label>Passport number</label>
-          <input value="${d.passport||''}" placeholder="Passport #" oninput="co.drivers[${i}].passport=this.value">
+        <div class="fi" style="flex:1 1 170px;min-width:150px;"><label>Date of birth</label>
+          <input id="dob${i}" inputmode="numeric" autocomplete="off" value="${d.dob||''}" placeholder="DD/MM/YYYY" maxlength="10"
+            oninput="dobType(this,${i})" style="border-color:${dobAge(d.dob)?'var(--gb)':'var(--g3)'}">
+          <div id="dob-note${i}" style="font-size:12px;font-weight:800;margin-top:3px;color:${dobAge(d.dob)?'var(--se)':'var(--rl)'};">${dobNote(d.dob)}</div>
         </div>
         <div class="fi" style="flex:1.4 1 260px;min-width:240px;"><label>Passport expiry</label>
           ${dtPickers('ppx'+i,d.ppExpiry||'',i,'ppExpiry')}
