@@ -3522,10 +3522,8 @@ function coStep1(){
         </div>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
-        <div class="fi" style="flex:1 1 170px;min-width:150px;"><label>Date of birth</label>
-          <input id="dob${i}" inputmode="numeric" autocomplete="off" value="${d.dob||''}" placeholder="DD/MM/YYYY" maxlength="10"
-            oninput="dobType(this,${i})" style="border-color:${dobAge(d.dob)?'var(--gb)':'var(--g3)'}">
-          <div id="dob-note${i}" style="font-size:12px;font-weight:800;margin-top:3px;color:${dobAge(d.dob)?'var(--se)':'var(--rl)'};">${dobNote(d.dob)}</div>
+        <div class="fi" style="flex:0 1 236px;min-width:230px;"><label>Date of birth</label>
+          ${dtPickers('dob'+i,d.dob||'',i,'dob','dob')}
         </div>
         <div class="fi" style="flex:0 1 236px;min-width:230px;"><label>Passport expiry</label>
           ${dtPickers('ppx'+i,d.ppExpiry||'',i,'ppExpiry')}
@@ -3692,21 +3690,6 @@ function dobNote(v){
   var age=dobAge(s);
   if(age)return '\u2713 '+age+' years old'+(age<21?' \u2014 under 21':(age<25?' \u2014 under 25':''));
   return s.length>=10?'\u26a0 Check this date':'';
-}
-function dobType(el,i){
-  var digits=String(el.value||'').replace(/\D/g,'').slice(0,8);
-  var out=digits;
-  if(digits.length>4)out=digits.slice(0,2)+'/'+digits.slice(2,4)+'/'+digits.slice(4);
-  else if(digits.length>2)out=digits.slice(0,2)+'/'+digits.slice(2);
-  var atEnd=el.selectionStart===el.value.length;
-  el.value=out;
-  if(atEnd)try{el.setSelectionRange(out.length,out.length);}catch(e){}
-  try{co.drivers[i].dob=out;}catch(e){}
-  var age=dobAge(out);
-  el.style.borderColor=age?'var(--gb)':(out.length>=10?'var(--re)':'var(--g3)');
-  var n=document.getElementById('dob-note'+i);
-  if(n){n.textContent=dobNote(out);n.style.color=age?'var(--se)':'var(--rl)';}
-  try{saveCOProgress();}catch(e){}
 }
 function coRedrawDrivers(){
   var s=document.getElementById('cos');if(!s)return;
@@ -7595,12 +7578,20 @@ function dtPickValue(id){
   if(!d||!m||!y||!d.value||!m.value||!y.value)return '';
   return d.value+'/'+m.value+'/'+y.value;
 }
-function dtPickChange(id,i,field){
+function dtPickChange(id,i,field,mode){
   var val=dtPickValue(id);
   try{if(co&&co.drivers&&co.drivers[i])co.drivers[i][field]=val;}catch(e){}
   var box=document.getElementById(id+'-box');
-  if(box)box.style.borderColor=val?'var(--gb)':'var(--g3)';
   var w=document.getElementById(id+'-warn');
+  if(mode==='dob'){
+    // a date of birth is only ever wrong or a number of years
+    var age=dobAge(val);
+    if(box)box.style.borderColor=age?'var(--gb)':(val?'var(--re)':'var(--g3)');
+    if(w){var n=dobNote(val);w.innerHTML=n;w.style.display=n?'':'none';w.style.color=age?'var(--se)':'var(--rl)';}
+    try{saveCOProgress();}catch(e){}
+    return;
+  }
+  if(box)box.style.borderColor=val?'var(--gb)':'var(--g3)';
   if(w){
     var msg='';
     if(val){
@@ -7609,28 +7600,32 @@ function dtPickChange(id,i,field){
       if(iso<new Date().toISOString().split('T')[0])msg='⚠ This date has already passed';
       else if(due&&iso<due)msg='⚠ Expires before the vehicle is due back on '+_dmy(due);
     }
-    w.innerHTML=msg;w.style.display=msg?'':'none';
+    w.innerHTML=msg;w.style.display=msg?'':'none';w.style.color='var(--rl)';
   }
   try{saveCOProgress();}catch(e){}
 }
-function dtPickers(id,value,i,field){
+// mode 'dob' offers birth years, newest first, and shows the age instead of an expiry warning
+function dtPickers(id,value,i,field,mode){
   var p=dtParse(value),thisYear=new Date().getFullYear(),k;
   var days=[],months=[],years=[];
   for(k=1;k<=31;k++)days.push([('0'+k).slice(-2),k]);
   for(k=0;k<12;k++)months.push([('0'+(k+1)).slice(-2),DT_MONTHS[k]]);
-  for(k=thisYear;k<=thisYear+15;k++)years.push([k,k]);
-  // a date already on file (or read off the passport) stays selectable even if it is old
+  if(mode==='dob'){ for(k=thisYear-16;k>=thisYear-95;k--)years.push([k,k]); }
+  else { for(k=thisYear;k<=thisYear+15;k++)years.push([k,k]); }
+  // a date already on file — read off the passport or licence — stays selectable
   if(p.y&&!years.some(function(x){return String(x[0])===String(p.y);}))years.unshift([p.y,p.y]);
+  var warn=(mode==='dob')?dobNote(value):'';
+  var okB=(mode==='dob')?(dobAge(value)?'var(--gb)':(value?'var(--re)':'var(--g3)')):(value?'var(--gb)':'var(--g3)');
   var sel=function(sid,label,opts,val,w){
-    return '<select id="'+sid+'" onchange="dtPickChange(\''+id+'\','+i+',\''+field+'\')" '
+    return '<select id="'+sid+'" onchange="dtPickChange(\''+id+'\','+i+',\''+field+'\',\''+(mode||'')+'\')" '
       +'style="color-scheme:dark;flex:0 0 auto;width:'+w+';padding:12px 4px;font-size:15px;font-weight:800;background:var(--g0);border:2px solid var(--g3);border-radius:var(--rs);color:var(--tx);">'
       +'<option value="">'+label+'</option>'
       +opts.map(function(o){return '<option value="'+o[0]+'"'+(String(val)===String(o[0])?' selected':'')+'>'+o[1]+'</option>';}).join('')
       +'</select>';
   };
-  return '<div id="'+id+'-box" style="display:inline-flex;gap:4px;padding:3px;border:2px solid '+(value?'var(--gb)':'var(--g3)')+';border-radius:var(--rs);">'
+  return '<div id="'+id+'-box" style="display:inline-flex;gap:4px;padding:3px;border:2px solid '+okB+';border-radius:var(--rs);">'
     +sel(id+'-d','Day',days,p.d,'64px')+sel(id+'-m','Month',months,p.m,'80px')+sel(id+'-y','Year',years,p.y,'76px')
-    +'</div><div id="'+id+'-warn" style="display:none;font-size:13px;font-weight:700;color:var(--rl);margin-top:3px;"></div>';
+    +'</div><div id="'+id+'-warn" style="display:'+(warn?'':'none')+';font-size:13px;font-weight:800;color:'+((mode==='dob'&&dobAge(value))?'var(--se)':'var(--rl)')+';margin-top:3px;">'+warn+'</div>';
 }
 function discPickValue(id){
   var d=document.getElementById(id+'-d'),m=document.getElementById(id+'-m'),y=document.getElementById(id+'-y');
