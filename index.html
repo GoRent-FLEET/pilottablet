@@ -3514,14 +3514,14 @@ function coStep1(){
           ${isPrimary?`<datalist id="cl-names-list">${(typeof clientList!=='undefined'?clientList:[]).map(c=>`<option value="${c.full_name}">`).join('')}</datalist>`:''}
           ${isPrimary?`<div style="font-size:13px;color:var(--g5);margin-top:3px;">This name goes on the rental contract — use the passport spelling.</div>`:''}
         </div>
-        <div class="fi" style="flex:1 1 200px;min-width:170px;"><label>Passport number</label>
+        <div class="fi" style="flex:1 1 190px;min-width:160px;"><label>Passport number</label>
           <input value="${d.passport||''}" placeholder="Passport #" oninput="co.drivers[${i}].passport=this.value">
+        </div>
+        <div class="fi" style="flex:0 1 130px;min-width:110px;"><label>Nationality</label>
+          <input value="${d.nationality||''}" placeholder="German" oninput="co.drivers[${i}].nationality=this.value">
         </div>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
-        <div class="fi" style="flex:1 1 150px;min-width:130px;"><label>Nationality</label>
-          <input value="${d.nationality||''}" placeholder="e.g. German" oninput="co.drivers[${i}].nationality=this.value">
-        </div>
         <div class="fi" style="flex:1 1 170px;min-width:150px;"><label>Date of birth</label>
           <input id="dob${i}" inputmode="numeric" autocomplete="off" value="${d.dob||''}" placeholder="DD/MM/YYYY" maxlength="10"
             oninput="dobType(this,${i})" style="border-color:${dobAge(d.dob)?'var(--gb)':'var(--g3)'}">
