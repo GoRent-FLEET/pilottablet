@@ -3506,42 +3506,47 @@ function coStep1(){
         ${d.passportImg&&!d.name?`<div style="font-size:13px;color:var(--al);margin-top:6px;">📖 Reading passport details automatically…</div>`:''}
       </div>
 
-      <!-- Text details -->
+      <!-- Text details: passport in one frame, licence in another -->
       <div style="font-size:14px;font-weight:700;color:var(--g5);text-transform:uppercase;letter-spacing:.4px;margin:12px 0 8px;">② Check the details — correct anything read wrongly</div>
-      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
-        <div class="fi" style="flex:2 1 320px;min-width:240px;">
-          <label>${isPrimary?'Full legal name (as on passport) *':'Full name (as on passport) *'}</label>
-          ${isPrimary&&co.v.cl?`<div style="font-size:13px;color:var(--am);background:var(--ag);border:1px solid var(--am);border-radius:6px;padding:5px 10px;margin-bottom:6px;">
-            📋 Booking name: <strong style="color:var(--al)">${co.v.cl}</strong> — verify and enter full legal name as per passport below
-          </div>`:''}
-          <input value="${d.name||''}" placeholder="${isPrimary?'Full legal name exactly as on passport':'Full name as on passport'}"
-            oninput="co.drivers[${i}].name=this.value${isPrimary?';co.clientName=this.value':''}"
-            style="${isPrimary&&!d.name?'border-color:var(--am)':''}"
-            ${isPrimary?'list="cl-names-list"':''}>
-          ${isPrimary?`<datalist id="cl-names-list">${(typeof clientList!=='undefined'?clientList:[]).map(c=>`<option value="${c.full_name}">`).join('')}</datalist>`:''}
-          ${isPrimary?`<div style="font-size:13px;color:var(--g5);margin-top:3px;">This name goes on the rental contract — use the passport spelling.</div>`:''}
-        </div>
-        <div class="fi" style="flex:1 1 190px;min-width:160px;"><label>Passport number</label>
-          <input value="${d.passport||''}" placeholder="Passport #" oninput="co.drivers[${i}].passport=this.value">
-        </div>
-        <div class="fi" style="flex:0 1 130px;min-width:110px;"><label>Nationality</label>
-          <input value="${d.nationality||''}" placeholder="German" oninput="co.drivers[${i}].nationality=this.value">
+
+      <!-- PASSPORT -->
+      <div style="border:2px solid #b8c6d4;border-radius:12px;padding:10px 12px 12px;margin-bottom:10px;background:#fbfcfe;">
+        <div style="font-size:12px;font-weight:900;color:#000;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">🛂 Passport</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;">
+          <div class="fi" style="flex:2 1 300px;min-width:240px;margin-bottom:0;">
+            <label>${isPrimary?'Full legal name (as on passport) *':'Full name (as on passport) *'}</label>
+            <input value="${d.name||''}" placeholder="${isPrimary?'Full legal name exactly as on passport':'Full name as on passport'}"
+              oninput="co.drivers[${i}].name=this.value${isPrimary?';co.clientName=this.value':''}"
+              style="${isPrimary&&!d.name?'border-color:var(--am)':''}"
+              ${isPrimary?'list="cl-names-list"':''}>
+            ${isPrimary?`<datalist id="cl-names-list">${(typeof clientList!=='undefined'?clientList:[]).map(c=>`<option value="${c.full_name}">`).join('')}</datalist>`:''}
+            ${isPrimary&&co.v.cl?`<div style="font-size:12px;color:var(--al);margin-top:3px;">📋 Booking says <strong>${co.v.cl}</strong> — use the passport spelling; it goes on the contract</div>`:''}
+          </div>
+          <div class="fi" style="flex:1 1 170px;min-width:150px;margin-bottom:0;"><label>Passport number</label>
+            <input value="${d.passport||''}" placeholder="Passport #" oninput="co.drivers[${i}].passport=this.value">
+          </div>
+          <div class="fi" style="flex:0 1 120px;min-width:105px;margin-bottom:0;"><label>Nationality</label>
+            <input value="${d.nationality||''}" placeholder="German" oninput="co.drivers[${i}].nationality=this.value">
+          </div>
+          <div class="fi" style="flex:0 1 236px;min-width:230px;margin-bottom:0;"><label>Date of birth</label>
+            ${dtPickers('dob'+i,d.dob||'',i,'dob','dob')}
+          </div>
+          <div class="fi" style="flex:0 1 236px;min-width:230px;margin-bottom:0;"><label>Passport expiry</label>
+            ${dtPickers('ppx'+i,d.ppExpiry||'',i,'ppExpiry')}
+          </div>
         </div>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
-        <div class="fi" style="flex:0 1 236px;min-width:230px;"><label>Date of birth</label>
-          ${dtPickers('dob'+i,d.dob||'',i,'dob','dob')}
-        </div>
-        <div class="fi" style="flex:0 1 236px;min-width:230px;"><label>Passport expiry</label>
-          ${dtPickers('ppx'+i,d.ppExpiry||'',i,'ppExpiry')}
-        </div>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:10px;">
-        <div class="fi" style="flex:1 1 200px;min-width:160px;"><label>Driver's licence #</label>
-          <input value="${d.licNo||''}" placeholder="Licence number" oninput="co.drivers[${i}].licNo=this.value">
-        </div>
-        <div class="fi" style="flex:0 1 236px;min-width:230px;"><label>Licence expiry</label>
-          ${dtPickers('lcx'+i,d.licExpiry||'',i,'licExpiry')}
+
+      <!-- DRIVER'S LICENCE -->
+      <div style="border:2px solid #c8bcd8;border-radius:12px;padding:10px 12px 12px;margin-bottom:10px;background:#fcfbfe;">
+        <div style="font-size:12px;font-weight:900;color:#000;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">🚗 Driver's licence</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;">
+          <div class="fi" style="flex:1 1 200px;min-width:160px;margin-bottom:0;"><label>Licence number</label>
+            <input value="${d.licNo||''}" placeholder="Licence number" oninput="co.drivers[${i}].licNo=this.value">
+          </div>
+          <div class="fi" style="flex:0 1 236px;min-width:230px;margin-bottom:0;"><label>Licence expiry</label>
+            ${dtPickers('lcx'+i,d.licExpiry||'',i,'licExpiry')}
+          </div>
         </div>
       </div>
       ${isPrimary?`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
