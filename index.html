@@ -4201,6 +4201,15 @@ function ctMissing(c){
   return m;
 }
 function previewAndSignContract(){
+  // If anything in here throws, the button used to do nothing at all and there was no
+  // way to tell why. Now it says so on screen and writes the detail to the console.
+  try{ _previewAndSignContract(); }
+  catch(e){
+    console.error('previewAndSignContract:',e);
+    try{toast('Could not open the contract: '+(e&&e.message||e),'err');}catch(e2){alert('Could not open the contract: '+(e&&e.message||e));}
+  }
+}
+function _previewAndSignContract(){
   gatherContract();
   const c=co.contract;
   const _miss=ctMissing(c);
