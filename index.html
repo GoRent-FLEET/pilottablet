@@ -3441,7 +3441,7 @@ function signEquip(){
 // ── STEP 1: Client ID Documents ──────────────────────────────────
 
 // Contract step: who is doing it (mainly Christina; Simon, Nelson, Joe and Robbie can also do it)
-var CONTRACT_STAFF=['Christina','Simon','Nelson','Joe','Robbie'];
+var CONTRACT_STAFF=['Christina','Simon','Nelson','Joe','Robbie','Peter'];
 // Ask who is doing the contract as soon as Step 5 opens — before any photos are taken
 function ctWhoModal(){
   if(document.getElementById('ct-who-modal'))return;
@@ -4263,8 +4263,9 @@ function _previewAndSignContract(){
 
       <!-- Sign button -->
       <div style="padding:10px 14px;background:#fff;">
-        <button id="ct-sign-btn" onclick="submitContractSig()" style="width:100%;padding:18px;background:${_miss.length?'#bbb':'#3ddc84'};border:none;border-radius:12px;font-size:17px;font-weight:800;color:#052010;cursor:pointer;font-family:inherit;letter-spacing:-.2px;">
-          ${_miss.length?'🔒 Complete the contract details first ('+_miss.length+' outstanding)':'✍️ I have read and accept — Sign Rental Contract'}
+        ${(_miss.length&&isAdmin())?'<button onclick="overrideContractMissing()" style="width:100%;padding:13px;margin-bottom:8px;border-radius:10px;font-size:14px;font-weight:900;cursor:pointer;border:2px dashed #b36a00;background:#fff6e5;color:#8a4d00;">\uD83D\uDD13 Peter only \u2014 finalise without the outstanding items</button>':''}
+        <button id="ct-sign-btn" onclick="submitContractSig()" style="width:100%;padding:18px;background:${(_miss.length&&!co._ctOverride)?'#bbb':'#3ddc84'};border:none;border-radius:12px;font-size:17px;font-weight:800;color:#052010;cursor:pointer;font-family:inherit;letter-spacing:-.2px;">
+          ${(_miss.length&&!co._ctOverride)?'🔒 Complete the contract details first ('+_miss.length+' outstanding)':(co._ctOverride?'⚠️ Sign — '+co._ctOverride.n+' item(s) waived by '+co._ctOverride.by:'✍️ I have read and accept — Sign Rental Contract')}
         </button>
       </div>
     </div>`;
@@ -4440,6 +4441,7 @@ function ctNameCopy(){
 }
 async function submitContractSig(){
   var _m=ctMissing(co.contract);
+  if(_m.length&&co._ctOverride)_m=[];   // Peter has taken responsibility for what is missing
   if(_m.length){
     toast(_m.length+' contract item'+(_m.length===1?'':'s')+' outstanding — go ← Back and complete them first','err');
     var _b=document.getElementById('ct-miss-box');if(_b)_b.scrollIntoView({behavior:'smooth',block:'start'});
@@ -4739,6 +4741,28 @@ function anyOverride(){
     for(var n=0;n<=7;n++){var o=stepOverride(n);if(o)out.push({step:n,o:o});}
     return out;
   }catch(e){return [];}
+}
+// Peter finalising a contract that is not complete. Same rules as the handover
+// override: only Peter, a reason is required, nothing is invented, and what was
+// waived is written onto the contract and into the office record.
+function overrideContractMissing(){
+  if(!isAdmin()){toast('\uD83D\uDD12 Only Peter can finalise an incomplete contract','err');return;}
+  var miss=ctMissing(co.contract)||[];
+  if(!miss.length){toast('Nothing outstanding','ok');return;}
+  var why=prompt('FINALISE WITHOUT THESE '+miss.length+' ITEM(S)\n\n \u2022 '+miss.join('\n \u2022 ')
+    +'\n\nThis is recorded against your name, on the contract and in the office record.\n\nWhy are these being waived?');
+  if(why===null)return;
+  why=String(why||'').trim();
+  if(why.length<4){toast('Give a short reason \u2014 it goes on the record','err');return;}
+  co._ctOverride={by:(APP_USER&&APP_USER.name)||'Peter',at:now(),reason:why,items:miss.slice(),n:miss.length};
+  co.contract=co.contract||{};
+  co.contract.override_by=co._ctOverride.by;
+  co.contract.override_at=co._ctOverride.at;
+  co.contract.override_reason=why;
+  co.contract.override_items=miss.join(' \u00b7 ');
+  try{saveCOProgress();}catch(e){}
+  toast('\u26a0 '+miss.length+' item(s) waived \u2014 recorded against '+co._ctOverride.by,'err');
+  try{var m=document.getElementById('contract-modal');if(m)m.remove();previewAndSignContract();}catch(e){}
 }
 function overrideSigBtn(){
   if(!isAdmin())return '';
@@ -5284,6 +5308,7 @@ async function completeCO(){
     handover_by:co.mechBy, customer_name:co.clientName,
     customer_signed_at:(co.custSig||co.sigOverride)?new Date().toISOString():null,
     signature_override:co.sigOverride?(co.sigOverride.by+' · '+co.sigOverride.at+' · '+co.sigOverride.reason):null,
+    contract_override:co._ctOverride?(co._ctOverride.by+' · '+co._ctOverride.at+' · waived: '+co._ctOverride.items.join('; ')+' · reason: '+co._ctOverride.reason):null,
     manager_name:co.mgmtBy, manager_signed_at:co.mgmtSig?new Date().toISOString():null,
     odo_out:co.odometerOut||co.v.odo, unchecked_prep:uncPrep, unchecked_mech:uncMech,
     damage_panels:co.dmgd, prep_checklist:co.prepItems||{}, mech_checklist:co.mechItems||{}, mech_by:co.mechCheckBy||null, mech_who:co.mechWho||{}, return_time:co.returnTime||null,
@@ -8338,6 +8363,11 @@ function buildContractHTML(c,sigUrl){
         ${sigUrl?`<img src="${sigUrl}" style="max-height:56px;max-width:100%;height:auto;width:auto;display:block;" alt="Renter signature">`:'<span style="color:#ccc;font-size:13px;font-style:italic;">Sign here</span>'}
       </div>
       ${sigUrl?`<div style="font-size:13px;color:#1e8449;margin-top:4px;">✓ Digitally signed — ${fDT(c.client_signed_at)}</div>`:''}
+      ${c.override_by?`<div style="margin-top:6px;padding:8px 10px;border:2px solid #b45309;border-radius:6px;background:#fffbeb;font-size:12px;color:#7a3f00;line-height:1.5;">
+        <strong>⚠ FINALISED WITH ITEMS OUTSTANDING</strong><br>
+        Authorised by ${c.override_by} on ${c.override_at}<br>
+        Outstanding: ${c.override_items||'—'}<br>
+        Reason: ${c.override_reason||'—'}</div>`:''}
     </div>
     <div>
       <div style="min-height:64px;display:flex;align-items:flex-end;"><img src="${GR_SIG}" alt="Go Rent signature" style="max-height:64px;max-width:100%;display:block;"></div>
