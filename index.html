@@ -2780,13 +2780,18 @@ function drawCO(){
     '<div class="fhdr">'+
       '<div style="display:flex;justify-content:space-between;align-items:flex-start">'+
         '<div>'+
-          '<div class="fhdr-fn">'+co.fn+' <span>'+_cov.reg+'</span></div>'+
-          '<div class="fhdr-cl">'+(co.clientName||_cov.cl||'No booking')+nameEditBtn(bkKey(_cov),co.clientName||_cov.cl,'drawCO')+(waChip(_cov)?' · '+waChip(_cov):'')+'</div>'+
-          '<div class="fhdr-cl" style="font-size:13px;opacity:.7;margin-top:1px">📅 '+(_cov.pu||'?')+' → '+(_cov.rt||'?')
-            +(rentalDays(_cov)?'<span style="margin-left:8px;padding:2px 9px;border-radius:6px;background:rgba(11,58,34,.12);font-weight:800;opacity:1;color:#0b3a22;">'+rentalDays(_cov)+' days</span>':'')+'</div>'+
-          '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">'+hdrTripChips(_cov)+'</div>'+
+          // fleet number, client, WhatsApp and the dates all on one line
+          '<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;">'+
+            '<span class="fhdr-fn">'+co.fn+' <span>'+_cov.reg+'</span></span>'+
+            '<span class="fhdr-cl" style="margin-top:0;">'+(co.clientName||_cov.cl||'No booking')+nameEditBtn(bkKey(_cov),co.clientName||_cov.cl,'drawCO')+(waChip(_cov)?' \u00b7 '+waChip(_cov):'')+'</span>'+
+            '<span class="fhdr-cl" style="font-size:13px;margin-top:0;white-space:nowrap;">\uD83D\uDCC5 '+(_cov.pu||'?')+' \u2192 '+(_cov.rt||'?')
+              +(rentalDays(_cov)?'<span style="margin-left:6px;padding:2px 9px;border-radius:6px;background:rgba(11,58,34,.12);font-weight:800;color:#0b3a22;">'+rentalDays(_cov)+' days</span>':'')+'</span>'+
+          '</div>'+
+          '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;">'+hdrTripChips(_cov)
+            +'<span style="font-size:11px;font-weight:900;color:#7a3f00;padding:4px 10px;background:#ffffff;border:1px solid rgba(11,58,34,.25);border-radius:7px;white-space:nowrap;">\uD83E\uDDF9 '+_bx(co.prepBy||(APP_USER&&APP_USER.name)||'\u2014')+'</span>'
+            +'</div>'+
           ((co.contract&&placeChips(co.contract.pickup_location,co.contract.return_location))?'<div style="margin-top:4px;">'+placeChips(co.contract.pickup_location,co.contract.return_location)+'</div>':'')+
-          '<div style="margin-top:4px;display:flex;align-items:center;gap:6px;">'+'<span style="font-size:10px;font-weight:800;color:#4a6b57;text-transform:uppercase;letter-spacing:.3px;">Prepared by</span>'+'<span style="font-size:11px;font-weight:900;color:var(--am);padding:1px 8px;background:rgba(245,166,35,.15);border-radius:4px;">'+(co.prepBy||APP_USER&&APP_USER.name||'—')+'</span></div>'+
+
         '</div>'+
         '<div style="text-align:right">'+
           '<span style="display:inline-block;margin-bottom:6px;font-size:14px;font-weight:800;padding:3px 10px;border-radius:8px;background:#1d4ed8;color:#ffffff;border:1px solid #1d4ed8">CHECK-OUT ▶</span><br>'+
