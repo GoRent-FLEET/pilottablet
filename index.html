@@ -30,10 +30,10 @@ html,body{height:100%;overflow:hidden;max-width:100%;background:var(--bg);color:
 
 /* NAV */
 .nav{background:#C7E9C0;border-bottom:2px solid #12803c;display:flex;align-items:center;padding:0 max(10px,env(safe-area-inset-right)) 0 max(10px,env(safe-area-inset-left));height:56px;flex-shrink:0;gap:3px;overflow-x:auto;}
-.logo{font-size:16px;font-weight:800;color:#0b3a22;margin-right:10px;letter-spacing:-.5px;white-space:nowrap;}
+.logo{font-size:16px;font-weight:800;color:#000000;margin-right:10px;letter-spacing:-.5px;white-space:nowrap;}
 .logo span{color:#12803c;}
-.nb{padding:8px 10px;border-radius:8px;font-size:11px;font-weight:800;color:#2f5140;cursor:pointer;border:none;background:transparent;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}
-.nb.on{background:#12803c;color:#ffffff;border:1px solid #0b5c2a;}
+.nb{padding:8px 10px;border-radius:8px;font-size:11px;font-weight:800;color:#1a1a1a;cursor:pointer;border:none;background:transparent;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}
+.nb.on{background:#12803c;color:#ffffff;border:1px solid #0a5c2a;}
 
 /* PAGES */
 .page{display:none;flex-direction:column;height:calc(100vh - var(--navh,56px));height:calc(100dvh - var(--navh,56px));overflow:hidden;}
@@ -61,13 +61,13 @@ html,body{height:100%;overflow:hidden;max-width:100%;background:var(--bg);color:
 .vc-meta{font-size:10px;color:var(--g5);margin-top:2px;}
 
 /* FLOW */
-.fhdr{background:#C7E9C0;border-radius:var(--r);padding:8px 12px;margin-bottom:8px;border-left:4px solid #12803c;color:#0b3a22;}
-.fhdr-fn{font-size:18px;font-weight:800;color:#0b3a22;}
-.fhdr-fn span{font-size:13px;font-weight:400;color:#3d5c49;margin-left:8px;}
-.fhdr-cl{font-size:14px;color:#123d27;margin-top:2px;}
+.fhdr{background:#C7E9C0;border-radius:var(--r);padding:8px 12px;margin-bottom:8px;border-left:4px solid #12803c;color:#000000;}
+.fhdr-fn{font-size:18px;font-weight:800;color:#000000;}
+.fhdr-fn span{font-size:13px;font-weight:400;color:#333333;margin-left:8px;}
+.fhdr-cl{font-size:14px;color:#000000;margin-top:2px;}
 .name-edit{margin-left:8px;border-radius:6px;padding:3px 8px;font-size:14px;line-height:1;cursor:pointer;border:1px solid var(--g3);background:var(--g0);}
-.fhdr .name-edit{border:1px solid rgba(11,58,34,.35);background:rgba(255,255,255,.85);color:#0b3a22;}
-.fhdr a,.fhdr .wa-chip{color:#0b6b33!important;}
+.fhdr .name-edit{border:1px solid rgba(11,58,34,.35);background:rgba(255,255,255,.85);color:#000000;}
+.fhdr a,.fhdr .wa-chip{color:#000000!important;}
 
 /* STEP TABS — 5 */
 .stg-bar{display:grid;gap:3px;margin-bottom:14px;}
@@ -433,7 +433,7 @@ input[type=file]{display:none;}
 <div id="app" style="display:none;height:100%;flex-direction:column;">
   <div class="nav">
     <div class="logo">TABLET&nbsp;<span>APP</span></div>
-    <button class="nb" id="nb-back" onclick="appBack()" style="background:#ffffff;color:#0b3a22;border:2px solid #0b5c2a;font-weight:900;">← Back</button>
+    <button class="nb" id="nb-back" onclick="appBack()" style="background:#ffffff;color:#000000;border:2px solid #0a5c2a;font-weight:900;">← Back</button>
     <button class="nb on" id="nb-ov" onclick="goPage('ov')">📊 Dashboard</button>
     <button class="nb" id="nb-co" onclick="goPage('co')"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;background:#4a6fa5;color:#fff;font-size:13px;font-weight:900;margin-right:5px;vertical-align:-4px;">↗</span>Check-Out</button>
     <button class="nb" id="nb-ci" onclick="goPage('ci')"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;background:#2a9d5c;color:#fff;font-size:13px;font-weight:900;margin-right:5px;vertical-align:-4px;">↙</span>Check-In</button>
@@ -444,7 +444,7 @@ input[type=file]{display:none;}
     <div style="margin-left:auto;display:flex;align-items:center;gap:6px;padding-right:6px;">
       <span id="nav-user" style="font-size:11px;font-weight:700;color:var(--se);white-space:nowrap;"></span>
       <button id="nav-logout" onclick="logoutUser()" style="display:none;font-size:12px;font-weight:800;padding:7px 14px;border-radius:8px;border:2px solid var(--re);background:var(--rg);color:var(--rl);cursor:pointer;white-space:nowrap;line-height:1.3;text-align:center;">
-  <span id="nav-user-name" style="display:block;font-size:13px;font-weight:800;color:#0b3a22;">—</span>
+  <span id="nav-user-name" style="display:block;font-size:13px;font-weight:800;color:#000000;">—</span>
   <span style="font-size:10px;color:var(--rl);">🚪 Sign Out</span>
 </button>
     </div>
@@ -2768,9 +2768,9 @@ function drawCO(){
   }
   // on the dark green header these were green-on-green and grey-on-green, so the words
   // were there but unreadable — hence the tent icon on its own
-  var _campStyle=_cov.camping?'background:#ffffff;color:#0b5c2a;border:1px solid rgba(11,58,34,.25)':'background:#ffffff;color:#8a4b00;border:1px solid rgba(11,58,34,.25)';
+  var _campStyle=_cov.camping?'background:#ffffff;color:#000000;border:1px solid rgba(11,58,34,.25)':'background:#ffffff;color:#8a4b00;border:1px solid rgba(11,58,34,.25)';
   var _campLbl=_cov.camping?'🏕 CAMPING':'🏨 NO CAMPING';
-  var _xbHtml=_cov.xb?'<span style="font-size:14px;font-weight:800;color:#0b3a22;margin-top:4px;display:inline-block;background:#ffffff;border:1px solid rgba(11,58,34,.25);padding:3px 10px;border-radius:8px;">🌍 '+_bx(_cov.xb)+'</span>':'';
+  var _xbHtml=_cov.xb?'<span style="font-size:14px;font-weight:800;color:#000000;margin-top:4px;display:inline-block;background:#ffffff;border:1px solid rgba(11,58,34,.25);padding:3px 10px;border-radius:8px;">🌍 '+_bx(_cov.xb)+'</span>':'';
   var _backBtn=coStep>0?'<button class="btn s" style="flex:1" onclick="coGoStep(coStep-1)">← Back</button>':'';
   var _nextBtn=coStep<6?'<button class="btn g" style="flex:2" onclick="coGoStep(coStep+1)">Next →</button>':'';
   document.getElementById('co-body').innerHTML=
@@ -2783,10 +2783,10 @@ function drawCO(){
           // fleet number, client, WhatsApp and the dates all on one line
           '<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;">'+
             '<span class="fhdr-fn">'+co.fn+' <span>'+_cov.reg+'</span></span>'+
-            '<span class="fhdr-cl" style="margin-top:0;font-size:20px;font-weight:900;color:#08301c;letter-spacing:-.2px;">'+_bx(co.clientName||_cov.cl||'No booking')+'</span>'+
+            '<span class="fhdr-cl" style="margin-top:0;font-size:20px;font-weight:900;color:#000000;letter-spacing:-.2px;">'+_bx(co.clientName||_cov.cl||'No booking')+'</span>'+
             '<span class="fhdr-cl" style="margin-top:0;">'+nameEditBtn(bkKey(_cov),co.clientName||_cov.cl,'drawCO')+(waChip(_cov)?' '+waChip(_cov):'')+'</span>'+
             '<span class="fhdr-cl" style="font-size:13px;margin-top:0;white-space:nowrap;">\uD83D\uDCC5 '+(_cov.pu||'?')+' \u2192 '+(_cov.rt||'?')
-              +(rentalDays(_cov)?'<span style="margin-left:6px;padding:2px 9px;border-radius:6px;background:rgba(11,58,34,.12);font-weight:800;color:#0b3a22;">'+rentalDays(_cov)+' days</span>':'')+'</span>'+
+              +(rentalDays(_cov)?'<span style="margin-left:6px;padding:2px 9px;border-radius:6px;background:rgba(11,58,34,.12);font-weight:800;color:#000000;">'+rentalDays(_cov)+' days</span>':'')+'</span>'+
           '</div>'+
           '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:5px;">'+hdrTripChips(_cov)
             +'<span style="font-size:11px;font-weight:900;color:#7a3f00;padding:4px 10px;background:#ffffff;border:1px solid rgba(11,58,34,.25);border-radius:7px;white-space:nowrap;">\uD83E\uDDF9 '+_bx(co.prepBy||(APP_USER&&APP_USER.name)||'\u2014')+'</span>'
@@ -2797,7 +2797,7 @@ function drawCO(){
           '<span style="display:inline-block;margin-bottom:6px;font-size:14px;font-weight:800;padding:3px 10px;border-radius:8px;background:#1d4ed8;color:#ffffff;border:1px solid #1d4ed8">CHECK-OUT ▶</span><br>'+
           '<div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;">'+
             '<span style="font-size:14px;font-weight:800;padding:4px 11px;border-radius:8px;white-space:nowrap;'+_campStyle+'">'+_campLbl+'</span>'+
-            '<span style="font-size:14px;font-weight:800;padding:4px 11px;border-radius:8px;white-space:nowrap;background:#ffffff;color:#0b3a22;border:1px solid rgba(11,58,34,.25);">\uD83D\uDC65 PAX '+(_cov.pax||'\u2014')+'</span>'+
+            '<span style="font-size:14px;font-weight:800;padding:4px 11px;border-radius:8px;white-space:nowrap;background:#ffffff;color:#000000;border:1px solid rgba(11,58,34,.25);">\uD83D\uDC65 PAX '+(_cov.pax||'\u2014')+'</span>'+
             _xbHtml+
           '</div>'+
         '</div>'+
@@ -2808,22 +2808,22 @@ function drawCO(){
       var licExp=(_cov.lic&&_cov.lic.expiry)||'';
       var licDiff=licExp?Math.round((new Date(licExp+'T00:00:00')-new Date())/86400000):99;
       licDiff=licExp?discDaysLeft(licExp):99;
-      var licCol=!licExp?'var(--al)':licDiff<0?'var(--rl)':licDiff<=DISC_WARN_DAYS?'var(--al)':'#3d5c49';
+      var licCol=!licExp?'var(--al)':licDiff<0?'var(--rl)':licDiff<=DISC_WARN_DAYS?'var(--al)':'#333333';
       var licTxt=licExp?(licDiff<0?'⚠ Disc EXPIRED':'Disc: '+new Date(licExp+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})+(licDiff<=DISC_WARN_DAYS?' ('+licDiff+'d)':'')):'＋ Add disc date';
       var fuelTxt='Fuel: '+(co.fuelOut||_cov.fuelOut||'Full');
-      var fuelCol='#3d5c49';
+      var fuelCol='#333333';
       var odoTxt='ODO: '+(_cov.odo||'—')+' km';
       var svcKm=(_cov.svc&&_cov.svc.lastKm&&_cov.svc.intKm)?(_cov.svc.lastKm+_cov.svc.intKm-_cov.odo):null;
       var svcTxt=svcKm!==null?(svcKm<=0?'⚠ Service DUE':'Svc in '+svcKm+' km'):'';
-      var svcCol=svcKm!==null&&svcKm<=0?'var(--rl)':svcKm!==null&&svcKm<1000?'var(--al)':'#3d5c49';
+      var svcCol=svcKm!==null&&svcKm<=0?'var(--rl)':svcKm!==null&&svcKm<1000?'var(--al)':'#333333';
       var tyreKm=(_cov.tyres&&_cov.tyres.lastKm&&_cov.tyres.intKm)?(_cov.tyres.lastKm+_cov.tyres.intKm-_cov.odo):null;
       var tyreTxt=tyreKm!==null?(tyreKm<=0?'⚠ Tyres DUE':'Tyres in '+tyreKm+' km'):'';
-      var tyreCol=tyreKm!==null&&tyreKm<=0?'var(--rl)':tyreKm!==null&&tyreKm<2000?'var(--al)':'#3d5c49';
+      var tyreCol=tyreKm!==null&&tyreKm<=0?'var(--rl)':tyreKm!==null&&tyreKm<2000?'var(--al)':'#333333';
       return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:6px 12px;border-top:1px solid rgba(11,58,34,.15);">'
         +(function(){
           var missing=!licExp, bad=licExp&&licDiff<0, soon=licExp&&licDiff<=DISC_WARN_DAYS;
           var bg=missing||bad?'#d13636':soon?'#e08a00':'#ffffff';
-          var fg=(missing||bad||soon)?'#fff':'#0b3a22';
+          var fg=(missing||bad||soon)?'#fff':'#000000';
           return '<button onclick="co._discEdit=!co._discEdit;drawCO();" class="'+((missing||soon||bad)?'disc-flash':'')+'" '
             +'style="font-size:13px;font-weight:900;padding:7px 14px;border-radius:8px;background:'+bg+';color:'+fg+';border:2px solid '+(missing||bad?'#ff8a8a':soon?'#f0c27a':'rgba(11,58,34,.3)')+';cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.3);">'
             +'<span class="disc-ico"></span> '+(missing?'＋ ADD LICENCE DISC DATE':licTxt)+' ✎</button>';
@@ -2837,13 +2837,13 @@ function drawCO(){
           var fuel=co.fuelOut||'Full';
           var fb=['Empty','1/4','1/2','3/4','Full'].map(function(f){
             var on=fuel===f;
-            return '<button onclick="co.fuelOut=\''+f+'\';drawCO();" style="min-width:62px;padding:10px 14px;border-radius:9px;font-size:15px;font-weight:900;cursor:pointer;touch-action:manipulation;border:2px solid '+(on?'#0b5c2a':'rgba(11,58,34,.3)')+';background:'+(on?'#12803c':'#ffffff')+';color:'+(on?'#ffffff':'#3d5c49')+';box-shadow:'+(on?'0 2px 6px rgba(11,58,34,.35)':'none')+';">'+f+'</button>';
+            return '<button onclick="co.fuelOut=\''+f+'\';drawCO();" style="min-width:62px;padding:10px 14px;border-radius:9px;font-size:15px;font-weight:900;cursor:pointer;touch-action:manipulation;border:2px solid '+(on?'#0a5c2a':'rgba(11,58,34,.3)')+';background:'+(on?'#12803c':'#ffffff')+';color:'+(on?'#ffffff':'#333333')+';box-shadow:'+(on?'0 2px 6px rgba(11,58,34,.35)':'none')+';">'+f+'</button>';
           }).join('');
-          return '<label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:#3d5c49;">🛣 CURRENT ODO READING'
+          return '<label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:#333333;">🛣 CURRENT ODO READING'
             +'<input type="number" inputmode="numeric" pattern="[0-9]*" id="co-odo-out" class="'+(km?'':'need-flash')+'" value="'+km+'" placeholder="Odo km" onfocus="this.select()" oninput="co.odometerOut=+this.value" '
             +'style="width:120px;padding:5px 8px;font-size:14px;font-weight:800;background:#ffffff;border:2px solid '+(km?'var(--gb)':'var(--re)')+';border-radius:6px;color:#fff;"></label>'
-            +'<span style="font-size:10px;color:#4a6b57;">'+src+'</span>'
-            +'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-left:auto;"><span style="font-size:13px;font-weight:900;color:#0b3a22;margin-right:4px;">⛽ FUEL OUT</span>'+fb+'</div>'
+            +'<span style="font-size:10px;color:#444444;">'+src+'</span>'
+            +'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-left:auto;"><span style="font-size:13px;font-weight:900;color:#000000;margin-right:4px;">⛽ FUEL OUT</span>'+fb+'</div>'
             +'</div>';
         })()
         +(co._discEdit?'<div style="padding:0 14px 10px;"><div id="lic-banner-out">'+licDiscBanner(_cov,'out')+'</div></div>':'');
@@ -2896,7 +2896,7 @@ function rentalDays(v){
 function hdrTripChips(v){
   var chip=function(txt,alarm,title){
     return '<span'+(alarm?' class="disc-flash"':'')+' title="'+_bx(title||'')+'" style="font-size:12px;font-weight:800;padding:5px 11px;border-radius:7px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
-      +(alarm?'background:#d13636;color:#fff;border:1px solid #ff8a8a;':'background:#ffffff;color:#0b3a22;border:1px solid rgba(11,58,34,.32);')+'">'+_bx(txt)+'</span>';
+      +(alarm?'background:#d13636;color:#fff;border:1px solid #ff8a8a;':'background:#ffffff;color:#000000;border:1px solid rgba(11,58,34,.32);')+'">'+_bx(txt)+'</span>';
   };
   var out='';
   var fi=(v&&v.flightIn)||'',fo=(v&&v.flightOut)||'';
@@ -5585,7 +5585,7 @@ function drawCI(){
           <div class="fhdr-fn">${r.fn} <span>${v.reg}</span></div>
           <div class="fhdr-cl">${v.cl}${nameEditBtn(bkKey(v),v.cl,'drawCI')}${waChip(v)?' · '+waChip(v):''}</div>
           <div class="fhdr-cl" style="font-size:13px;opacity:.75;margin-top:1px">📅 ${v.pu||'?'} → ${v.rt||'?'}</div>
-          <div style="margin-top:5px;font-size:11px;font-weight:800;color:#3d5c49;">👤 ${ci.receivedBy||APP_USER&&APP_USER.name||"—"}</div>
+          <div style="margin-top:5px;font-size:11px;font-weight:800;color:#333333;">👤 ${ci.receivedBy||APP_USER&&APP_USER.name||"—"}</div>
         </div>
         <div style="text-align:right">
           <span style="display:inline-block;margin-bottom:6px;font-size:14px;font-weight:700;padding:3px 10px;border-radius:8px;background:rgba(240,80,80,.15);color:var(--rl);border:1px solid var(--re)">◀ CHECK-IN</span><br>
@@ -5598,16 +5598,16 @@ function drawCI(){
       ${(function(){
         var licExp=(v.lic&&v.lic.expiry)||'';
         var licDiff=licExp?Math.round((new Date(licExp+'T00:00:00')-new Date())/86400000):99;
-        var licCol=licDiff<30?'var(--rl)':licDiff<60?'var(--al)':'#3d5c49';
+        var licCol=licDiff<30?'var(--rl)':licDiff<60?'var(--al)':'#333333';
         var licTxt=licExp?(licDiff<0?'⚠ Disc EXPIRED':'Disc: '+new Date(licExp+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})):'No disc date';
         var fuelTxt='Fuel out: '+(v.fuelOut||'Full');
         var odoTxt='ODO out: '+(r.odometerOut||v.odo||'—')+' km';
         var svcKm=(v.svc&&v.svc.lastKm&&v.svc.intKm)?(v.svc.lastKm+v.svc.intKm-v.odo):null;
         var svcTxt=svcKm!==null?(svcKm<=0?'⚠ Service DUE':'Svc in '+svcKm+' km'):'';
-        var svcCol=svcKm!==null&&svcKm<=0?'var(--rl)':svcKm!==null&&svcKm<1000?'var(--al)':'#3d5c49';
+        var svcCol=svcKm!==null&&svcKm<=0?'var(--rl)':svcKm!==null&&svcKm<1000?'var(--al)':'#333333';
         var pills='<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(11,58,34,.07);color:'+licCol+';">'+licTxt+'</span>'
-          +'<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(11,58,34,.07);color:#3d5c49;">'+fuelTxt+'</span>'
-          +'<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(11,58,34,.07);color:#3d5c49;">'+odoTxt+'</span>'
+          +'<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(11,58,34,.07);color:#333333;">'+fuelTxt+'</span>'
+          +'<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(11,58,34,.07);color:#333333;">'+odoTxt+'</span>'
           +(svcTxt?'<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(11,58,34,.07);color:'+svcCol+';">'+svcTxt+'</span>':'');
         return pills;
       })()}
