@@ -2783,7 +2783,8 @@ function drawCO(){
           // fleet number, client, WhatsApp and the dates all on one line
           '<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;">'+
             '<span class="fhdr-fn">'+co.fn+' <span>'+_cov.reg+'</span></span>'+
-            '<span class="fhdr-cl" style="margin-top:0;">'+(co.clientName||_cov.cl||'No booking')+nameEditBtn(bkKey(_cov),co.clientName||_cov.cl,'drawCO')+(waChip(_cov)?' \u00b7 '+waChip(_cov):'')+'</span>'+
+            '<span class="fhdr-cl" style="margin-top:0;font-size:20px;font-weight:900;color:#08301c;letter-spacing:-.2px;">'+_bx(co.clientName||_cov.cl||'No booking')+'</span>'+
+            '<span class="fhdr-cl" style="margin-top:0;">'+nameEditBtn(bkKey(_cov),co.clientName||_cov.cl,'drawCO')+(waChip(_cov)?' '+waChip(_cov):'')+'</span>'+
             '<span class="fhdr-cl" style="font-size:13px;margin-top:0;white-space:nowrap;">\uD83D\uDCC5 '+(_cov.pu||'?')+' \u2192 '+(_cov.rt||'?')
               +(rentalDays(_cov)?'<span style="margin-left:6px;padding:2px 9px;border-radius:6px;background:rgba(11,58,34,.12);font-weight:800;color:#0b3a22;">'+rentalDays(_cov)+' days</span>':'')+'</span>'+
           '</div>'+
