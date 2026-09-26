@@ -3527,7 +3527,7 @@ function coStep1(){
             oninput="dobType(this,${i})" style="border-color:${dobAge(d.dob)?'var(--gb)':'var(--g3)'}">
           <div id="dob-note${i}" style="font-size:12px;font-weight:800;margin-top:3px;color:${dobAge(d.dob)?'var(--se)':'var(--rl)'};">${dobNote(d.dob)}</div>
         </div>
-        <div class="fi" style="flex:1.4 1 260px;min-width:240px;"><label>Passport expiry</label>
+        <div class="fi" style="flex:0 1 236px;min-width:230px;"><label>Passport expiry</label>
           ${dtPickers('ppx'+i,d.ppExpiry||'',i,'ppExpiry')}
         </div>
       </div>
@@ -3535,7 +3535,7 @@ function coStep1(){
         <div class="fi" style="flex:1 1 200px;min-width:160px;"><label>Driver's licence #</label>
           <input value="${d.licNo||''}" placeholder="Licence number" oninput="co.drivers[${i}].licNo=this.value">
         </div>
-        <div class="fi" style="flex:1.4 1 260px;min-width:240px;"><label>Licence expiry</label>
+        <div class="fi" style="flex:0 1 236px;min-width:230px;"><label>Licence expiry</label>
           ${dtPickers('lcx'+i,d.licExpiry||'',i,'licExpiry')}
         </div>
       </div>
@@ -7623,13 +7623,13 @@ function dtPickers(id,value,i,field){
   if(p.y&&!years.some(function(x){return String(x[0])===String(p.y);}))years.unshift([p.y,p.y]);
   var sel=function(sid,label,opts,val,w){
     return '<select id="'+sid+'" onchange="dtPickChange(\''+id+'\','+i+',\''+field+'\')" '
-      +'style="color-scheme:dark;flex:'+w+';min-width:0;padding:11px 6px;font-size:16px;font-weight:800;background:var(--g0);border:2px solid var(--g3);border-radius:var(--rs);color:var(--tx);">'
+      +'style="color-scheme:dark;flex:0 0 auto;width:'+w+';padding:12px 4px;font-size:15px;font-weight:800;background:var(--g0);border:2px solid var(--g3);border-radius:var(--rs);color:var(--tx);">'
       +'<option value="">'+label+'</option>'
       +opts.map(function(o){return '<option value="'+o[0]+'"'+(String(val)===String(o[0])?' selected':'')+'>'+o[1]+'</option>';}).join('')
       +'</select>';
   };
-  return '<div id="'+id+'-box" style="display:flex;gap:5px;padding:3px;border:2px solid '+(value?'var(--gb)':'var(--g3)')+';border-radius:var(--rs);">'
-    +sel(id+'-d','Day',days,p.d,'1')+sel(id+'-m','Month',months,p.m,'1.2')+sel(id+'-y','Year',years,p.y,'1.1')
+  return '<div id="'+id+'-box" style="display:inline-flex;gap:4px;padding:3px;border:2px solid '+(value?'var(--gb)':'var(--g3)')+';border-radius:var(--rs);">'
+    +sel(id+'-d','Day',days,p.d,'64px')+sel(id+'-m','Month',months,p.m,'80px')+sel(id+'-y','Year',years,p.y,'76px')
     +'</div><div id="'+id+'-warn" style="display:none;font-size:13px;font-weight:700;color:var(--rl);margin-top:3px;"></div>';
 }
 function discPickValue(id){
