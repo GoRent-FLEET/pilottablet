@@ -2768,9 +2768,9 @@ function drawCO(){
   }
   // on the dark green header these were green-on-green and grey-on-green, so the words
   // were there but unreadable — hence the tent icon on its own
-  var _campStyle=_cov.camping?'background:#12803c;color:#ffffff;border:1px solid #0b5c2a':'background:#ffffff;color:#8a4b00;border:1px solid #d3a45f';
+  var _campStyle=_cov.camping?'background:#ffffff;color:#0b5c2a;border:1px solid rgba(11,58,34,.25)':'background:#ffffff;color:#8a4b00;border:1px solid rgba(11,58,34,.25)';
   var _campLbl=_cov.camping?'🏕 CAMPING':'🏨 NO CAMPING';
-  var _xbHtml=_cov.xb?'<br><span style="font-size:13px;font-weight:800;color:#0b3a22;margin-top:4px;display:inline-block;background:#ffffff;border:1px solid rgba(11,58,34,.25);padding:3px 10px;border-radius:8px;">🌍 '+_bx(_cov.xb)+'</span>':'';
+  var _xbHtml=_cov.xb?'<span style="font-size:14px;font-weight:800;color:#0b3a22;margin-top:4px;display:inline-block;background:#ffffff;border:1px solid rgba(11,58,34,.25);padding:3px 10px;border-radius:8px;">🌍 '+_bx(_cov.xb)+'</span>':'';
   var _backBtn=coStep>0?'<button class="btn s" style="flex:1" onclick="coGoStep(coStep-1)">← Back</button>':'';
   var _nextBtn=coStep<6?'<button class="btn g" style="flex:2" onclick="coGoStep(coStep+1)">Next →</button>':'';
   document.getElementById('co-body').innerHTML=
@@ -2795,9 +2795,11 @@ function drawCO(){
         '</div>'+
         '<div style="text-align:right">'+
           '<span style="display:inline-block;margin-bottom:6px;font-size:14px;font-weight:800;padding:3px 10px;border-radius:8px;background:#1d4ed8;color:#ffffff;border:1px solid #1d4ed8">CHECK-OUT ▶</span><br>'+
-          '<span style="font-size:14px;font-weight:700;padding:3px 10px;border-radius:8px;'+_campStyle+'">'+_campLbl+'</span><br>'+
-          '<span style="font-size:13px;font-weight:800;color:#0b3a22;margin-top:4px;display:inline-block;background:#ffffff;border:1px solid rgba(11,58,34,.25);padding:3px 10px;border-radius:8px;">👥 PAX '+(_cov.pax||'—')+'</span>'+_xbHtml+
-          (resetBtn(co.fn)?'<div style="margin-top:8px;">'+resetBtn(co.fn)+'</div>':'')+
+          '<div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;">'+
+            '<span style="font-size:14px;font-weight:800;padding:4px 11px;border-radius:8px;white-space:nowrap;'+_campStyle+'">'+_campLbl+'</span>'+
+            '<span style="font-size:14px;font-weight:800;padding:4px 11px;border-radius:8px;white-space:nowrap;background:#ffffff;color:#0b3a22;border:1px solid rgba(11,58,34,.25);">\uD83D\uDC65 PAX '+(_cov.pax||'\u2014')+'</span>'+
+            _xbHtml+
+          '</div>'+
         '</div>'+
       '</div>'+
       _specialHtml+
