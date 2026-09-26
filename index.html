@@ -3520,25 +3520,22 @@ function coStep1(){
           <div id="dob-note${i}" style="font-size:12px;font-weight:800;margin-top:3px;color:${dobAge(d.dob)?'var(--se)':'var(--rl)'};">${dobNote(d.dob)}</div>
         </div>
       </div>
-      <div class="fg">
-        <div class="fi"><label>Nationality</label>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
+        <div class="fi" style="flex:1 1 150px;min-width:130px;"><label>Nationality</label>
           <input value="${d.nationality||''}" placeholder="e.g. German" oninput="co.drivers[${i}].nationality=this.value">
         </div>
-        <div class="fi"><label>Passport number</label>
+        <div class="fi" style="flex:1 1 160px;min-width:140px;"><label>Passport number</label>
           <input value="${d.passport||''}" placeholder="Passport #" oninput="co.drivers[${i}].passport=this.value">
         </div>
-      </div>
-      <div class="fg">
-        <div class="fi"><label>Passport expiry</label>
+        <div class="fi" style="flex:1.4 1 260px;min-width:240px;"><label>Passport expiry</label>
           ${dtPickers('ppx'+i,d.ppExpiry||'',i,'ppExpiry')}
         </div>
-        <div class="fi"></div>
       </div>
-      <div class="fg">
-        <div class="fi"><label>Driver's licence #</label>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;">
+        <div class="fi" style="flex:1 1 200px;min-width:160px;"><label>Driver's licence #</label>
           <input value="${d.licNo||''}" placeholder="Licence number" oninput="co.drivers[${i}].licNo=this.value">
         </div>
-        <div class="fi"><label>Licence expiry</label>
+        <div class="fi" style="flex:1.4 1 260px;min-width:240px;"><label>Licence expiry</label>
           ${dtPickers('lcx'+i,d.licExpiry||'',i,'licExpiry')}
         </div>
       </div>
