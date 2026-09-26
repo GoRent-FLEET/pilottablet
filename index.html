@@ -2835,13 +2835,13 @@ function drawCO(){
           var fuel=co.fuelOut||'Full';
           var fb=['Empty','1/4','1/2','3/4','Full'].map(function(f){
             var on=fuel===f;
-            return '<button onclick="co.fuelOut=\''+f+'\';drawCO();" style="padding:5px 9px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;border:1px solid '+(on?'var(--se)':'rgba(11,58,34,.28)')+';background:'+(on?'#12803c':'#ffffff')+';color:'+(on?'#ffffff':'#3d5c49')+';">'+f+'</button>';
+            return '<button onclick="co.fuelOut=\''+f+'\';drawCO();" style="min-width:62px;padding:10px 14px;border-radius:9px;font-size:15px;font-weight:900;cursor:pointer;touch-action:manipulation;border:2px solid '+(on?'#0b5c2a':'rgba(11,58,34,.3)')+';background:'+(on?'#12803c':'#ffffff')+';color:'+(on?'#ffffff':'#3d5c49')+';box-shadow:'+(on?'0 2px 6px rgba(11,58,34,.35)':'none')+';">'+f+'</button>';
           }).join('');
           return '<label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:#3d5c49;">🛣 CURRENT ODO READING'
             +'<input type="number" inputmode="numeric" pattern="[0-9]*" id="co-odo-out" class="'+(km?'':'need-flash')+'" value="'+km+'" placeholder="Odo km" onfocus="this.select()" oninput="co.odometerOut=+this.value" '
             +'style="width:120px;padding:5px 8px;font-size:14px;font-weight:800;background:#ffffff;border:2px solid '+(km?'var(--gb)':'var(--re)')+';border-radius:6px;color:#fff;"></label>'
             +'<span style="font-size:10px;color:#4a6b57;">'+src+'</span>'
-            +'<div style="display:flex;align-items:center;gap:4px;margin-left:auto;"><span style="font-size:11px;font-weight:800;color:#3d5c49;margin-right:2px;">⛽ FUEL OUT</span>'+fb+'</div>'
+            +'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-left:auto;"><span style="font-size:13px;font-weight:900;color:#0b3a22;margin-right:4px;">⛽ FUEL OUT</span>'+fb+'</div>'
             +'</div>';
         })()
         +(co._discEdit?'<div style="padding:0 14px 10px;"><div id="lic-banner-out">'+licDiscBanner(_cov,'out')+'</div></div>':'');
