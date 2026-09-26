@@ -2766,9 +2766,11 @@ function drawCO(){
     }
     _specialHtml+='</div>';
   }
-  var _campStyle=_cov.camping?'background:rgba(61,220,132,.15);color:var(--se);border:1px solid var(--gb)':'background:var(--g2);color:var(--g5);border:1px solid var(--g3)';
-  var _campLbl=_cov.camping?'🏕 Camping':'🏨 No camping';
-  var _xbHtml=_cov.xb?' · 🌍 '+_cov.xb:'';
+  // on the dark green header these were green-on-green and grey-on-green, so the words
+  // were there but unreadable — hence the tent icon on its own
+  var _campStyle=_cov.camping?'background:#ffffff;color:#0b3a22;border:1px solid rgba(0,0,0,.15)':'background:rgba(255,255,255,.9);color:#5a3200;border:1px solid rgba(0,0,0,.15)';
+  var _campLbl=_cov.camping?'🏕 CAMPING':'🏨 NO CAMPING';
+  var _xbHtml=_cov.xb?'<br><span style="font-size:13px;font-weight:800;color:#fff;margin-top:4px;display:inline-block;background:rgba(255,255,255,.16);padding:3px 10px;border-radius:8px;">🌍 '+_bx(_cov.xb)+'</span>':'';
   var _backBtn=coStep>0?'<button class="btn s" style="flex:1" onclick="coGoStep(coStep-1)">← Back</button>':'';
   var _nextBtn=coStep<6?'<button class="btn g" style="flex:2" onclick="coGoStep(coStep+1)">Next →</button>':'';
   document.getElementById('co-body').innerHTML=
@@ -2789,7 +2791,7 @@ function drawCO(){
         '<div style="text-align:right">'+
           '<span style="display:inline-block;margin-bottom:6px;font-size:14px;font-weight:700;padding:3px 10px;border-radius:8px;background:rgba(74,158,255,.15);color:#7db8ff;border:1px solid #4a9eff">CHECK-OUT ▶</span><br>'+
           '<span style="font-size:14px;font-weight:700;padding:3px 10px;border-radius:8px;'+_campStyle+'">'+_campLbl+'</span><br>'+
-          '<span style="font-size:13px;color:var(--g5);margin-top:3px;display:inline-block">👥 '+(_cov.pax||'?')+' pax'+_xbHtml+'</span>'+
+          '<span style="font-size:13px;font-weight:800;color:#fff;margin-top:4px;display:inline-block;background:rgba(255,255,255,.16);padding:3px 10px;border-radius:8px;">👥 '+(_cov.pax?_cov.pax+(_cov.pax==1?' person':' people'):'pax not on the booking')+'</span>'+_xbHtml+
           (resetBtn(co.fn)?'<div style="margin-top:8px;">'+resetBtn(co.fn)+'</div>':'')+
         '</div>'+
       '</div>'+
@@ -2810,7 +2812,7 @@ function drawCO(){
       var tyreKm=(_cov.tyres&&_cov.tyres.lastKm&&_cov.tyres.intKm)?(_cov.tyres.lastKm+_cov.tyres.intKm-_cov.odo):null;
       var tyreTxt=tyreKm!==null?(tyreKm<=0?'⚠ Tyres DUE':'Tyres in '+tyreKm+' km'):'';
       var tyreCol=tyreKm!==null&&tyreKm<=0?'var(--rl)':tyreKm!==null&&tyreKm<2000?'var(--al)':'rgba(255,255,255,.5)';
-      return '<div style="display:flex;flex-wrap:wrap;gap:5px;padding:6px 14px 8px;border-top:1px solid rgba(255,255,255,.1);">'
+      return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:8px 14px;border-top:1px solid rgba(255,255,255,.1);">'
         +(function(){
           var missing=!licExp, bad=licExp&&licDiff<0, soon=licExp&&licDiff<=DISC_WARN_DAYS;
           var bg=missing||bad?'#d13636':soon?'#e08a00':'rgba(255,255,255,.12)';
@@ -2821,8 +2823,7 @@ function drawCO(){
         })()
         +(svcTxt?'<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(255,255,255,.07);color:'+svcCol+';">'+svcTxt+'</span>':'')
         +(tyreTxt?'<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(255,255,255,.07);color:'+tyreCol+';">'+tyreTxt+'</span>':'')
-        +'</div>'
-        // Km + fuel OUT (editable, shown on every step)
+        // odometer and fuel sit on the same line as the disc
         +(function(){
           var km=co.odometerOut||_cov.odo||'';
           var src=_cov.lastRet?('↩ Last return '+Number(_cov.lastRet.km).toLocaleString()+' km · '+new Date(_cov.lastRet.at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})):(_cov.odo?'From Fleet Manager':'No previous reading');
@@ -2831,8 +2832,7 @@ function drawCO(){
             var on=fuel===f;
             return '<button onclick="co.fuelOut=\''+f+'\';drawCO();" style="padding:5px 9px;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer;border:1px solid '+(on?'var(--se)':'rgba(255,255,255,.15)')+';background:'+(on?'rgba(61,220,132,.18)':'rgba(255,255,255,.05)')+';color:'+(on?'var(--se)':'rgba(255,255,255,.6)')+';">'+f+'</button>';
           }).join('');
-          return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;padding:8px 14px 10px;border-top:1px solid rgba(255,255,255,.1);">'
-            +'<label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:rgba(255,255,255,.6);">🛣 CURRENT ODO READING'
+          return '<label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:rgba(255,255,255,.6);">🛣 CURRENT ODO READING'
             +'<input type="number" inputmode="numeric" pattern="[0-9]*" id="co-odo-out" class="'+(km?'':'need-flash')+'" value="'+km+'" placeholder="Odo km" onfocus="this.select()" oninput="co.odometerOut=+this.value" '
             +'style="width:120px;padding:5px 8px;font-size:14px;font-weight:800;background:rgba(0,0,0,.35);border:2px solid '+(km?'var(--gb)':'var(--re)')+';border-radius:6px;color:#fff;"></label>'
             +'<span style="font-size:10px;color:rgba(255,255,255,.45);">'+src+'</span>'
