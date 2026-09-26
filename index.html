@@ -29,11 +29,11 @@ html,body{height:100%;overflow:hidden;max-width:100%;background:var(--bg);color:
 @keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(240,80,80,.4);}50%{opacity:.9;box-shadow:0 0 0 6px rgba(240,80,80,0);}}
 
 /* NAV */
-.nav{background:#15532f;border-bottom:2px solid var(--gb);display:flex;align-items:center;padding:0 max(10px,env(safe-area-inset-right)) 0 max(10px,env(safe-area-inset-left));height:56px;flex-shrink:0;gap:3px;overflow-x:auto;}
-.logo{font-size:16px;font-weight:800;color:#fff;margin-right:10px;letter-spacing:-.5px;white-space:nowrap;}
-.logo span{color:var(--se);}
-.nb{padding:8px 10px;border-radius:8px;font-size:11px;font-weight:700;color:rgba(255,255,255,.5);cursor:pointer;border:none;background:transparent;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}
-.nb.on{background:rgba(61,220,132,.12);color:var(--se);border:1px solid rgba(61,220,132,.3);}
+.nav{background:#C7E9C0;border-bottom:2px solid #12803c;display:flex;align-items:center;padding:0 max(10px,env(safe-area-inset-right)) 0 max(10px,env(safe-area-inset-left));height:56px;flex-shrink:0;gap:3px;overflow-x:auto;}
+.logo{font-size:16px;font-weight:800;color:#0b3a22;margin-right:10px;letter-spacing:-.5px;white-space:nowrap;}
+.logo span{color:#12803c;}
+.nb{padding:8px 10px;border-radius:8px;font-size:11px;font-weight:800;color:#2f5140;cursor:pointer;border:none;background:transparent;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}
+.nb.on{background:#12803c;color:#ffffff;border:1px solid #0b5c2a;}
 
 /* PAGES */
 .page{display:none;flex-direction:column;height:calc(100vh - var(--navh,56px));height:calc(100dvh - var(--navh,56px));overflow:hidden;}
@@ -433,7 +433,7 @@ input[type=file]{display:none;}
 <div id="app" style="display:none;height:100%;flex-direction:column;">
   <div class="nav">
     <div class="logo">TABLET&nbsp;<span>APP</span></div>
-    <button class="nb" id="nb-back" onclick="appBack()" style="background:#fff;color:#1d6b3d;border:2px solid #3ddc84;font-weight:900;">← Back</button>
+    <button class="nb" id="nb-back" onclick="appBack()" style="background:#ffffff;color:#0b3a22;border:2px solid #0b5c2a;font-weight:900;">← Back</button>
     <button class="nb on" id="nb-ov" onclick="goPage('ov')">📊 Dashboard</button>
     <button class="nb" id="nb-co" onclick="goPage('co')"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;background:#4a6fa5;color:#fff;font-size:13px;font-weight:900;margin-right:5px;vertical-align:-4px;">↗</span>Check-Out</button>
     <button class="nb" id="nb-ci" onclick="goPage('ci')"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;background:#2a9d5c;color:#fff;font-size:13px;font-weight:900;margin-right:5px;vertical-align:-4px;">↙</span>Check-In</button>
@@ -444,7 +444,7 @@ input[type=file]{display:none;}
     <div style="margin-left:auto;display:flex;align-items:center;gap:6px;padding-right:6px;">
       <span id="nav-user" style="font-size:11px;font-weight:700;color:var(--se);white-space:nowrap;"></span>
       <button id="nav-logout" onclick="logoutUser()" style="display:none;font-size:12px;font-weight:800;padding:7px 14px;border-radius:8px;border:2px solid var(--re);background:var(--rg);color:var(--rl);cursor:pointer;white-space:nowrap;line-height:1.3;text-align:center;">
-  <span id="nav-user-name" style="display:block;font-size:13px;color:var(--se);">—</span>
+  <span id="nav-user-name" style="display:block;font-size:13px;font-weight:800;color:#0b3a22;">—</span>
   <span style="font-size:10px;color:var(--rl);">🚪 Sign Out</span>
 </button>
     </div>
