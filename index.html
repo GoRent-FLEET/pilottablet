@@ -4041,13 +4041,6 @@ function extraDriverFee(){ return extraDriverCount()*EXTRA_DRIVER_FEE; }
   var OFFICE='Go Rent Office, 6 Diehl Str, Windhoek';
   if(c.pickup_location===undefined)c.pickup_location=OFFICE;
   if(c.return_location===undefined)c.return_location=OFFICE;
-  var locBox=function(k,lbl){
-    var val=c[k]||OFFICE,isOffice=val===OFFICE;
-    return '<div class="fi"><label>'+lbl+'</label>'
-      +'<input value="'+_bx(val)+'" placeholder="'+_bx(OFFICE)+'" oninput="(co.contract=co.contract||{})[\''+k+'\']=this.value" style="border-color:'+(isOffice?'var(--g3)':'var(--am)')+';">'
-      +'<div style="font-size:12px;color:var(--g5);margin-top:3px;">'+(isOffice?'Go Rent office — type over it for a different place':'Not the office — this will show on the contract')
-      +' <button onclick="(co.contract=co.contract||{})[\''+k+'\']=\''+OFFICE+'\';drawCO()" style="background:none;border:none;color:var(--bl);font-size:12px;font-weight:800;cursor:pointer;padding:0 4px;">use office</button></div></div>';
-  };
   var remote=(c.return_location||OFFICE)!==OFFICE;
   var remoteBox=remote?('<div style="border:2px solid var(--am);background:var(--ag);border-radius:10px;padding:10px 12px;margin:0 0 10px;">'
       +'<div style="font-size:14px;font-weight:900;color:var(--al);margin-bottom:6px;">🚩 Not the office — where exactly is the vehicle collected?</div>'
@@ -4058,7 +4051,6 @@ function extraDriverFee(){ return extraDriverCount()*EXTRA_DRIVER_FEE; }
       +timePickers('ct-rtime',c.return_place_time||'',"var _t=timePickValue('ct-rtime');if(_t){(co.contract=co.contract||{}).return_place_time=_t;drawCO();}")
       +'</div></div>'):'';
   var h='<div style="font-size:13px;color:var(--g5);margin-bottom:10px;">Rental period: <b style="color:var(--tx);">'+days+' days</b> · rental rates are on the separate invoice</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+locBox('pickup_location','📍 Collection place')+locBox('return_location','📍 Return place')+'</div>'
     +remoteBox
     +insSel
     +'<div style="font-size:12px;font-weight:800;color:var(--g5);text-transform:uppercase;letter-spacing:.4px;margin:12px 0 6px;">Extra cover — client must take or decline each</div>'
