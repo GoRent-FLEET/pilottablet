@@ -1383,7 +1383,7 @@ function renderCOPicker(){
     rows+='<div data-fn="'+v.fn+'" class="picker-row" ontouchend="event.preventDefault();startCO(this.dataset.fn);" style="background:'+(fin?'var(--gr)':late?'var(--rg)':ip?'var(--ag)':'var(--g1)')+';border:2px solid '+col+';border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;">'
       +'<div><div style="font-size:16px;font-weight:900;color:var(--se);">'+v.fn+'</div>'
-      +'<div style="font-size:13px;font-weight:700;color:var(--tx);margin-top:2px;">'+v.cl+'</div>'
+      +'<div style="font-size:13px;font-weight:700;color:var(--tx);margin-top:2px;">'+_bx(renterName(v))+'</div>'
       +'<div style="font-size:11px;color:var(--g5);margin-top:3px;">'+v.reg+' &middot; '+dt+'</div>'
       +(ip?'<div style="margin-top:6px;font-size:12px;font-weight:800;color:var(--al);">⏳ '+_bx(ip.stepName||'Started')+(ip._name?' · '+_bx(ip._name):'')+(ip.done?' · '+ip.done+' items done':'')
           +(ip.updated?' · last touched '+new Date(ip.updated).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'')+resetBtn(v.fn)+'</div>'
@@ -2028,7 +2028,7 @@ function _renderOV(){
       +'<span style="color:#fff;font-size:18px;font-weight:900;line-height:1;">'+(isOut?'↗':'↙')+'</span>'
       +'</div>'
       +'<div style="flex:1;min-width:0;">'
-      +'<div style="font-size:14px;font-weight:800;color:#1a1a1a;margin-bottom:2px;">'+v.fn+' — '+(isOut?'OUT':'BACK')+' · '+v.cl+'</div>'
+      +'<div style="font-size:14px;font-weight:800;color:#1a1a1a;margin-bottom:2px;">'+v.fn+' — '+(isOut?'OUT':'BACK')+' · '+_bx(renterName(v))+'</div>'
       +'<div style="font-size:12px;color:#666;margin-bottom:3px;">'+locLbl+': '+loc+' · Quote '+(v.quote||'—')+(isRemote?' · ':'')+'</div>'
       +(isRemote?'<div style="font-size:11px;font-weight:900;color:#c53030;letter-spacing:.3px;margin-bottom:3px;">REMOTE ARRANGEMENTS</div>':'')
       +(isIP?'<div style="font-size:11px;font-weight:900;color:#e53e3e;margin-bottom:3px;">🔴 IN PROGRESS</div>'
@@ -2566,12 +2566,12 @@ async function drFinish(id){
 // A finished check-out must stop looking unfinished. The tablet's own checkouts / checkins
 // tables are the authority: once a row exists for that booking, the job is done — that also
 // heals markers already stranded on a tablet, without anyone clearing anything by hand.
-var DONE_CO={},DONE_CI={},FORCED_CO={};
+var DONE_CO={},DONE_CI={},FORCED_CO={},RENTER_CO={};
 async function loadDoneSets(){
   try{
-    var a=await SB.from('checkouts').select('booking_id,force_closed_by').order('created_at',{ascending:false}).limit(500);
-    var m={},f={};((a&&a.data)||[]).forEach(function(x){if(!x||!x.booking_id)return;m[x.booking_id]=true;if(x.force_closed_by&&f[x.booking_id]===undefined)f[x.booking_id]=true;if(!x.force_closed_by)f[x.booking_id]=false;});
-    if(a&&!a.error){DONE_CO=m;FORCED_CO=f;}
+    var a=await SB.from('checkouts').select('booking_id,force_closed_by,client,booked_by').order('created_at',{ascending:false}).limit(500);
+    var m={},f={},rn={};((a&&a.data)||[]).forEach(function(x){if(!x||!x.booking_id)return;m[x.booking_id]=true;if(x.force_closed_by&&f[x.booking_id]===undefined)f[x.booking_id]=true;if(!x.force_closed_by)f[x.booking_id]=false;if(x.client&&rn[x.booking_id]===undefined)rn[x.booking_id]={name:x.client,booked:x.booked_by||''};});
+    if(a&&!a.error){DONE_CO=m;FORCED_CO=f;RENTER_CO=rn;}
   }catch(e){}
   try{
     var b=await SB.from('checkins').select('booking_id').order('created_at',{ascending:false}).limit(500);
@@ -2581,6 +2581,15 @@ async function loadDoneSets(){
 }
 function coIsDone(v){try{return !!(v&&DONE_CO[bkKey(v)]);}catch(e){return false;}}
 function coWasForced(v){try{return !!(v&&FORCED_CO[bkKey(v)]);}catch(e){return false;}}
+// Away from an open check-out, the renter's real name comes from the saved check-out.
+function renterName(v){
+  try{
+    var r=v&&RENTER_CO[bkKey(v)];
+    if(!r||!r.name)return String((v&&v.cl)||'');
+    var booked=r.booked||((v&&v.cl&&_nmKey(v.cl)!==_nmKey(r.name))?v.cl:'');
+    return r.name+(booked?' ('+booked+')':'');
+  }catch(e){return String((v&&v.cl)||'');}
+}
 function ciIsDone(v){try{return !!(v&&DONE_CI[bkKey(v)]);}catch(e){return false;}}
 async function drFinishFleet(fn){
   var ids=Object.keys(DR_SRV).filter(function(k){return DR_SRV[k].fleet_no===fn;});
@@ -2942,7 +2951,7 @@ function drawCO(){
           // fleet number, client, WhatsApp and the dates all on one line
           '<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;">'+
             '<span class="fhdr-fn">'+co.fn+' <span>'+_cov.reg+'</span></span>'+
-            '<span class="fhdr-cl" style="margin-top:0;font-size:20px;font-weight:900;color:#000000;letter-spacing:-.2px;">'+_bx(co.clientName||_cov.cl||'No booking')+'</span>'+
+            '<span class="fhdr-cl" style="margin-top:0;font-size:20px;font-weight:900;color:#000000;letter-spacing:-.2px;">'+_bx(mainRenter()||_cov.cl||'No booking')+'</span>'+
             '<span class="fhdr-cl" style="margin-top:0;">'+nameEditBtn(bkKey(_cov),co.clientName||_cov.cl,'drawCO')+(waChip(_cov)?' '+waChip(_cov):'')+'</span>'+
             '<span onclick="editQuoteNo()" title="Tap to change the quote number" style="cursor:pointer;font-size:13px;font-weight:900;color:#000;background:#ffffff;border:1px solid rgba(11,58,34,.25);border-radius:7px;padding:3px 9px;white-space:nowrap;">\uD83D\uDCCB '+_bx(co.quoteNo||_cov.quote||'Add quote no.')+' \u270E</span>'+
             '<span class="fhdr-cl" style="font-size:13px;margin-top:0;white-space:nowrap;">\uD83D\uDCC5 '+(_cov.pu||'?')+' \u2192 '+(_cov.rt||'?')
@@ -3939,6 +3948,36 @@ function setRead(i,ok,msg){var d=co.drivers&&co.drivers[i];if(!d)return;d._readO
 // vehicle was open landed in a stranger's file with nothing to catch it, so the name on the
 // document is checked against the people actually on this booking before it is filed.
 function _nmKey(s){return String(s||'').toUpperCase().replace(/[^A-Z]/g,'');}
+// A booking is often made by an agent, a spouse or a company. Once the main renter's passport
+// is scanned, that name is the one that counts everywhere — it is who signs and who drives —
+// and the name the booking was made under is kept beside it in brackets.
+function mainRenter(){
+  try{
+    return (co&&co.drivers&&co.drivers[0]&&co.drivers[0].name)||(co&&co.clientName)||(co&&co.v&&co.v.cl)||'';
+  }catch(e){return '';}
+}
+function bookedByName(){
+  try{
+    var b=(co&&co.bookedBy)||'';
+    if(!b)return '';
+    return _nmKey(b)===_nmKey(mainRenter())?'':b;
+  }catch(e){return '';}
+}
+function clientDisplay(){
+  var m=mainRenter(),b=bookedByName();
+  return m+(b?' (booked by '+b+')':'');
+}
+// Called whenever a passport or licence gives us the main renter's real name.
+function noteMainRenter(name){
+  try{
+    if(!name||!co||!co.v)return;
+    var booked=co.v.cl||'';
+    if(booked&&_nmKey(booked)!==_nmKey(name)&&!co.bookedBy)co.bookedBy=booked;
+    co.clientName=name;
+    if(co.drivers&&co.drivers[0])co.drivers[0].name=name;
+    if(co.contract)co.contract.client_name=name;
+  }catch(e){}
+}
 function docNameMatches(name){
   var k=_nmKey(name);
   if(!k)return true;                                  // no name yet — the slot is still blank
@@ -3961,11 +4000,14 @@ function docBelongsHere(name){
   try{
     if(!co||!co.v)return true;
     if(docNameMatches(name))return true;
-    return confirm('⚠️ THIS MAY BE THE WRONG CLIENT\n\n'
-      +'You are filing a document for:\n    '+String(name||'(no name)')+'\n\n'
-      +'but this check-out is:\n    '+co.fn+' — '+String((co.v&&co.v.cl)||co.clientName||'')+'\n\n'
-      +'OK  =  file it here anyway\n'
-      +'Cancel  =  do not file it (go and open the right vehicle first)');
+    return confirm('⚠️ THIS NAME DOES NOT MATCH THE BOOKING\n\n'
+      +'Document:   '+String(name||'(no name)')+'\n'
+      +'Booking:    '+co.fn+' — '+String((co.v&&co.v.cl)||co.clientName||'')+'\n\n'
+      +'OK  =  this IS the person collecting the vehicle.\n'
+      +'          The booking was just made under another name, which will be\n'
+      +'          kept in brackets beside theirs.\n\n'
+      +'Cancel  =  this document belongs to a different client.\n'
+      +'          Nothing is filed — open the right vehicle first.');
   }catch(e){return true;}
 }
 async function extractPassportData(b64DataUrl, driverIdx){
@@ -4023,7 +4065,7 @@ If a field is not visible or unclear, use an empty string. Return only the JSON.
 
     if(parsed.full_name){
       d.name = parsed.full_name;
-      if(driverIdx === 0) co.clientName = parsed.full_name;
+      if(driverIdx === 0) noteMainRenter(parsed.full_name);   // passport wins; booking name kept in brackets
       changed.push('name');
     }
     if(parsed.dob){ d.dob = parsed.dob; changed.push('DOB'); }
@@ -4054,7 +4096,7 @@ If a field is not visible or unclear, use an empty string. Return only the JSON.
       var d2=co.drivers[driverIdx];
       if(m&&d2){
         var ch=[];
-        if(m.full_name&&!d2.name){d2.name=m.full_name;if(driverIdx===0)co.clientName=m.full_name;ch.push('name');}
+        if(m.full_name&&!d2.name){d2.name=m.full_name;if(driverIdx===0)noteMainRenter(m.full_name);ch.push('name');}
         if(m.dob&&!d2.dob){d2.dob=m.dob;ch.push('DOB');}
         if(m.nationality&&!d2.nationality){d2.nationality=m.nationality;ch.push('nationality');}
         if(m.passport_number&&!d2.passport){d2.passport=m.passport_number;ch.push('passport #');}
@@ -4117,7 +4159,7 @@ If a field is not visible, use an empty string. Return only the JSON.` }
     if(!d) return;
 
     let changed = [];
-    if(parsed.full_name && !d.name){ d.name=parsed.full_name; if(driverIdx===0) co.clientName=parsed.full_name; changed.push('name'); }
+    if(parsed.full_name && !d.name){ d.name=parsed.full_name; if(driverIdx===0) noteMainRenter(parsed.full_name); changed.push('name'); }
     if(parsed.licence_number){ d.licNo=parsed.licence_number; changed.push('licence #'); }
     if(parsed.expiry){ d.licExpiry=parsed.expiry; changed.push('expiry'); }
     if(parsed.date_of_birth && !d.dob){ d.dob=parsed.date_of_birth; changed.push('DOB'); }
@@ -4294,7 +4336,7 @@ function coStep2(){
       <div class="step-ico">📋</div>
       <div><div class="step-title">Step 5 — Contract</div><div class="step-sub">Signed and filed</div></div>
     </div>
-    <div class="signed">✅<div class="signed-name">${co.clientName} — Contract signed</div><div class="signed-time">${co.contractAt||''}${co.contractBy?' · by '+_bx(co.contractBy):''}</div></div>
+    <div class="signed">✅<div class="signed-name">${mainRenter()} — Contract signed</div><div class="signed-time">${co.contractAt||''}${co.contractBy?' · by '+_bx(co.contractBy):''}</div></div>
     <button class="btn g" style="margin-bottom:8px;" onclick="viewSignedContract()">📄 View signed contract</button>
     <div class="al ok" style="font-size:14px;">Saved to the rental file. The client receives it on WhatsApp with the handover document at the end of the check-out.</div>`;
   }
@@ -4325,8 +4367,9 @@ function gatherContract(){
   co.contract=co.contract||{};
   // Pull primary driver details from co.drivers[0]
   const pd=co.drivers&&co.drivers[0]?co.drivers[0]:{};
-  co.contract.client_name=pd.name||co.clientName||'';
+  co.contract.client_name=pd.name||mainRenter()||'';
   co.clientName=co.contract.client_name;
+  co.contract.booked_by=bookedByName()||null;
   co.contract.client_dob=pd.dob||'';
   co.contract.client_nationality=pd.nationality||'';
   co.contract.client_passport=pd.passport||'';
@@ -4404,7 +4447,7 @@ function _previewAndSignContract(){
     <div style="background:#1d6b3d;color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;border-bottom:3px solid #3ddc84;">
       <div>
         <div style="font-size:16px;font-weight:800;">📋 Rental Agreement</div>
-        <div style="font-size:14px;color:rgba(255,255,255,.6);margin-top:2px;">${co.fn} · ${co.clientName} · Please read before signing</div>
+        <div style="font-size:14px;color:rgba(255,255,255,.6);margin-top:2px;">${co.fn} · ${clientDisplay()} · Please read before signing</div>
       </div>
       <button onclick="ctBack()" style="background:#fff;border:2px solid #3ddc84;border-radius:10px;color:#1d6b3d;padding:10px 18px;font-size:16px;font-weight:900;cursor:pointer;">← Back</button>
     </div>
@@ -4865,7 +4908,7 @@ function draftPayload(){
   if(!co||!co.fn)return null;
   var v=co.v||{};
   return {
-    id:draftId('checkout',co.fn,v.bid), kind:'checkout', fleet_no:co.fn, client:co.clientName||v.cl||'',
+    id:draftId('checkout',co.fn,v.bid), kind:'checkout', fleet_no:co.fn, client:mainRenter()||v.cl||'',
     staff:[co.prepBy,co.equipBy,co.mechCheckBy,co.inspBy,co.contractBy,co.mechBy,co.mgmtBy].filter(Boolean).slice(-1)[0]||'',
     step:coStep,
     data:{
@@ -4875,7 +4918,7 @@ function draftPayload(){
       contractBy:co.contractBy||'', contractSigned:!!co.contractSigned, contractAt:co.contractAt||'',
       contract:co.contract||{}, drivers:(co.drivers||[]).map(function(d){return {name:d.name||'',dob:d.dob||'',nat:d.nat||'',passport:d.passport||'',passportExp:d.passportExp||'',licNo:d.licNo||'',licExpiry:d.licExpiry||''};}),
       odometerOut:co.odometerOut||0, fuelOut:co.fuelOut||'', returnTime:co.returnTime||'',
-      clientName:co.clientName||'', mgmtBy:co.mgmtBy||'',
+      clientName:co.clientName||'', bookedBy:co.bookedBy||'', mgmtBy:co.mgmtBy||'',
       marks:(typeof imarks!=='undefined'?imarks:null), isize:(typeof isize!=='undefined'?isize:'M')
     },
     updated_by:(APP_USER&&APP_USER.name)||'', device:DEVICE_ID,
@@ -4904,6 +4947,7 @@ function applyDraft(d){
   if(x.fuelOut)co.fuelOut=x.fuelOut;
   if(x.returnTime)co.returnTime=x.returnTime;
   if(x.clientName)co.clientName=x.clientName;
+  if(x.bookedBy)co.bookedBy=x.bookedBy;
   if(x.mgmtBy)co.mgmtBy=x.mgmtBy;
   try{ if(x.marks&&typeof imarks!=='undefined'){ VIEWS.forEach(function(v){ if(x.marks[v])imarks[v]=x.marks[v]; }); if(x.isize)isize=x.isize; } }catch(e){}
   return true;
@@ -5337,7 +5381,7 @@ function coStep6_mgmt(){
       ['🧹','Cleaning',coCleanStaff().join(' + ')||'—',coCleanDone(),uncPrep.length+probPrep.length],
       ['🏕','Equipment',co.equipByAll&&co.equipByAll.length>1?co.equipByAll.join(' + '):co.prepBy,!!co.equipSig,0],
       ['📷','Client ID',co.clientPassport||co.licFront?'On file':'Missing',!!(co.clientPassport||co.licFront),0],
-      ['📋','Contract',co.clientName,co.contractSigned,0],
+      ['📋','Contract',clientDisplay(),co.contractSigned,0],
       ['🔍','Damage',co.mechBy||'—',true,uncMech.length+probMech.length],
       ['✍️','Client signed',co.sigOverride?('OVERRIDE by '+co.sigOverride.by):co.clientName,handoverClosed(),0],
     ].map(function(row){var ico=row[0],lbl=row[1],who=row[2],done=row[3],issues=row[4]; return `
@@ -5522,7 +5566,7 @@ async function completeCO(){
 
   // Save the check-out record (first time), or update it if something was corrected afterwards
   const _coRec={
-    booking_id:co.fn+'_'+co.v.pu, fleet_no:co.fn, client:co.clientName,
+    booking_id:co.fn+'_'+co.v.pu, fleet_no:co.fn, client:mainRenter(), booked_by:bookedByName()||null,
     prep_by:co.prepBy, prep_by_all:co.prepByAll||[co.prepBy], prep_log:co.prepLog||[],
     prep_signed_at:coCleanDone()?new Date().toISOString():null, fuel_out:co.fuelOut,
     handover_by:co.mechBy, customer_name:co.clientName,
@@ -5587,7 +5631,7 @@ async function completeCO(){
   <div class="meta">
     <div class="meta-item"><div class="meta-label">Vehicle</div><div class="meta-value">${co.fn}</div></div>
     <div class="meta-item"><div class="meta-label">Registration</div><div class="meta-value">${co.v.reg}</div></div>
-    <div class="meta-item"><div class="meta-label">Client</div><div class="meta-value">${co.clientName||co.v.cl}</div></div>
+    <div class="meta-item"><div class="meta-label">Client</div><div class="meta-value">${mainRenter()||co.v.cl}${bookedByName()?` <span style="font-weight:600;color:#666;">(booked by ${bookedByName()})</span>`:''}</div></div>
     <div class="meta-item"><div class="meta-label">Pickup</div><div class="meta-value">${coPickupDate()||'—'}</div></div>
     <div class="meta-item"><div class="meta-label">Return</div><div class="meta-value">${co.v.rt||'—'}</div></div>
     <div class="meta-item"><div class="meta-label">Odometer out</div><div class="meta-value">${(co.odometerOut||co.v.odo||0).toLocaleString()} km</div></div>
