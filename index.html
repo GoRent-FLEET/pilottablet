@@ -3971,7 +3971,7 @@ function parseMRZ(text){
   if(nm.length){
     var sur=(nm[0]||'').replace(/</g,' ').trim(),giv=(nm[1]||'').replace(/</g,' ').trim();
     var full=(giv+' '+sur).replace(/\s+/g,' ').trim();
-    if(full.length>3)out.full_name=full;
+    if(full.length>3){out.full_name=tidyName(full);out.given_names=tidyName(giv);out.surname=tidyName(sur);}
   }
   var pno=l2.slice(0,9).replace(/</g,'').trim();
   if(pno.length>=6)out.passport_number=pno;
@@ -4004,6 +4004,41 @@ function _nmKey(s){return String(s||'').toUpperCase().replace(/[^A-Z]/g,'');}
 // A booking is often made by an agent, a spouse or a company. Once the main renter's passport
 // is scanned, that name is the one that counts everywhere — it is who signs and who drives —
 // and the name the booking was made under is kept beside it in brackets.
+// Passports print the surname first, so a name read straight off one came out as
+// 'SLATTERY MAX AMBROSE' and every greeting said 'Hi Slattery'. Given names come first here,
+// and the shouting is turned down while keeping the particles and prefixes people actually use.
+var NAME_LOWER=['de','del','della','der','den','des','di','da','do','dos','du','la','le','van','von','ter','ten','bin','binte','al','of','y','e'];
+var NAME_UPPER=['ii','iii','iv'];
+function tidyName(s){
+  var t=String(s||'').trim().replace(/\s+/g,' ');
+  if(!t)return '';
+  if(t!==t.toUpperCase()&&t!==t.toLowerCase())return t;   // already mixed case: leave it be
+  return t.split(' ').map(function(w,i){
+    var low=w.toLowerCase();
+    if(NAME_UPPER.indexOf(low)>=0)return w.toUpperCase();
+    if(i>0&&NAME_LOWER.indexOf(low)>=0)return low;
+    // O'Brien, Mc / Mac, and double-barrelled names keep their inner capitals
+    return low.replace(/(^|['\u2019-])([a-z])/g,function(m,a,b){return a+b.toUpperCase();})
+              .replace(/^(Mc|Mac)([a-z])/,function(m,a,b){return a+b.toUpperCase();});
+  }).join(' ');
+}
+function composeName(parsed){
+  var g=String((parsed&&parsed.given_names)||'').trim();
+  var sn=String((parsed&&parsed.surname)||'').trim();
+  if(g&&sn)return tidyName(g+' '+sn);          // given names first, the way people are addressed
+  if(g)return tidyName(g);
+  if(sn)return tidyName(sn);
+  return tidyName((parsed&&parsed.full_name)||'');
+}
+// The name to greet somebody by. Uses the given names when we know them.
+function firstNameOf(name,driver){
+  try{
+    var g=driver&&driver.givenNames;
+    if(g)return tidyName(String(g).trim().split(/\s+/)[0]);
+    var t=String(name||'').replace(/\(.*\)/,'').trim();
+    return tidyName(t.split(/\s+/)[0]||'');
+  }catch(e){return '';}
+}
 function mainRenter(){
   try{
     return (co&&co.drivers&&co.drivers[0]&&co.drivers[0].name)||(co&&co.clientName)||(co&&co.v&&co.v.cl)||'';
@@ -4112,7 +4147,8 @@ async function extractPassportData(b64DataUrl, driverIdx){
               type: 'text',
               text: `This is a passport photo page. Extract the following fields and return ONLY a valid JSON object, nothing else, no markdown, no explanation:
 {
-  "full_name": "surname and given names exactly as printed (NOT from MRZ)",
+  "given_names": "the given names / first names exactly as printed (NOT from MRZ)",
+  "surname": "the surname / family name exactly as printed (NOT from MRZ)",
   "dob": "date of birth in DD/MM/YYYY format",
   "nationality": "nationality as printed",
   "passport_number": "passport number",
@@ -4133,9 +4169,12 @@ If a field is not visible or unclear, use an empty string. Return only the JSON.
 
     let changed = [];
 
-    if(parsed.full_name){
-      d.name = parsed.full_name;
-      if(driverIdx === 0) noteMainRenter(parsed.full_name);   // passport wins; booking name kept in brackets
+    var _nm = composeName(parsed);
+    if(_nm){
+      d.name = _nm;
+      d.givenNames = parsed.given_names || '';
+      d.surname    = parsed.surname || '';
+      if(driverIdx === 0) noteMainRenter(_nm);   // passport wins; booking name kept in brackets
       changed.push('name');
     }
     if(parsed.dob){ d.dob = parsed.dob; changed.push('DOB'); }
@@ -4166,7 +4205,7 @@ If a field is not visible or unclear, use an empty string. Return only the JSON.
       var d2=co.drivers[driverIdx];
       if(m&&d2){
         var ch=[];
-        if(m.full_name&&!d2.name){d2.name=m.full_name;if(driverIdx===0)noteMainRenter(m.full_name);ch.push('name');}
+        if(m.full_name&&!d2.name){d2.name=m.full_name;d2.givenNames=m.given_names||'';d2.surname=m.surname||'';if(driverIdx===0)noteMainRenter(m.full_name);ch.push('name');}
         if(m.dob&&!d2.dob){d2.dob=m.dob;ch.push('DOB');}
         if(m.nationality&&!d2.nationality){d2.nationality=m.nationality;ch.push('nationality');}
         if(m.passport_number&&!d2.passport){d2.passport=m.passport_number;ch.push('passport #');}
@@ -4209,7 +4248,8 @@ async function extractLicenceData(b64DataUrl, driverIdx){
             { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
             { type: 'text', text: `This is a driver's licence. Extract the following and return ONLY valid JSON, nothing else:
 {
-  "full_name": "full name as printed on the licence",
+  "given_names": "the given names / first names as printed on the licence",
+  "surname": "the surname / family name as printed on the licence",
   "licence_number": "licence number / ID number",
   "expiry": "expiry date in DD/MM/YYYY format",
   "date_of_birth": "date of birth in DD/MM/YYYY format if visible",
@@ -4228,7 +4268,8 @@ If a field is not visible, use an empty string. Return only the JSON.` }
     if(!d) return;
 
     let changed = [];
-    if(parsed.full_name && !d.name){ d.name=parsed.full_name; if(driverIdx===0) noteMainRenter(parsed.full_name); changed.push('name'); }
+    var _lnm=composeName(parsed);
+    if(_lnm && !d.name){ d.name=_lnm; d.givenNames=parsed.given_names||''; d.surname=parsed.surname||''; if(driverIdx===0) noteMainRenter(_lnm); changed.push('name'); }
     if(parsed.licence_number){ d.licNo=parsed.licence_number; changed.push('licence #'); }
     if(parsed.expiry){ d.licExpiry=parsed.expiry; changed.push('expiry'); }
     if(parsed.date_of_birth && !d.dob){ d.dob=parsed.date_of_birth; changed.push('DOB'); }
@@ -5847,7 +5888,7 @@ function sendHandoverWA(){
   const phone=((function(){var _e=document.getElementById('send-wa');return _e?_e.value:undefined;})()||'').trim();
   if(!phone){toast('Enter WhatsApp number','err');return;}
   if(!co._handoverLink){toast('The handover report is still being saved — try again in a moment','err');return;}
-  var first=String(co.clientName||co.v.cl||'').split(' ')[0]||'';
+  var first=firstNameOf(mainRenter()||co.v.cl,(co.drivers||[])[0]);
   const msg=encodeURIComponent('Hi '+first+',\n\nThank you for renting with Go Rent 4x4 Namibia!\n\nVehicle: '+co.fn+' ('+(co.v.reg||'')+')\nPickup: '+(coPickupDate()||'today')+' | Return: '+(co.v.rt||'-')+'\nFuel at departure: '+(co.fuelOut||'Full')+' - please return at the same level. DIESEL ONLY.\n\nYour handover document - handover checklist, vehicle condition and damage, photos, equipment issued and your full signed rental contract:\n'+co._handoverLink+'\n\nSafe travels! WhatsApp us anytime: +264 81 861 8085\n- Go Rent 4x4 Team');
   window.open('https://wa.me/'+waNumber(phone)+'?text='+msg,'_blank');
   if(!co._mgmtSent)toast('Now send the copy to Management (green button)','ok');
@@ -6301,7 +6342,7 @@ async function saveDeposit(id){
   try{SB.from('management_alerts').update({resolved:true,resolved_by:who,resolved_at:new Date().toISOString()}).eq('fleet_no',c.fleet_no).eq('resolved',false).then(function(){},function(){});}catch(e){}
   DEP_PENDING=DEP_PENDING.filter(function(x){return x.id!==id;});
   var v=FLEET.filter(function(f){return f.fn===c.fleet_no&&(f.fn+'_'+f.pu)===c.booking_id;})[0]||FLEET.filter(function(f){return f.fn===c.fleet_no;})[0]||{};
-  var first=String(c.client||'').split(' ')[0];
+  var first=firstNameOf(c.client);
   var msg='Hi '+first+', thank you for renting with Go Rent 4×4.\n\nYour deposit for '+c.fleet_no+':\n'
     +(ret!==''?'• Returned to you: N$ '+(+ret).toLocaleString()+'\n':'')+(ded!==''&&+ded>0?'• Deducted: N$ '+(+ded).toLocaleString()+'\n':'')
     +(notes?'\n'+notes+'\n':'')+'\nKind regards, Go Rent 4×4';
@@ -6953,7 +6994,7 @@ function waNumber(p){
   return d.replace(/\D/g,'');
 }
 function ciWaText(link){
-  var first=String(ci.v.cl||'').split(' ')[0]||'';
+  var first=firstNameOf(ci.v.cl);
   return 'Hi '+first+', thank you for renting with Go Rent 4×4. Here is your vehicle return report for '+ci.fn
     +', with photos, who received the vehicle and the signatures:\n'+link;
 }
@@ -7047,7 +7088,7 @@ function sharedReportWA(){
         if(k==='CLIENT')name=v;else if(k==='VEHICLE')veh=v;else if(k==='RETURN')ret=v;
       }
     }catch(e){}
-    var first=String(name||'').replace(/\(.*\)/,'').trim().split(/\s+/)[0]||'';
+    var first=firstNameOf(name);
     var msg='Hi '+first+',\n\nHere is your Go Rent 4x4 Namibia document again'
       +(veh?'\n\nVehicle: '+veh:'')+(ret?'\nReturn: '+ret:'')
       +'\n\nIt opens straight on your phone:\n'+link
