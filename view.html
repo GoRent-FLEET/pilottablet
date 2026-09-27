@@ -65,8 +65,20 @@
     raw = location.search.replace(/^.*[?&]u=([^&]*).*$/, '$1');
   }
   if (!raw) {
-    fail('Link incomplete',
-      'The whole link did not come through. Please open the full link from your WhatsApp message, or ask us to send it again.', false);
+    // Also lets staff rescue a document link that was sent before this page existed:
+    // paste the old link in here and it opens properly.
+    show('<h1>Paste your document link</h1>' +
+      '<p>If you were sent a link that opened as code, paste it here and it will open properly.</p>' +
+      '<textarea id="paste" rows="4" placeholder="https://..." style="width:100%;box-sizing:border-box;padding:10px;' +
+        'border:2px solid #cbd5e1;border-radius:9px;font-size:13px;font-family:inherit;"></textarea>' +
+      '<a class="wa" id="go" style="background:#145c30;color:#fff;cursor:pointer;">Open my document</a>');
+    var go = document.getElementById('go');
+    if (go) go.onclick = function(){
+      var v = (document.getElementById('paste').value || '').trim();
+      if (!v) return;
+      location.hash = encodeURIComponent(v);
+      location.reload();
+    };
     return;
   }
 
