@@ -8351,7 +8351,28 @@ function getDmgData(){const out=[];VIEWS.forEach(v=>{const m=imarks[v][isize];if
 
 // ── Quantities (chairs, sleeping bags): what went out at check-out must come back ──
 function ciQtyItems(){if(!window._ciQtyItems)window._ciQtyItems=L_CI.filter(function(x){return String(x[1]).indexOf('__QTY__')===0;}).map(function(x){return String(x[1]).replace('__QTY__','');});return window._ciQtyItems;}
-function ciQtyOut(i){if(ciQtyItems().indexOf(i)<0||!ci)return 0;var v=ci._coItems&&ci._coItems[i];v=(v&&typeof v==='object')?v.st:v;return parseInt(v)||0;}
+// The check-out files a quantity under the plain item name ('Chairs'), while the return list
+// calls the same thing 'Chairs (correct qty)'. Matched literally, the counts never appeared at
+// check-in. The trailing note is ignored when looking the quantity up.
+function ciQtyKey(i){
+  var raw=String(i||'').trim(), bare=raw.replace(/\s*\(.*?\)\s*$/,'').trim(), list=ciQtyItems();
+  for(var k=0;k<list.length;k++){
+    var q=String(list[k]);
+    if(q===raw||q===bare)return q;
+    if(q.toLowerCase()===bare.toLowerCase())return q;
+  }
+  return '';
+}
+function ciQtyRaw(i){
+  if(!ci)return null;
+  var key=ciQtyKey(i);if(!key)return null;
+  var v=ci._coItems&&ci._coItems[key];
+  v=(v&&typeof v==='object')?v.st:v;
+  if(v===undefined||v===null||v==='')return null;
+  var n=parseInt(v);
+  return isNaN(n)?null:n;                       // 0 is a real answer: none went out
+}
+function ciQtyOut(i){var n=ciQtyRaw(i);return n||0;}
 function ciQtyLabel(i){var o=ciQtyOut(i);if(!o)return i;var r=ci.retQty?ci.retQty[i]:null;return (r!=null&&r<o)?i+' ('+r+' of '+o+' returned — '+(o-r)+' missing)':i;}
 function ciPickQty(gi,ii){
   var i=RET_GROUPS[gi].items[ii],o=ciQtyOut(i),cur=ci.retQty?ci.retQty[i]:null;
@@ -8388,7 +8409,9 @@ function renderRetGroups(){
       var bd=st==='ok'?'var(--se)':st==='missing'?'var(--re)':'var(--g3)';
       var fg=st==='ok'?'var(--se)':st==='missing'?'var(--rl)':'var(--g5)';
       var _o=ciQtyOut(i),_r=(ci&&ci.retQty)?ci.retQty[i]:null;
-      var _qt=_o?(_r==null?' · <b>'+_o+' out</b>':(_r>=_o?' '+_r+'/'+_o:' — only '+_r+' of '+_o+' back')):'';
+      var _raw=ciQtyRaw(i);
+      var _qt=_o?(_r==null?' · <b>'+_o+' out</b>':(_r>=_o?' '+_r+'/'+_o:' — only '+_r+' of '+_o+' back'))
+              :(_raw===0?' · <b>none went out</b>':'');
       var ico=ITEM_ICON(i)?'<span class="chip-ico">'+ITEM_ICON(i)+'</span>':'';
       // Tap the item = returned · tap ✗ = MISSING (quantities ask how many came back)
       return '<div style="display:inline-flex;align-items:stretch;border-radius:10px;border:2px solid '+bd+';background:'+bg+';overflow:hidden;">'
