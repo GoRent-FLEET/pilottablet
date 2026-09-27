@@ -1285,15 +1285,27 @@ function goPage(p,_fromBack){
   else if(p==='doc')renderDoc();
 }
 
+// How far back the check-out list reaches. A client who lands late often collects the next
+// day, and the booking still carries the original date, so that vehicle must stay reachable.
+var CO_LOOKBACK=7;
+function setCOLookback(n){CO_LOOKBACK=n;try{localStorage.setItem('gorent_co_lookback',String(n));}catch(e){}renderCOPicker();}
+try{var _cl=parseInt(localStorage.getItem('gorent_co_lookback'),10);if(_cl===1||_cl===7||_cl===30)CO_LOOKBACK=_cl;}catch(e){}
 function renderCOPicker(){
   var body=document.getElementById('co-body');
   if(!body)return;
   if(co&&co.v){ try{drawCO();}catch(err){toast('Error: '+err.message,'err');} return;}
   var today=new Date().toISOString().split('T')[0];
+  // A client whose flight lands late often only collects the next day. The booking still says
+  // yesterday, so earlier departures stay on this list until the vehicle actually goes out.
+  function puDiff(v){return Math.round((new Date(v.pu+'T00:00:00')-new Date(today+'T00:00:00'))/86400000);}
   var upcoming=FLEET.filter(function(v){
-    var diff=Math.round((new Date(v.pu+'T00:00:00')-new Date(today+'T00:00:00'))/86400000);
-    return diff>=0&&diff<=7;
-  }).sort(function(a,b){return a.pu>b.pu?1:-1;});
+    var diff=puDiff(v);
+    return diff>=-CO_LOOKBACK&&diff<=7;
+  }).sort(function(a,b){
+    var la=puDiff(a)<0,lb=puDiff(b)<0;
+    if(la!==lb)return la?-1:1;   // not collected yet on the day it was due — deal with these first
+    return a.pu>b.pu?1:-1;
+  });
   function ipInfo(fn,bid){
     var best=null;
     try{
@@ -1318,12 +1330,15 @@ function renderCOPicker(){
   var rows='';
   upcoming.forEach(function(v){
     var isToday=v.pu===today;
+    var dDiff=puDiff(v),late=dDiff<0,lateTxt=Math.abs(dDiff)+' day'+(Math.abs(dDiff)===1?'':'s')+' ago';
     var ip=ipInfo(v.fn,v.bid);
     var badge=isToday?'<span style="background:#4a6fa5;color:#fff;font-size:11px;font-weight:800;padding:3px 10px;border-radius:8px;">TODAY</span>':'<span style="background:var(--g2);color:var(--g5);font-size:11px;font-weight:800;padding:3px 10px;border-radius:8px;">UPCOMING</span>';
     var dt=new Date(v.pu+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
     if(ip)badge='<span style="background:var(--ag);color:var(--al);border:1px solid var(--am);font-size:11px;font-weight:900;padding:3px 10px;border-radius:8px;">IN PROGRESS</span>';
-    var col=ip?'var(--am)':isToday?'#4a6fa5':'var(--g3)';
-    rows+='<div data-fn="'+v.fn+'" class="picker-row" ontouchend="event.preventDefault();startCO(this.dataset.fn);" style="background:'+(ip?'var(--ag)':'var(--g1)')+';border:2px solid '+col+';border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;">'
+    if(late)badge='<span style="background:var(--re);color:#fff;font-size:11px;font-weight:900;padding:3px 10px;border-radius:8px;">NOT COLLECTED</span>'+(ip?'<div style="margin-top:4px;">'+badge+'</div>':'');
+    if(late)dt='⚠ Was due '+dt+' — '+lateTxt;
+    var col=late?'var(--re)':ip?'var(--am)':isToday?'#4a6fa5':'var(--g3)';
+    rows+='<div data-fn="'+v.fn+'" class="picker-row" ontouchend="event.preventDefault();startCO(this.dataset.fn);" style="background:'+(late?'var(--rg)':ip?'var(--ag)':'var(--g1)')+';border:2px solid '+col+';border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;">'
       +'<div><div style="font-size:16px;font-weight:900;color:var(--se);">'+v.fn+'</div>'
       +'<div style="font-size:13px;font-weight:700;color:var(--tx);margin-top:2px;">'+v.cl+'</div>'
@@ -1337,8 +1352,18 @@ function renderCOPicker(){
       +'</div>'
       +'<div>'+badge+'</div></div></div>';
   });
-  if(!upcoming.length) rows='<div style="padding:40px;text-align:center;color:var(--g5);font-size:13px;">No check-outs in the next 7 days</div>';
-  body.innerHTML='<div style="padding:16px;"><div style="font-size:13px;font-weight:800;color:var(--g5);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;">&#9654; Select Vehicle to Check Out</div>'+rows+'</div>';
+  if(!upcoming.length) rows='<div style="padding:40px;text-align:center;color:var(--g5);font-size:13px;">No check-outs due in this period</div>';
+  var lateN=upcoming.filter(function(v){return puDiff(v)<0;}).length;
+  var back='<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:12px;">'
+    +'<span style="font-size:12px;font-weight:800;color:var(--g5);">Also show departures from:</span>'
+    +[[1,'Yesterday'],[7,'Last 7 days'],[30,'Last 30 days']].map(function(o){
+        var on=CO_LOOKBACK===o[0];
+        return '<button onclick="setCOLookback('+o[0]+')" style="padding:7px 12px;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer;'
+          +'border:2px solid '+(on?'var(--gb)':'var(--g3)')+';background:'+(on?'var(--se)':'#ffffff')+';color:'+(on?'#ffffff':'var(--tx)')+';">'+o[1]+'</button>';
+      }).join('')
+    +'</div>'
+    +(lateN?'<div style="background:var(--rg);border:2px solid var(--re);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;font-weight:800;color:var(--rl);">⚠ '+lateN+' vehicle'+(lateN===1?'':'s')+' still to go out from an earlier day — tap to finish the check-out</div>':'');
+  body.innerHTML='<div style="padding:16px;"><div style="font-size:13px;font-weight:800;color:var(--g5);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;">&#9654; Select Vehicle to Check Out</div>'+back+rows+'</div>';
   body.querySelectorAll('.picker-row').forEach(function(el){
     el.addEventListener('click',function(){ startCO(this.dataset.fn); });
   });
@@ -2689,6 +2714,7 @@ async function startCO(fn){
     mgmtBy:'',mgmtSig:null,mgmtAt:'',
   };
   co._drLoading=true;   // wait for work from an older version of the app (pickUpRemoteWork) before saving
+  askCollectionDate();
   initIM();coStep=firstAllowedStep();goPage('co');
   loadPrevDamage(fn);
   try{ drawCO(); } catch(err){ 
@@ -2697,6 +2723,35 @@ async function startCO(fn){
     document.getElementById('co-body').innerHTML='<div style="padding:20px;color:red;font-size:15px;">Error: '+err.message+'</div>';
   }
 }
+
+// A client who lands late collects a day or two after the booked date. The contract must carry
+// the day the keys actually changed hands, so this asks once, up front, and shows what each
+// choice does to the number of days charged. Peter's answer is recorded on the check-out.
+function askCollectionDate(){
+  try{
+    if(!co||!co.v||!co.v.pu)return;
+    if(co.collectedOn||co._collectAsked)return;
+    var today=new Date().toISOString().split('T')[0];
+    if(co.v.pu>=today)return;                       // booked for today or later: nothing to ask
+    co._collectAsked=true;
+    function pretty(d){return new Date(d+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});}
+    function days(from){return co.v.rt?Math.max(1,Math.round((new Date(co.v.rt)-new Date(from))/86400000)):0;}
+    var msg='This booking was due to go out on '+pretty(co.v.pu)+', but today is '+pretty(today)+'.\n\n'
+      +'When is the client actually taking the vehicle?\n\n'
+      +'OK  =  TODAY, '+pretty(today)+'   ('+days(today)+' days on the contract)\n'
+      +'Cancel  =  keep the booked date, '+pretty(co.v.pu)+'   ('+days(co.v.pu)+' days on the contract)';
+    if(confirm(msg)){
+      co.collectedOn=today;
+      co.collectedNote={booked:co.v.pu,actual:today,by:(APP_USER&&APP_USER.name)||'',at:new Date().toISOString()};
+      toast('Contract will be dated '+pretty(today)+' — '+days(today)+' days','ok');
+    }else{
+      co.collectedOn=co.v.pu;
+      toast('Keeping the booked date, '+pretty(co.v.pu),'ok');
+    }
+    try{saveCOProgress();}catch(e){}
+  }catch(e){}
+}
+function coPickupDate(){return (co&&co.collectedOn)||(co&&co.v&&co.v.pu)||'';}
 
 const CO_STEPS=[
   {n:0,ico:'🚿',lbl:'Cleaning',   sub:'Carwash & clean'},
@@ -2846,7 +2901,7 @@ function drawCO(){
           }).join('');
           return '<label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:#333333;">🛣 CURRENT ODO READING'
             +'<input type="number" inputmode="numeric" pattern="[0-9]*" id="co-odo-out" class="'+(km?'':'need-flash')+'" value="'+km+'" placeholder="Odo km" onfocus="this.select()" oninput="co.odometerOut=+this.value" '
-            +'style="width:120px;padding:5px 8px;font-size:14px;font-weight:800;background:#ffffff;border:2px solid '+(km?'var(--gb)':'var(--re)')+';border-radius:6px;color:#fff;"></label>'
+            +'style="width:120px;padding:6px 8px;font-size:16px;font-weight:900;background:#ffffff;border:2px solid '+(km?'var(--gb)':'var(--re)')+';border-radius:6px;color:#0f172a;"></label>'
             +'<span style="font-size:10px;color:#444444;">'+src+'</span>'
             +'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-left:auto;"><span style="font-size:13px;font-weight:900;color:#000000;margin-right:4px;">⛽ FUEL OUT</span>'+fb+'</div>'
             +'</div>';
@@ -3995,7 +4050,7 @@ async function captureDriverDoc(event,driverIdx,field){
 // Contract details: insurance dropdown + tick boxes (fuel & admin, cross-border, windscreen, camping cover)
 var CT_INS={'1':{t:'Option 1 — Basic Cover',rate:230,dep:45000},'2':{t:'Option 2 — Extended Cover',rate:362,dep:30000},'3':{t:'Option 3 — Premium Cover (zero excess)',rate:546,dep:0}};
 function ctMoney(n){return 'N$ '+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
-function ctDays(){return co.v.pu&&co.v.rt?Math.max(1,Math.round((new Date(co.v.rt)-new Date(co.v.pu))/86400000)):0;}
+function ctDays(){var _pu=coPickupDate();return _pu&&co.v.rt?Math.max(1,Math.round((new Date(co.v.rt)-new Date(_pu))/86400000)):0;}
 function ctSet(k,v){(co.contract=co.contract||{})[k]=v;if(k==='insurance_option'){var o=CT_INS[v];co.contract.deposit_amount=o?o.dep:null;}drawCO();}
 // ── EXTRA DRIVER FEE ───────────────────────────────────────────────────────
 // N$280 once-off per additional driver, taken at collection. Counted from the drivers
@@ -4126,7 +4181,7 @@ function coStep2(){
 }
 
 function calcDays(){
-  const days=co.v.pu&&co.v.rt?Math.max(1,Math.round((new Date(co.v.rt)-new Date(co.v.pu))/86400000)):0;
+  const days=ctDays();
   (co.contract=co.contract||{}).total_days=days;
   (co.contract=co.contract||{}).total_rental=days*(+(function(){var _e=document.getElementById('ct-rate');return _e?_e.value:undefined;})()||0);
   const el=document.getElementById('ct-days');if(el)el.value=days;
@@ -4146,7 +4201,8 @@ function gatherContract(){
   co.contract.client_passport_expiry=pd.ppExpiry||'';
   co.contract.fleet_no=co.fn;
   co.contract.vehicle_reg=co.v.reg;
-  co.contract.pickup_date=co.v.pu;
+  co.contract.pickup_date=coPickupDate();
+  if(co.collectedOn&&co.collectedOn!==co.v.pu){co.contract.booked_pickup_date=co.v.pu;co.contract.collection_note='Booked '+co.v.pu+', collected '+co.collectedOn;}
   co.contract.return_date=co.v.rt;
   if(co.returnTime)co.contract.return_time=co.returnTime;
   co.contract.odo_out=co.v.odo;
@@ -4168,7 +4224,7 @@ function gatherContract(){
   co.contract.additional_drivers=(co.drivers||[]).slice(1).filter(function(d){return d&&d.name;}).map(function(d){return [d.name,d.dob,d.nationality,d.licNo,d.licExpiry].filter(Boolean).join(' / ');}).join('\n');
   co.contract.extra_driver_count=extraDriverCount();
   co.contract.extra_driver_fee=extraDriverFee();
-  const days=co.v.pu&&co.v.rt?Math.max(1,Math.round((new Date(co.v.rt)-new Date(co.v.pu))/86400000)):0;
+  const days=ctDays();
   co.contract.total_days=days;
 
 }
@@ -4985,7 +5041,7 @@ function coStep5_client(){
   </div>`:''}
 
   <!-- Client signature -->
-  <div style="background:#0a1520;border:3px solid var(--gb);border-radius:var(--r);overflow:hidden;margin-bottom:10px;">
+  <div style="background:var(--g0);border:3px solid var(--gb);border-radius:var(--r);overflow:hidden;margin-bottom:10px;">
     <div style="background:linear-gradient(135deg,#1d6b3d,#145c30);padding:12px 16px;border-bottom:2px solid var(--gb);">
       <div style="font-size:15px;font-weight:800;color:#fff;">✍️ ${v.cl} — I confirm the above was explained</div>
       <div style="font-size:14px;color:rgba(255,255,255,.6);margin-top:2px;">I understand my responsibilities and accept the vehicle in the condition described</div>
@@ -5361,7 +5417,7 @@ async function completeCO(){
     <div class="meta-item"><div class="meta-label">Vehicle</div><div class="meta-value">${co.fn}</div></div>
     <div class="meta-item"><div class="meta-label">Registration</div><div class="meta-value">${co.v.reg}</div></div>
     <div class="meta-item"><div class="meta-label">Client</div><div class="meta-value">${co.clientName||co.v.cl}</div></div>
-    <div class="meta-item"><div class="meta-label">Pickup</div><div class="meta-value">${co.v.pu||'—'}</div></div>
+    <div class="meta-item"><div class="meta-label">Pickup</div><div class="meta-value">${coPickupDate()||'—'}</div></div>
     <div class="meta-item"><div class="meta-label">Return</div><div class="meta-value">${co.v.rt||'—'}</div></div>
     <div class="meta-item"><div class="meta-label">Odometer out</div><div class="meta-value">${(co.odometerOut||co.v.odo||0).toLocaleString()} km</div></div>
     <div class="meta-item"><div class="meta-label">Fuel level</div><div class="meta-value">⛽ ${co.fuelOut||'Full'} — RETURN SAME</div></div>
@@ -5508,7 +5564,7 @@ function sendHandoverWA(){
   if(!phone){toast('Enter WhatsApp number','err');return;}
   if(!co._handoverLink){toast('The handover report is still being saved — try again in a moment','err');return;}
   var first=String(co.clientName||co.v.cl||'').split(' ')[0]||'';
-  const msg=encodeURIComponent('Hi '+first+',\n\nThank you for renting with Go Rent 4x4 Namibia!\n\nVehicle: '+co.fn+' ('+(co.v.reg||'')+')\nPickup: '+(co.v.pu||'today')+' | Return: '+(co.v.rt||'-')+'\nFuel at departure: '+(co.fuelOut||'Full')+' - please return at the same level. DIESEL ONLY.\n\nYour handover document - handover checklist, vehicle condition and damage, photos, equipment issued and your full signed rental contract:\n'+co._handoverLink+'\n\nSafe travels! WhatsApp us anytime: +264 81 861 8085\n- Go Rent 4x4 Team');
+  const msg=encodeURIComponent('Hi '+first+',\n\nThank you for renting with Go Rent 4x4 Namibia!\n\nVehicle: '+co.fn+' ('+(co.v.reg||'')+')\nPickup: '+(coPickupDate()||'today')+' | Return: '+(co.v.rt||'-')+'\nFuel at departure: '+(co.fuelOut||'Full')+' - please return at the same level. DIESEL ONLY.\n\nYour handover document - handover checklist, vehicle condition and damage, photos, equipment issued and your full signed rental contract:\n'+co._handoverLink+'\n\nSafe travels! WhatsApp us anytime: +264 81 861 8085\n- Go Rent 4x4 Team');
   window.open('https://wa.me/'+waNumber(phone)+'?text='+msg,'_blank');
   if(!co._mgmtSent)toast('Now send the copy to Management (green button)','ok');
 }
@@ -6128,7 +6184,7 @@ function ciStep3_CI(){
     <div class="step-sub">Client checks the return summary and signs · the signed checklist is then sent to the client on WhatsApp</div></div>
   </div>
 
-  <div style="background:#0a1520;border:3px solid ${hasIssues?'var(--re)':'var(--gb)'};border-radius:var(--r);overflow:hidden;margin-bottom:14px">
+  <div style="background:var(--g0);border:3px solid ${hasIssues?'var(--re)':'var(--gb)'};border-radius:var(--r);overflow:hidden;margin-bottom:14px">
     <div style="background:${hasIssues?'linear-gradient(135deg,#200505,#3a0808)':'linear-gradient(135deg,#1d6b3d,#145c30)'};padding:13px 16px;border-bottom:2px solid ${hasIssues?'var(--re)':'var(--gb)'}">
       <div style="font-size:16px;font-weight:800;color:#fff">${hasIssues?'⚠️':'✅'} ${v.cl} — Return Summary</div>
       <div style="font-size:14px;color:rgba(255,255,255,.6)">Received by ${r.receivedBy||'—'} · ${new Date().toLocaleDateString('en-GB')}</div>
@@ -6240,7 +6296,7 @@ function ciStep4_CI(){
 
 function ciReturnView(v,r,newDmg,fuelShort,missing,damaged){
   const hasIssues=newDmg.length||fuelShort||missing.length||damaged.length;
-  return `<div style="background:#0a1520;border:3px solid ${hasIssues?'var(--re)':'var(--gb)'};border-radius:var(--r);overflow:hidden;margin-bottom:14px">
+  return `<div style="background:var(--g0);border:3px solid ${hasIssues?'var(--re)':'var(--gb)'};border-radius:var(--r);overflow:hidden;margin-bottom:14px">
     <div style="background:${hasIssues?'linear-gradient(135deg,#200505,#3a0808)':'linear-gradient(135deg,#1d6b3d,#145c30)'};padding:13px 16px;border-bottom:2px solid ${hasIssues?'var(--re)':'var(--gb)'}">
       <div style="font-size:16px;font-weight:800;color:#fff">${hasIssues?'⚠️':'✅'} ${v.cl} — Return Summary</div>
       <div style="font-size:14px;color:rgba(255,255,255,.6)">Received by ${r.receivedBy||'—'} · ${new Date().toLocaleDateString('en-GB')}</div>
@@ -6594,7 +6650,7 @@ function sendHandoverMgmt(){
   var d=co.docItems||{};
   mgmtWA('GO RENT RECORD - CHECK-OUT\n'
     +'Vehicle: '+co.fn+' ('+(co.v.reg||'')+')\nClient: '+(co.clientName||co.v.cl||'')+(co.clientPhone?' ('+co.clientPhone+')':'')
-    +'\nPickup: '+(co.v.pu||'-')+' | Return: '+(co.v.rt||'-')+(co.returnTime?' at '+co.returnTime:'')
+    +'\nPickup: '+(coPickupDate()||'-')+' | Return: '+(co.v.rt||'-')+(co.returnTime?' at '+co.returnTime:'')
     +'\nKm out: '+(co.odometerOut||co.v.odo||'-')+' | Fuel out: '+(co.fuelOut||'Full')
     +'\nWiFi device: '+(d.wifi==='ok'?'handed over':'NOT handed over')+(co.v.xb?' | Cross-border ('+co.v.xb+') docs: '+(d.xb==='ok'?'handed over':'MISSING'):'')
     +'\nHanded over by: '+(co.mechBy||co.inspBy||'-')+' | Contract by: '+(co.contractBy||'-')
