@@ -1194,6 +1194,43 @@ function resetProcess(fn,ev){
   var _onCI=(function(){var e=document.getElementById('page-ci');return !!(e&&e.classList.contains('on'));})();
   goPage(_onCI?'ci':(document.getElementById('page-co')&&co&&co.fn?'co':'ov'));
 }
+// Peter only. Some vehicles are long gone and the tablet paperwork will never be finished —
+// they must be closable so the list shows what still needs doing. It is recorded as a forced
+// close, with who and why, and never passes as a check-out that was actually carried out.
+function forceBtn(fn){
+  if(!isAdmin())return '';
+  return '<button onclick="forceCompleteCO(\''+_bx(fn)+'\',event)" style="margin-left:8px;background:var(--gr);border:2px solid var(--gb);color:var(--gb);border-radius:8px;font-size:11px;font-weight:900;padding:5px 10px;cursor:pointer;">✅ Close off</button>';
+}
+async function forceCompleteCO(fn,ev){
+  try{if(ev){ev.stopPropagation();ev.preventDefault();}}catch(e){}
+  if(!isAdmin()){toast('Only Peter can close off a check-out','err');return;}
+  var v=pickVeh(fn,'out');
+  if(!v){toast('Vehicle '+fn+' not found','err');return;}
+  if(coIsDone(v)){toast(fn+' is already completed','ok');return;}
+  if(!confirm('CLOSE OFF '+fn+' — '+(v.cl||'')+'\n\n'
+    +'This marks the check-out finished WITHOUT the tablet process.\n'
+    +'There will be no signed contract, no vehicle checks and no handover document on file for it.\n\n'
+    +'Only do this for a vehicle that has already gone out and will never be captured properly.'))return;
+  var why=prompt('Why is '+fn+' being closed off? (this is recorded against it)','Vehicle already collected — not captured on the tablet');
+  if(why===null)return;
+  why=String(why||'').trim();
+  if(!why){toast('A reason is needed','err');return;}
+  var now=new Date().toISOString();
+  try{
+    var res=await SB.from('checkouts').insert({
+      booking_id:bkKey(v),fleet_no:v.fn,client:v.cl||'',
+      force_closed_by:(APP_USER&&APP_USER.name)||'Peter',force_closed_at:now,force_closed_reason:why,
+      created_at:now
+    });
+    if(res&&res.error){toast('Could not close it off: '+res.error.message,'err');return;}
+  }catch(e){toast('Could not close it off — check the connection','err');return;}
+  try{await drFinish(drId('checkout',{v:v,fn:v.fn}));}catch(e){}
+  try{await drFinishFleet(v.fn);}catch(e){}
+  try{if(co&&co.fn===fn){co={};coStep=0;}}catch(e){}
+  await loadDoneSets();
+  toast(fn+' closed off ✅','ok');
+  renderCOPicker();
+}
 function resetBtn(fn){
   if(!isAdmin())return '';
   return '<button onclick="resetProcess(\''+_bx(fn)+'\',event)" style="margin-left:8px;background:var(--rg);border:1px solid var(--re);color:var(--rl);border-radius:8px;font-size:11px;font-weight:900;padding:4px 9px;cursor:pointer;">🗑 Reset</button>';
@@ -1338,7 +1375,9 @@ function renderCOPicker(){
     var dt=new Date(v.pu+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
     if(ip)badge='<span style="background:var(--ag);color:var(--al);border:1px solid var(--am);font-size:11px;font-weight:900;padding:3px 10px;border-radius:8px;">IN PROGRESS</span>';
     if(late&&!fin)badge='<span style="background:var(--re);color:#fff;font-size:11px;font-weight:900;padding:3px 10px;border-radius:8px;">NOT COLLECTED</span>'+(ip?'<div style="margin-top:4px;">'+badge+'</div>':'');
-    if(fin)badge='<span style="background:var(--se);color:#fff;font-size:11px;font-weight:900;padding:3px 10px;border-radius:8px;">\u2705 COMPLETED</span>';
+    if(fin)badge=coWasForced(v)
+      ?'<span style="background:var(--am);color:#fff;font-size:11px;font-weight:900;padding:3px 10px;border-radius:8px;">\u26A0 CLOSED OFF</span>'
+      :'<span style="background:var(--se);color:#fff;font-size:11px;font-weight:900;padding:3px 10px;border-radius:8px;">\u2705 COMPLETED</span>';
     if(late&&!fin)dt='⚠ Was due '+dt+' — '+lateTxt;
     var col=fin?'var(--gb)':late?'var(--re)':ip?'var(--am)':isToday?'#4a6fa5':'var(--g3)';
     rows+='<div data-fn="'+v.fn+'" class="picker-row" ontouchend="event.preventDefault();startCO(this.dataset.fn);" style="background:'+(fin?'var(--gr)':late?'var(--rg)':ip?'var(--ag)':'var(--g1)')+';border:2px solid '+col+';border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;">'
@@ -1352,6 +1391,9 @@ function renderCOPicker(){
           +['cleaning','equipment','mechanical','inspection','contract','handover'].filter(function(k){return ip.who[k];})
              .map(function(k){return k.charAt(0).toUpperCase()+k.slice(1)+': '+_bx(ip.who[k]);}).join(' · ')+'</div>':'')
         :'')
+      +((!fin&&(late||ip))?'<div style="margin-top:8px;display:flex;align-items:center;flex-wrap:wrap;gap:6px;">'
+          +'<span style="font-size:12px;font-weight:800;color:'+(late?'var(--rl)':'var(--al)')+';">\uD83D\uDC49 Tap to '+(ip?'carry on with':'start')+' the check-out</span>'
+          +forceBtn(v.fn)+'</div>':'')
       +'</div>'
       +'<div>'+badge+'</div></div></div>';
   });
@@ -1990,7 +2032,9 @@ function _renderOV(){
       +'<div style="font-size:12px;color:#666;margin-bottom:3px;">'+locLbl+': '+loc+' · Quote '+(v.quote||'—')+(isRemote?' · ':'')+'</div>'
       +(isRemote?'<div style="font-size:11px;font-weight:900;color:#c53030;letter-spacing:.3px;margin-bottom:3px;">REMOTE ARRANGEMENTS</div>':'')
       +(isIP?'<div style="font-size:11px;font-weight:900;color:#e53e3e;margin-bottom:3px;">🔴 IN PROGRESS</div>'
-        :_fin?'<div style="font-size:11px;font-weight:900;color:#12803c;margin-bottom:3px;">✅ COMPLETED</div>':'')
+        :_fin?(isOut&&coWasForced(v)
+          ?'<div style="font-size:11px;font-weight:900;color:#b36a00;margin-bottom:3px;">⚠ CLOSED OFF — no paperwork on file</div>'
+          :'<div style="font-size:11px;font-weight:900;color:#12803c;margin-bottom:3px;">✅ COMPLETED</div>'):'')
       +'<div style="font-size:12px;font-weight:800;color:'+campCol+';">'+camp+'</div>'
       +'</div>'
       +(isRemote?'<span style="font-size:16px;flex-shrink:0;">⚠️</span>':'')
@@ -2522,12 +2566,12 @@ async function drFinish(id){
 // A finished check-out must stop looking unfinished. The tablet's own checkouts / checkins
 // tables are the authority: once a row exists for that booking, the job is done — that also
 // heals markers already stranded on a tablet, without anyone clearing anything by hand.
-var DONE_CO={},DONE_CI={};
+var DONE_CO={},DONE_CI={},FORCED_CO={};
 async function loadDoneSets(){
   try{
-    var a=await SB.from('checkouts').select('booking_id').order('created_at',{ascending:false}).limit(500);
-    var m={};((a&&a.data)||[]).forEach(function(x){if(x&&x.booking_id)m[x.booking_id]=true;});
-    if(a&&!a.error)DONE_CO=m;
+    var a=await SB.from('checkouts').select('booking_id,force_closed_by').order('created_at',{ascending:false}).limit(500);
+    var m={},f={};((a&&a.data)||[]).forEach(function(x){if(!x||!x.booking_id)return;m[x.booking_id]=true;if(x.force_closed_by&&f[x.booking_id]===undefined)f[x.booking_id]=true;if(!x.force_closed_by)f[x.booking_id]=false;});
+    if(a&&!a.error){DONE_CO=m;FORCED_CO=f;}
   }catch(e){}
   try{
     var b=await SB.from('checkins').select('booking_id').order('created_at',{ascending:false}).limit(500);
@@ -2536,6 +2580,7 @@ async function loadDoneSets(){
   }catch(e){}
 }
 function coIsDone(v){try{return !!(v&&DONE_CO[bkKey(v)]);}catch(e){return false;}}
+function coWasForced(v){try{return !!(v&&FORCED_CO[bkKey(v)]);}catch(e){return false;}}
 function ciIsDone(v){try{return !!(v&&DONE_CI[bkKey(v)]);}catch(e){return false;}}
 async function drFinishFleet(fn){
   var ids=Object.keys(DR_SRV).filter(function(k){return DR_SRV[k].fleet_no===fn;});
@@ -2697,7 +2742,14 @@ async function loadPrevDamage(fn){
 async function startCO(fn){
   const v=pickVeh(fn,'out');
   if(!v){toast('Vehicle '+fn+' not found','err');return;}
-  if(v.st==='rented'){toast('Already checked out','err');return;}
+  // Marked OUT in the Fleet Manager but never checked out on the tablet: that is exactly the
+  // late collection Peter needs to finish, so it must not be a dead end.
+  if(v.st==='rented'&&!coIsDone(v)){
+    if(!isAdmin()){toast('Fleet Manager has '+fn+' as already out — ask Peter','err');return;}
+    if(!confirm(fn+' is marked OUT in the Fleet Manager, but no check-out was ever completed on this tablet.\n\n'
+      +'OK  =  do the check-out now and get the paperwork on file\n'
+      +'Cancel  =  go back'))return;
+  }
   // Opening a finished check-out used to build a blank one and push that empty draft over the
   // saved work — the screen came up with nothing on it. The saved record is the real thing.
   if(coIsDone(v)){
