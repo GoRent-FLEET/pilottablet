@@ -5480,6 +5480,19 @@ function coHandoverExtras(){
     +(diag?'<h2>🗺 Damage Diagram (marked at departure)</h2><p style="font-size:13px;color:#666;">Blue = scratch · Red = dent · Yellow = pre-existing — the client is not liable for damage recorded here.</p>'+diag:'')
     +(ct?'<h2>📋 Signed Rental Contract</h2><div style="border:2px solid #145c30;border-radius:8px;padding:12px;background:#fff;">'+ct+'</div>':'<h2>📋 Signed Rental Contract</h2><p style="font-size:14px;color:#b45309;">The signed contract is kept in the Go Rent office file.</p>');
 }
+// Supabase Storage hands HTML files back as plain text for security, so a client tapping a
+// storage link straight sees page source instead of their contract. view.html sits next to this
+// app on GitHub Pages, which serves real HTML: it loads the stored document and renders it.
+// The storage link rides in the # fragment, which browsers never send to any server, so the
+// client's document link never leaves their phone.
+var VIEWER_FALLBACK='https://gorent-fleet.github.io/tablet/view.html';
+function clientDocLink(signedUrl){
+  if(!signedUrl)return '';
+  try{
+    if(location.protocol!=='http:'&&location.protocol!=='https:')return VIEWER_FALLBACK+'#'+encodeURIComponent(signedUrl);
+    return location.origin+location.pathname.replace(/[^\/]*$/,'')+'view.html#'+encodeURIComponent(signedUrl);
+  }catch(e){return VIEWER_FALLBACK+'#'+encodeURIComponent(signedUrl);}
+}
 async function saveHandoverLink(html){
   try{
     var path='bookings/'+bkKey(co.v)+'/handover-report_'+Date.now()+'.html';
@@ -5487,7 +5500,7 @@ async function saveHandoverLink(html){
     if(up&&up.error)return '';
     var su=await SB.storage.from('client-docs').createSignedUrl(path,60*60*24*REPORT_LINK_DAYS);
     var signed=su&&su.data&&su.data.signedUrl;if(!signed)return '';
-    return signed;   // straight to the document: the client never has to load this app
+    return clientDocLink(signed);
   }catch(e){return '';}
 }
 function sendHandoverWA(){
@@ -6547,7 +6560,7 @@ async function saveCIReportLink(){
     if(up&&up.error)return '';
     var s=await SB.storage.from('client-docs').createSignedUrl(path,60*60*24*REPORT_LINK_DAYS);
     var signed=s&&s.data&&s.data.signedUrl;if(!signed)return '';
-    return signed;
+    return clientDocLink(signed);
   }catch(e){return '';}
 }
 function waNumber(p){

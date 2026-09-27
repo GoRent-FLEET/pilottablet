@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Go Rent 4&times;4 Namibia — Your Document</title>
+<style>
+  html,body{margin:0;padding:0;background:#f4f6fa;color:#0f172a;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;}
+  .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;}
+  .card{max-width:420px;width:100%;background:#fff;border:2px solid #cbd5e1;border-radius:14px;
+    padding:28px 22px;text-align:center;box-shadow:0 2px 14px rgba(15,23,42,.07);}
+  .logo{font-size:19px;font-weight:900;color:#145c30;letter-spacing:.3px;margin-bottom:6px;}
+  .sub{font-size:13px;color:#64748b;margin-bottom:20px;}
+  .spin{width:34px;height:34px;margin:6px auto 16px;border:3px solid #e6ebf2;border-top-color:#145c30;
+    border-radius:50%;animation:sp 0.9s linear infinite;}
+  @keyframes sp{to{transform:rotate(360deg);}}
+  h1{font-size:17px;font-weight:800;margin:0 0 10px;}
+  p{font-size:14px;line-height:1.55;color:#475569;margin:0 0 10px;}
+  .err h1{color:#b91c1c;}
+  .wa{display:inline-block;margin-top:14px;padding:11px 18px;border-radius:9px;background:#25d366;
+    color:#04240f;font-weight:900;font-size:14px;text-decoration:none;}
+  .retry{display:inline-block;margin-top:10px;padding:10px 18px;border-radius:9px;border:2px solid #cbd5e1;
+    background:#fff;color:#0f172a;font-weight:800;font-size:14px;text-decoration:none;cursor:pointer;}
+  .tiny{font-size:11px;color:#94a3b8;margin-top:16px;}
+</style>
+</head>
+<body>
+<div class="wrap"><div class="card" id="card">
+  <div class="logo">GO RENT 4&times;4 NAMIBIA</div>
+  <div class="sub">Windhoek</div>
+  <div class="spin"></div>
+  <h1>Opening your document…</h1>
+  <p>This takes a few seconds on a slow connection.</p>
+</div></div>
+
+<script>
+/* Supabase Storage returns HTML files as plain text for security, so a client
+   tapping a storage link sees page source instead of their document. This page
+   is served from GitHub Pages as real HTML: it fetches the stored document and
+   renders it. The storage link travels in the # fragment, which browsers never
+   send to the server, so the document link stays on the client's own phone. */
+(function(){
+  var WA = 'https://wa.me/264818618085';
+
+  // Opening a second document link in the same tab only changes the #fragment, which does
+  // not reload the page — so load the new one instead of leaving the old one on screen.
+  window.addEventListener('hashchange', function(){ location.reload(); });
+
+  function show(html){
+    document.getElementById('card').className = 'card err';
+    document.getElementById('card').innerHTML =
+      '<div class="logo">GO RENT 4&times;4 NAMIBIA</div><div class="sub">Windhoek</div>' + html +
+      '<div class="tiny">Go Rent 4&times;4 Namibia &middot; 6 Diehl Str, Windhoek</div>';
+  }
+  function fail(title, msg, retry){
+    show('<h1>' + title + '</h1><p>' + msg + '</p>' +
+      (retry ? '<a class="retry" href="javascript:location.reload()">Try again</a><br>' : '') +
+      '<a class="wa" href="' + WA + '">Message Go Rent on WhatsApp</a>');
+  }
+
+  var raw = location.hash ? location.hash.slice(1) : '';
+  if (!raw && location.search.indexOf('u=') > -1) {
+    raw = location.search.replace(/^.*[?&]u=([^&]*).*$/, '$1');
+  }
+  if (!raw) {
+    fail('Link incomplete',
+      'The whole link did not come through. Please open the full link from your WhatsApp message, or ask us to send it again.', false);
+    return;
+  }
+
+  var url;
+  try { url = decodeURIComponent(raw); } catch (e) { url = raw; }
+
+  // Only ever load a Go Rent storage document — never an address someone else pasted in.
+  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/storage\/v1\//i.test(url)) {
+    fail('Link not recognised',
+      'This does not look like a Go Rent document link. Please open the link exactly as we sent it.', false);
+    return;
+  }
+
+  var done = false;
+  var timer = setTimeout(function(){
+    if (done) return;
+    done = true;
+    fail('Taking too long', 'Your document did not load. Check your signal and try again.', true);
+  }, 45000);
+
+  var x = new XMLHttpRequest();
+  x.open('GET', url, true);
+  x.onreadystatechange = function(){
+    if (x.readyState !== 4 || done) return;
+    done = true; clearTimeout(timer);
+    if (x.status === 200 && x.responseText) {
+      try {
+        document.open();
+        document.write(x.responseText);
+        document.close();
+      } catch (e) {
+        fail('Could not display the document',
+          'Your document downloaded but this browser could not show it. Try opening the link in Chrome or Safari.', true);
+      }
+    } else if (x.status === 400 || x.status === 403 || x.status === 404) {
+      fail('This link has expired',
+        'Document links stay active for a limited time. Message us and we will send you a fresh one straight away.', false);
+    } else {
+      fail('Could not open your document',
+        'Something went wrong on the way (error ' + (x.status || 'no connection') + '). Check your signal and try again.', true);
+    }
+  };
+  x.onerror = function(){
+    if (done) return;
+    done = true; clearTimeout(timer);
+    fail('No connection',
+      'Your phone could not reach our document store. Check your signal or Wi-Fi and try again.', true);
+  };
+  try { x.send(); } catch (e) {
+    done = true; clearTimeout(timer);
+    fail('Could not open your document', 'This browser blocked the request. Try opening the link in Chrome or Safari.', true);
+  }
+})();
+</script>
+</body>
+</html>
