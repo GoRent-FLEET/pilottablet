@@ -790,14 +790,7 @@ function selectLoginName(name){
   var msg=document.getElementById('pin-msg'); if(msg) msg.textContent='';
   _pinRefresh();
 }
-function showApp(){
-  document.getElementById('page-login').classList.remove('on');
-  document.getElementById('nav-user').textContent='';
-  var nameEl = document.getElementById('nav-user-name');
-  if(nameEl) nameEl.textContent = '👤 '+APP_USER.name;
-  document.getElementById('nav-logout').style.display='';
-  goPage('ov');
-}
+// (an older showApp lived here; the live one is further down, after restoreSession)
 // ── PIN LOGIN ─────────────────────────────────────────────────
 var _pin = '';
 var _who = '';
@@ -1128,15 +1121,23 @@ async function appUpdateNow(){
 }
 
 // ── Backup: a copy of everything on this computer each day the app is opened ──
-async function backupNow(auto){
+async function backupData(){
   try{
-    var tables=['checkouts','checkins','rental_contracts','booking_overrides'];
+    var tables=['checkouts','checkins','rental_contracts','booking_overrides','work_drafts','management_alerts'];
     var data={made:new Date().toISOString(),by:(APP_USER&&APP_USER.name)||'',bookings:[],vehicles:[]};
     try{var bk=await SB.from('bookings').select('*');data.bookings=(bk&&bk.data)||[];}catch(e){}
     try{var vh=await SB.from('vehicles').select('*');data.vehicles=(vh&&vh.data)||[];}catch(e){}
     for(var i=0;i<tables.length;i++){
       try{var r=await SB.from(tables[i]).select('*');data[tables[i]]=(r&&r.data)||[];}catch(e){data[tables[i]]=[];}
     }
+    return data;
+  }catch(e){return null;}
+}
+async function backupNow(auto){
+  try{
+    var data=await backupData();
+    if(!data)throw new Error('could not read the records');
+    try{await backupToCloud(true);}catch(e){}     // keep the off-tablet copy current as well
     var name='gorent-backup-'+new Date().toISOString().split('T')[0]+'.json';
     var blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
     var url=URL.createObjectURL(blob);
@@ -1150,11 +1151,28 @@ async function backupNow(auto){
 }
 function backupOnOpen(){
   try{
-    if(/iPad|iPhone|Android/i.test(navigator.userAgent))return;
+    // This used to give up on any tablet, and the tablets are all this app runs on — so no
+    // backup was ever taken. The daily one now goes to storage, which every device can do.
     var today=new Date().toISOString().split('T')[0];
     if(localStorage.getItem('gorent_backup_day')===today)return;
-    setTimeout(function(){backupNow(true);},4000);
+    setTimeout(function(){backupToCloud(true);},4000);
   }catch(e){}
+}
+// A copy of the records kept off the tablets, so losing or wiping one loses nothing.
+async function backupToCloud(auto){
+  try{
+    var data=await backupData();
+    if(!data)return false;
+    var day=new Date().toISOString().split('T')[0];
+    var path='backups/gorent-backup-'+day+'.json';
+    var blob=new Blob([JSON.stringify(data)],{type:'application/json'});
+    var up=await SB.storage.from('client-docs').upload(path,blob,{contentType:'application/json',upsert:true});
+    if(up&&up.error){ if(!auto)toast('Backup failed: '+up.error.message,'err'); return false; }
+    try{localStorage.setItem('gorent_backup_day',day);}catch(e){}
+    var n=(data.checkouts||[]).length+(data.checkins||[]).length+(data.rental_contracts||[]).length;
+    if(!auto)toast('\u2601\uFE0F Backup saved off the tablet \u2014 '+n+' records','ok');
+    return true;
+  }catch(e){ if(!auto)toast('Backup failed: '+(e&&e.message||e),'err'); return false; }
 }
 function canSeeOverview(){ return !!(APP_USER && NO_OVERVIEW.indexOf(APP_USER.name)<0); }
 function canViewReports(){ return APP_USER && canSeeOverview() && (REPORTS_ALLOWED.includes(APP_USER.name) || isAdmin()); }
@@ -9040,6 +9058,12 @@ async function lsPin(d) {
       try { renderOV(); } catch(e) { console.warn('renderOV:',e); }
       try { afterUnlock(); } catch(e) {}
       try { loadFleetFromDB().then(function(){ loadClients().then(function(){ try{renderOV();}catch(e){} }); }); } catch(e) {}
+      // Signing in with a PIN used to skip these three. Without them a tablet never checked for
+      // a new version of the app, never refreshed bookings or finished check-outs from the other
+      // tablets, and never took its daily backup — for every member of staff.
+      setTimeout(function(){ try{ checkResume(); }catch(e){} }, 500);
+      try{ startAutoRefresh(); }catch(e){}
+      try{ backupOnOpen(); }catch(e){}
     } else {
       var msg = document.getElementById('ls-msg');
       msg.style.color = '#f05050';
