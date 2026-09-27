@@ -1430,13 +1430,31 @@ async function renderDoc(){
   var back={};ci_.forEach(function(x){back[x.booking_id]=x.created_at||1;});
   var signed={};ct_.forEach(function(x){signed[x.booking_id]=x.client_name||1;});
   var seen={};
-  DOC_ROWS=co_.filter(function(x){if(!x.booking_id||seen[x.booking_id])return false;seen[x.booking_id]=1;return true;})
+  var rows=co_.filter(function(x){if(!x.booking_id||seen[x.booking_id])return false;seen[x.booking_id]=1;return true;})
     .map(function(x){
       var v=FLEET.filter(function(f){return bkKey(f)===x.booking_id;})[0]||{};
       return {bid:x.booking_id,fn:x.fleet_no,cl:x.client||x.customer_name||signed[x.booking_id]||v.cl||'',
               out:x.created_at,back:back[x.booking_id]||null,contract:!!signed[x.booking_id],
-              pu:v.pu||'',rt:v.rt||'',by:x.handover_by||'',mgr:x.manager_name||''};
+              pu:v.pu||'',rt:v.rt||'',by:x.handover_by||'',mgr:x.manager_name||'',also:[]};
     });
+  // A check-out started again under a different date leaves two records for one rental. They are
+  // the same vehicle and the same person, so they are shown as one — newest first, with the
+  // earlier one's documents folded in. Nothing is deleted; both records are still there.
+  rows.sort(function(a,b){return (b.out||'')>(a.out||'')?1:-1;});
+  var merged=[];
+  rows.forEach(function(r){
+    var into=merged.filter(function(m){
+      return m.fn===r.fn && !m.back && !r.back && namesLookSame(m.cl,r.cl);
+    })[0];
+    if(into){
+      into.also.push({bid:r.bid,out:r.out,by:r.by});
+      if(!into.contract&&r.contract)into.contract=true;
+      if(!into.by&&r.by)into.by=r.by;
+      return;
+    }
+    merged.push(r);
+  });
+  DOC_ROWS=merged;
   drawDoc();
 }
 function drawDoc(){
@@ -1453,6 +1471,7 @@ function drawDoc(){
       +'<div style="min-width:0;">'
       +'<div style="font-size:16px;font-weight:900;color:var(--se);">'+_bx(r.fn)+' <span style="font-size:13px;color:var(--g5);font-weight:700;">'+_bx(r.cl||'—')+'</span></div>'
       +'<div style="font-size:12px;color:var(--g5);margin-top:3px;">📅 '+(r.pu||fmt(r.out))+' → '+(r.rt||'—')+' · handed over by '+_bx(r.by||'—')+'</div>'
+      +((r.also&&r.also.length)?'<div style="font-size:11px;font-weight:800;color:var(--al);margin-top:3px;">\uD83D\uDD17 '+r.also.length+' earlier check-out'+(r.also.length===1?'':'s')+' for this rental combined here</div>':'')
       +'<div style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap;">'
       +'<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:8px;background:'+(r.contract?'var(--sg)':'var(--rg)')+';color:'+(r.contract?'var(--se)':'var(--rl)')+';">'+(r.contract?'📋 Contract signed':'📋 No contract')+'</span>'
       +'<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:8px;background:'+(r.back?'var(--g2)':'var(--ag)')+';color:'+(r.back?'var(--g5)':'var(--al)')+';">'+(r.back?'🏠 Returned '+fmt(r.back):'🚙 Still out')+'</span>'
@@ -1513,7 +1532,7 @@ function docVehPanel(){
 }
 function docOpenBooking(bid){
   var r=DOC_ROWS.filter(function(x){return x.bid===bid;})[0];
-  if(r)openRentalFile(r.bid,r.fn,r.cl);
+  if(r)openRentalFile(r.bid,r.fn,r.cl,(r.also||[]).map(function(a){return a.bid;}));
 }
 function docOpen(i){
   var q=(DOC_FIND||'').toLowerCase().trim();
@@ -1522,7 +1541,7 @@ function docOpen(i){
     return !q||(r.fn+' '+r.cl+' '+(r.pu||'')+' '+(r.rt||'')).toLowerCase().indexOf(q)>=0;
   });
   var r=list[i];if(!r)return;
-  openRentalFile(r.bid,r.fn,r.cl);
+  openRentalFile(r.bid,r.fn,r.cl,(r.also||[]).map(function(a){return a.bid;}));
 }
 async function renderOut(){
   var body=document.getElementById('out-body');if(!body)return;
@@ -1531,7 +1550,7 @@ async function renderOut(){
   try{var r1=await SB.from('checkouts').select('id,booking_id,fleet_no,customer_name,created_at,return_time,return_date_new,out_notes,handover_by,return_place,return_address,return_place_time').order('created_at',{ascending:false}).limit(300);co_=(r1&&r1.data)||[];}catch(e){}
   try{var r2=await SB.from('checkins').select('booking_id');ci_=(r2&&r2.data)||[];}catch(e){}
   var back={};ci_.forEach(function(x){back[x.booking_id]=1;});
-  var seen={};OUT_ROWS=co_.filter(function(x){if(!x.booking_id||back[x.booking_id]||seen[x.booking_id])return false;seen[x.booking_id]=1;return true;});
+  var seen={},seenFn={};OUT_ROWS=co_.filter(function(x){if(!x.booking_id||back[x.booking_id]||seen[x.booking_id])return false;seen[x.booking_id]=1;if(seenFn[x.fleet_no])return false;seenFn[x.fleet_no]=1;return true;});
   drawOut();
 }
 function outVeh(row){return FLEET.filter(function(v){return bkKey(v)===row.booking_id;})[0]||FLEET.filter(function(v){return v.fn===row.fleet_no;})[0]||{fn:row.fleet_no,cl:row.customer_name,reg:'',pu:'',rt:''};}
@@ -3982,22 +4001,24 @@ function noteMainRenter(name){
     if(co.contract)co.contract.client_name=name;
   }catch(e){}
 }
+// Two spellings of one person: a passport read badly, a name typed by hand, a different order.
+function namesLookSame(a,b){
+  var ka=_nmKey(a),kb=_nmKey(b);
+  if(!ka||!kb)return false;
+  if(ka===kb||ka.indexOf(kb)>=0||kb.indexOf(ka)>=0)return true;
+  var ta=String(a).toUpperCase().split(/[^A-Z]+/).filter(function(x){return x.length>2;});
+  var tb=String(b).toUpperCase().split(/[^A-Z]+/).filter(function(x){return x.length>2;});
+  for(var i=0;i<ta.length;i++)if(tb.indexOf(ta[i])>=0)return true;
+  return false;
+}
 function docNameMatches(name){
-  var k=_nmKey(name);
-  if(!k)return true;                                  // no name yet — the slot is still blank
+  if(!_nmKey(name))return true;                       // no name yet — the slot is still blank
   var known=[];
   try{
     known.push(co.clientName,co.v&&co.v.cl);
     (co.drivers||[]).forEach(function(d){if(d&&d.name)known.push(d.name);});
   }catch(e){}
-  for(var i=0;i<known.length;i++){
-    var o=_nmKey(known[i]);if(!o)continue;
-    if(o===k||o.indexOf(k)>=0||k.indexOf(o)>=0)return true;
-    // a shared surname or first name is enough — people are entered in every order imaginable
-    var a=String(name).toUpperCase().split(/[^A-Z]+/).filter(function(x){return x.length>2;});
-    var b=String(known[i]).toUpperCase().split(/[^A-Z]+/).filter(function(x){return x.length>2;});
-    for(var j=0;j<a.length;j++)if(b.indexOf(a[j])>=0)return true;
-  }
+  for(var i=0;i<known.length;i++)if(namesLookSame(name,known[i]))return true;
   return false;
 }
 function docBelongsHere(name){
@@ -6695,7 +6716,7 @@ function rfShowContract(){
     +'<meta name="viewport" content="width=device-width,initial-scale=1">'
     +'<title>Signed contract</title></head><body style="margin:0;padding:10px;background:#fff;">'+h+'</body></html>','Signed contract');
 }
-async function openRentalFile(key,fn,client){
+async function openRentalFile(key,fn,client,alsoKeys){
   closeRentalFile();closeBookingDetail();
   var m=document.createElement('div');m.id='rf-modal';
   m.setAttribute('style','position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.55);display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow-y:auto;-webkit-overflow-scrolling:touch;');
@@ -6721,10 +6742,19 @@ async function openRentalFile(key,fn,client){
         if(contract)contract._alt=true;
       }catch(e){}
     }
-    var docs=await rfList('client-docs','bookings/'+key);
+    var _keys=[key].concat((alsoKeys||[]).filter(function(k){return k&&k!==key;}));
+    var docs=[],_from={};
+    for(var _i=0;_i<_keys.length;_i++){
+      var _d=await rfList('client-docs','bookings/'+_keys[_i]);
+      _d.forEach(function(p){if(docs.indexOf(p)<0){docs.push(p);_from[p]=_keys[_i];}});
+    }
     var signed={};
     if(docs.length){var s=await SB.storage.from('client-docs').createSignedUrls(docs,3600);((s&&s.data)||[]).forEach(function(x){if(x&&x.signedUrl)signed[x.path]=x.signedUrl;});}
-    var pics=await rfList('vehicle-photos','bookings/'+key);
+    var pics=[];
+    for(var _j=0;_j<_keys.length;_j++){
+      var _p=await rfList('vehicle-photos','bookings/'+_keys[_j]);
+      _p.forEach(function(p){if(pics.indexOf(p)<0){pics.push(p);_from[p]=_keys[_j];}});
+    }
     var picUrls=pics.map(function(p){return {path:p,url:SB.storage.from('vehicle-photos').getPublicUrl(p).data.publicUrl};});
     (cki&&cki.fuel_receipts||[]).forEach(function(u){if(String(u).indexOf('http')===0&&!picUrls.some(function(x){return x.url===u;}))picUrls.push({path:'x/fuel-receipt/x',url:u});});
     window._rfContractHTML=contract&&contract.contract_html||'';
@@ -6747,11 +6777,11 @@ async function openRentalFile(key,fn,client){
       +((RD.handover||RD.ret)?'<div style="display:flex;gap:8px;flex-wrap:wrap;">'+(RD.handover?'<a class="btn s" style="flex:1;text-align:center;text-decoration:none;" href="https://gorent-fleet.github.io/tablet/#r='+encodeURIComponent(RD.handover)+'" target="_blank">🤝 Open handover document</a>':'')+(RD.ret?'<a class="btn s" style="flex:1;text-align:center;text-decoration:none;" href="https://gorent-fleet.github.io/tablet/#r='+encodeURIComponent(RD.ret)+'" target="_blank">🏠 Open return report</a>':'')+'</div>':'');
     h+=sec('📝 Signed contract',contract?(line('Signed by client',_bx(contract.client_name||'')+(contract.client_signed_at?' · '+new Date(contract.client_signed_at).toLocaleString('en-GB'):''))+line('Staff',_bx(contract.staff_signed_by||contract.created_by||'—'))+line('Deposit',contract.deposit_amount?('N$ '+Number(contract.deposit_amount).toLocaleString()):'—')
       +(window._rfContractHTML?'<button class="btn g" style="margin-top:8px;width:auto;padding:10px 16px;" onclick="rfShowContract()">📄 Open full signed contract</button>':'')):'<div style="font-size:13px;color:var(--g5);">No signed contract saved for this booking yet.</div>');
-    h+=sec('🪪 Passport, ID & licence scans',idDocs.length?idDocs.map(function(p){return signed[p]?thumb(signed[p],rfLabel(p),p,'client-docs'):'';}).join(''):'<div style="font-size:13px;color:var(--g5);">No scans saved for this booking yet.</div>');
+    h+=sec('🪪 Passport, ID & licence scans',idDocs.length?idDocs.map(function(p){return signed[p]?thumb(signed[p],rfLabel(p)+(_from[p]&&_from[p]!==key?' · from '+_from[p]:''),p,'client-docs'):'';}).join(''):'<div style="font-size:13px;color:var(--g5);">No scans saved for this booking yet.</div>');
     h+=sec('🚗 Check-out',cko?(line('Prepared by',_bx((cko.prep_by_all||[cko.prep_by]).filter(Boolean).join(', ')||'—'))+line('Handed over by',_bx(cko.handover_by||'—'))+line('Manager',_bx(cko.manager_name||'—'))+line('Km out · fuel out',Number(cko.odo_out||0).toLocaleString()+' km · '+_bx(cko.fuel_out||'—'))+line('Date',new Date(cko.created_at).toLocaleString('en-GB'))):'<div style="font-size:13px;color:var(--g5);">Not checked out on the tablet yet.</div>');
     if(cko&&(cko.out_notes||[]).length)h+=sec('📝 Notes while out',(cko.return_date_new?line('Return date changed to',_bx(cko.return_date_new)):'')+(cko.return_time?line('Expected return time',_bx(cko.return_time)):'')+cko.out_notes.map(function(n){return '<div style="font-size:13px;padding:4px 0;border-bottom:1px solid var(--g2);"><b>'+_bx(n.by||'')+'</b> · '+_bx(new Date(n.at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))+' — '+_bx(n.text)+'</div>';}).join(''));
     h+=sec('🏠 Check-in',cki?(line('Received by',_bx(cki.received_by||'—'))+line('Manager sign-off',_bx(cki.manager_name||'—'))+line('Km in · fuel in',Number(cki.odo_in||0).toLocaleString()+' km · '+_bx(cki.fuel_in||'—'))+line('Deposit decision',_bx(cki.deposit_decision||'—'))+line('Return report',cki.report_link?'<a href="'+cki.report_link+'" target="_blank" style="color:var(--se);">📄 Open report</a> · <a href="https://wa.me/?text='+encodeURIComponent('Your Go Rent 4×4 vehicle return report: '+cki.report_link)+'" target="_blank" style="color:#25d366;">📱 Share on WhatsApp</a>':'—')+(cki.report_whatsapp_at?line('Sent on WhatsApp',new Date(cki.report_whatsapp_at).toLocaleString('en-GB')):'')+line('Return report emailed',cki.report_sent_to?_bx(cki.report_sent_to)+' · '+new Date(cki.report_sent_at).toLocaleString('en-GB'):'Not sent')+line('Date',new Date(cki.created_at).toLocaleString('en-GB'))):'<div style="font-size:13px;color:var(--g5);">Not checked in on the tablet yet.</div>');
-    h+=sec('📷 Photos & fuel receipts',picUrls.length?picUrls.map(function(x){return thumb(x.url,rfLabel(x.path),(x.path.indexOf('x/fuel-receipt/')===0?'':x.path),'vehicle-photos');}).join(''):'<div style="font-size:13px;color:var(--g5);">No photos saved for this booking yet.</div>');
+    h+=sec('📷 Photos & fuel receipts',picUrls.length?picUrls.map(function(x){return thumb(x.url,rfLabel(x.path)+(_from[x.path]&&_from[x.path]!==key?' · from '+_from[x.path]:''),(x.path.indexOf('x/fuel-receipt/')===0?'':x.path),'vehicle-photos');}).join(''):'<div style="font-size:13px;color:var(--g5);">No photos saved for this booking yet.</div>');
     h+=sec('✍️ Signatures',sigDocs.length?sigDocs.map(function(p){return signed[p]?thumb(signed[p],rfLabel(p),p,'client-docs'):'';}).join(''):'<div style="font-size:13px;color:var(--g5);">No signatures saved for this booking yet.</div>');
     h+='<div style="font-size:11px;color:var(--g5);margin-top:12px;">Tap any picture to open it full size. Scan and signature links are private and expire after 1 hour.</div>';
     body.innerHTML=h;
