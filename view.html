@@ -109,6 +109,20 @@
         document.open();
         document.write(x.responseText);
         document.close();
+        // the document has replaced this page — give it a way to be saved
+        try {
+          var st = document.createElement('style');
+          st.textContent = '@media print{#gr-bar{display:none!important;}}';
+          document.head.appendChild(st);
+          var bar = document.createElement('div');
+          bar.id = 'gr-bar';
+          bar.setAttribute('style', 'position:fixed;right:14px;bottom:14px;z-index:2147483647;');
+          bar.innerHTML = '<button style="padding:13px 20px;font-size:16px;font-weight:900;border:0;' +
+            'border-radius:11px;background:#145c30;color:#fff;cursor:pointer;' +
+            'box-shadow:0 3px 12px rgba(0,0,0,.3);">&#128424; Save / Print</button>';
+          bar.firstChild.onclick = function(){ window.print(); };
+          document.body.appendChild(bar);
+        } catch (e2) {}
       } catch (e) {
         fail('Could not display the document',
           'Your document downloaded but this browser could not show it. Try opening the link in Chrome or Safari.', true);
