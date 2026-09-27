@@ -8253,16 +8253,20 @@ function photoHTML(key,title,sub,max){
     <div class="photo-grid">
       ${arr.map((src,i)=>`<div class="p-thumb"><img src="${src}"><button class="p-del" onclick="delPhoto('${key}',${i})">✕</button></div>`).join('')}
       ${arr.length<max?`<div class="p-add" onclick="document.getElementById('fi-${safe}').click()">
-        <input type="file" id="fi-${safe}" accept="image/*" capture="environment" multiple onchange="handlePhotos(event,'${key}')">
+        <input type="file" id="fi-${safe}" accept="image/*" capture="environment" multiple onchange="handlePhotos(event,'${key}',${max})">
         <div class="p-add-ico">📷</div><div class="p-add-lbl">${arr.length?'Add more':'Take photo'}</div>
       </div>`:''}
     </div>
     <div style="font-size:13px;color:var(--g5);margin-top:5px;text-align:center">${arr.length}/${max}</div>
   </div>`;
 }
-function handlePhotos(e,key){
+function handlePhotos(e,key,max){
   const arr=getPA(key);const files=Array.from(e.target.files);
-  const toAdd=Math.min(files.length,8-arr.length);let loaded=0;
+  // the limit each section declares was ignored here, so a counter could read 8/3
+  const cap=parseInt(max)||8;
+  const toAdd=Math.max(0,Math.min(files.length,cap-arr.length));let loaded=0;
+  if(files.length>toAdd){try{toast('Only '+cap+' photos here — '+(toAdd?'added the first '+toAdd:'none added'),'err');}catch(e2){}}
+  if(!toAdd){try{e.target.value='';}catch(e3){}return;}
   for(let i=0;i<toAdd;i++){const r=new FileReader();r.onload=ev=>{arr.push(ev.target.result);loaded++;if(loaded===toAdd)redraw();};r.readAsDataURL(files[i]);}
 }
 function delPhoto(key,i){if(!canDelete('photos'))return;const arr=getPA(key);arr.splice(i,1);redraw();}
