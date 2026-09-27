@@ -2896,6 +2896,22 @@ const CO_STEPS=[
   {n:7,ico:'👔',lbl:'Management', sub:'Clear to go'},
 ];
 
+// 'All the ticks are green but it does not say finished' — the last gate is the manager
+// clearing the vehicle, and nothing said so. This spells out what is still outstanding.
+function coWhatsLeft(){
+  try{
+    if(!co||!co.v)return '';
+    if(co._done)return '<div style="margin:-10px 0 8px;padding:9px 14px;border-radius:9px;background:var(--gr);border:2px solid var(--gb);font-size:13px;font-weight:900;color:var(--gb);">\u2705 CHECK-OUT COMPLETE \u2014 '+_bx(co.fn)+' has gone out</div>';
+    var left=[];
+    if(!handoverClosed())left.push('the client\u2019s signature on the handover');
+    if(!co.mgmtSig)left.push('the manager\u2019s sign-off to release the vehicle');
+    if(!left.length)return '<div style="margin:-10px 0 8px;padding:9px 14px;border-radius:9px;background:var(--ag);border:2px solid var(--am);font-size:13px;font-weight:900;color:var(--al);">\uD83D\uDC49 Everything is signed \u2014 tap FINISH CHECK-OUT at the bottom to send '+_bx(co.fn)+' out</div>';
+    return '<div style="margin:-10px 0 8px;padding:9px 14px;border-radius:9px;background:var(--ag);border:2px solid var(--am);font-size:13px;font-weight:800;color:var(--al);">'
+      +'\u23F3 Not finished yet \u2014 still needed: '+left.join(' and ')
+      +(!co.mgmtSig?' <button onclick="coGoStep(7)" style="margin-left:6px;padding:5px 11px;border-radius:7px;border:2px solid var(--gb);background:var(--se);color:#fff;font-size:12px;font-weight:900;cursor:pointer;">Go to Management</button>':'')
+      +'</div>';
+  }catch(e){return '';}
+}
 function drawCO(){
   sigScope('co:'+((co&&co.fn)||''));   // ink belongs to this vehicle's check-out only
   // Safety guard
@@ -2974,7 +2990,7 @@ function drawCO(){
           // fleet number, client, WhatsApp and the dates all on one line
           '<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;">'+
             '<span class="fhdr-fn">'+co.fn+' <span>'+_cov.reg+'</span></span>'+
-            '<span class="fhdr-cl" style="margin-top:0;font-size:20px;font-weight:900;color:#000000;letter-spacing:-.2px;">'+_bx(mainRenter()||_cov.cl||'No booking')+'</span>'+
+            '<span class="fhdr-cl" style="margin-top:0;font-size:20px;font-weight:900;color:#000000;letter-spacing:-.2px;">'+_bx(mainRenter()||_cov.cl||'No booking')+(bookedByName()?'<span style="font-size:14px;font-weight:700;color:#444;"> (booked by '+_bx(bookedByName())+')</span>':'')+'</span>'+
             '<span class="fhdr-cl" style="margin-top:0;">'+nameEditBtn(bkKey(_cov),co.clientName||_cov.cl,'drawCO')+(waChip(_cov)?' '+waChip(_cov):'')+'</span>'+
             '<span onclick="editQuoteNo()" title="Tap to change the quote number" style="cursor:pointer;font-size:13px;font-weight:900;color:#000;background:#ffffff;border:1px solid rgba(11,58,34,.25);border-radius:7px;padding:3px 9px;white-space:nowrap;">\uD83D\uDCCB '+_bx(co.quoteNo||_cov.quote||'Add quote no.')+' \u270E</span>'+
             '<span class="fhdr-cl" style="font-size:13px;margin-top:0;white-space:nowrap;">\uD83D\uDCC5 '+(_cov.pu||'?')+' \u2192 '+(_cov.rt||'?')
@@ -3042,6 +3058,7 @@ function drawCO(){
     })()+
     '</div>'+
     '<div class="stg-bar s7">'+bar+'</div>'+
+    coWhatsLeft()+
     (function(){
       var by=[['🧹',co.prepBy],['📦',co.equipBy||co.prepBy],['🔩',co.mechCheckBy],['🔍',co.inspBy],['📋',co.contractBy],['🤝',co.mechBy],['👔',co.mgmtBy]]
         .filter(function(x){return x[1];})
@@ -3994,9 +4011,11 @@ function mainRenter(){
 }
 function bookedByName(){
   try{
-    var b=(co&&co.bookedBy)||'';
+    var m=mainRenter();if(!m)return '';
+    // works whether the passport reader set it or the name was simply typed over the booking's
+    var b=(co&&co.bookedBy)||(co&&co.v&&co.v.cl)||'';
     if(!b)return '';
-    return _nmKey(b)===_nmKey(mainRenter())?'':b;
+    return namesLookSame(b,m)?'':b;
   }catch(e){return '';}
 }
 function clientDisplay(){
