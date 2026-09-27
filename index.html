@@ -1765,6 +1765,8 @@ function _fmtFlight(s,kind){
   if(!s)return '';
   var p=String(s).split('/');var num=(p[0]||'').trim();var last=(p[p.length-1]||'').trim();
   var time=/^\d{1,2}:\d{2}$/.test(last)?last:'';
+  // some bookings carry only a time in the flight field — that is a time, not a flight number
+  if(/^\d{1,2}:\d{2}$/.test(num))return kind+' '+num;
   return num+(time?' · '+kind+' '+time:'');
 }
 function _dmy(d){if(!d)return '';var p=String(d).split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
@@ -2061,8 +2063,9 @@ function _renderOV(){
       +'style="background:#fff;border:1px solid #e8e8e8;border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;touch-action:manipulation;display:flex;align-items:center;gap:14px;">'
       +'<div style="width:44px;height:44px;border-radius:10px;background:'+(isArrival?'#e8ebfc':'#efe8fd')+';display:flex;align-items:center;justify-content:center;flex-shrink:0;">'+(isArrival?'<svg width="22" height="22" viewBox="0 0 24 24" fill="#3b4fd8" xmlns="http://www.w3.org/2000/svg" style="display:block"><path d="M2.5 19h19v2h-19v-2zm7.18-5.73l4.35 1.16 5.31 1.42c.8.21 1.62-.26 1.84-1.06.21-.8-.26-1.62-1.06-1.84l-5.31-1.42-2.76-9.02L10.12 2v8.28L5.15 8.95l-.93-2.32-1.45-.39v5.17l1.6.43 5.31 1.43z"/></svg>':'<svg width="22" height="22" viewBox="0 0 24 24" fill="#7c3aed" xmlns="http://www.w3.org/2000/svg" style="display:block"><path d="M2.5 19h19v2h-19v-2zm19.57-9.36c-.21-.8-1.04-1.28-1.84-1.06L14.92 10l-6.9-6.43-1.93.51 4.14 7.17-4.97 1.33-1.97-1.54-1.45.39 2.59 4.49 16.57-4.43c.81-.23 1.28-1.05 1.07-1.85z"/></svg>')+'</div>'
       +'<div style="flex:1;min-width:0;">'
-      +'<div style="font-size:14px;font-weight:800;color:#1a1a1a;margin-bottom:1px;">'+v.cl+' · '+num+'</div>'
+      +'<div style="font-size:14px;font-weight:800;color:#1a1a1a;margin-bottom:1px;">'+_bx(renterName(v))+(num&&num!==time?' · '+num:'')+'</div>'
       +(time?'<div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:3px;">'+time+'</div>':'')
+      +(isArrival&&coIsDone(v)?'<div style="font-size:12px;font-weight:900;color:#12803c;margin-bottom:3px;">\u2705 Already here — '+v.fn+' collected</div>':'')
       +'<div style="font-size:12px;color:#666;margin-bottom:3px;">Vehicle '+v.fn+' · Quote '+(v.quote||'—')+'</div>'
       +(transferLabel?'<div style="font-size:12px;font-weight:800;color:'+transferCol+';">Transfer: '+transferLabel+'</div>':'')
       +'</div>'
@@ -2252,7 +2255,8 @@ function _renderOV(){
     +'<div style="padding:12px 14px 10px;border-bottom:1px solid #e0e0e0;background:#fff;flex-shrink:0;">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;">'
     +'<div style="display:flex;align-items:center;gap:6px;">'
-    +'<span style="font-size:22px;">🛬</span><span style="font-size:14px;font-weight:900;color:#1a1a1a;">Arrival movements</span>'
+    +'<span style="font-size:22px;">🛬</span><span style="font-size:14px;font-weight:900;color:#1a1a1a;">Client flights landing</span>'
+    +'<span style="font-size:11px;color:#888;font-weight:700;">(not vehicle returns)</span>'
     +'</div>'
     +'<div style="display:flex;align-items:center;gap:5px;">'
     +'<span style="font-size:11px;font-weight:900;padding:3px 10px;border-radius:12px;background:#f6ad55;color:#1a1a1a;">'+todayArrCount+' today</span>'
