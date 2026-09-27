@@ -4001,9 +4001,6 @@ var CT_INS={'1':{t:'Option 1 — Basic Cover',rate:230,dep:45000},'2':{t:'Option
 function ctMoney(n){return 'N$ '+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function ctDays(){return co.v.pu&&co.v.rt?Math.max(1,Math.round((new Date(co.v.rt)-new Date(co.v.pu))/86400000)):0;}
 function ctSet(k,v){(co.contract=co.contract||{})[k]=v;if(k==='insurance_option'){var o=CT_INS[v];co.contract.deposit_amount=o?o.dep:null;}drawCO();}
-function ctDetailsForm(){
-  var c=co.contract=co.contract||{},days=ctDays();c.total_days=days;
-  var need=!!(co.v.xb||c.cross_border);
 // ── EXTRA DRIVER FEE ───────────────────────────────────────────────────────
 // N$280 once-off per additional driver, taken at collection. Counted from the drivers
 // actually captured, so nobody has to remember to add it up — and it is flagged red
@@ -4013,6 +4010,9 @@ function extraDriverCount(){
   try{ return (co.drivers||[]).slice(1).filter(function(d){return d&&d.name;}).length; }catch(e){ return 0; }
 }
 function extraDriverFee(){ return extraDriverCount()*EXTRA_DRIVER_FEE; }
+function ctDetailsForm(){
+  var c=co.contract=co.contract||{},days=ctDays();c.total_days=days;
+  var need=!!(co.v.xb||c.cross_border);
   function tick(id,on,title,sub,right,state){ // state: ok | req | opt
     var bd=on?'var(--gb)':state==='req'?'var(--re)':'var(--g3)',bg=on?'var(--sg)':state==='req'?'var(--rg)':'var(--g0)';
     return '<label style="display:flex;align-items:center;gap:12px;cursor:pointer;margin:0 0 8px;padding:12px 14px;border-radius:10px;border:2px solid '+bd+';background:'+bg+';">'
