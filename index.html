@@ -3935,6 +3935,39 @@ async function mrzFromImage(dataUrl){
   return parseMRZ(r&&r.data&&r.data.text);
 }
 function setRead(i,ok,msg){var d=co.drivers&&co.drivers[i];if(!d)return;d._readOk=ok;d._readMsg=msg;try{drawCO();}catch(e){}}
+// Scans are filed under whichever check-out is open. A passport captured while the wrong
+// vehicle was open landed in a stranger's file with nothing to catch it, so the name on the
+// document is checked against the people actually on this booking before it is filed.
+function _nmKey(s){return String(s||'').toUpperCase().replace(/[^A-Z]/g,'');}
+function docNameMatches(name){
+  var k=_nmKey(name);
+  if(!k)return true;                                  // no name yet — the slot is still blank
+  var known=[];
+  try{
+    known.push(co.clientName,co.v&&co.v.cl);
+    (co.drivers||[]).forEach(function(d){if(d&&d.name)known.push(d.name);});
+  }catch(e){}
+  for(var i=0;i<known.length;i++){
+    var o=_nmKey(known[i]);if(!o)continue;
+    if(o===k||o.indexOf(k)>=0||k.indexOf(o)>=0)return true;
+    // a shared surname or first name is enough — people are entered in every order imaginable
+    var a=String(name).toUpperCase().split(/[^A-Z]+/).filter(function(x){return x.length>2;});
+    var b=String(known[i]).toUpperCase().split(/[^A-Z]+/).filter(function(x){return x.length>2;});
+    for(var j=0;j<a.length;j++)if(b.indexOf(a[j])>=0)return true;
+  }
+  return false;
+}
+function docBelongsHere(name){
+  try{
+    if(!co||!co.v)return true;
+    if(docNameMatches(name))return true;
+    return confirm('⚠️ THIS MAY BE THE WRONG CLIENT\n\n'
+      +'You are filing a document for:\n    '+String(name||'(no name)')+'\n\n'
+      +'but this check-out is:\n    '+co.fn+' — '+String((co.v&&co.v.cl)||co.clientName||'')+'\n\n'
+      +'OK  =  file it here anyway\n'
+      +'Cancel  =  do not file it (go and open the right vehicle first)');
+  }catch(e){return true;}
+}
 async function extractPassportData(b64DataUrl, driverIdx){
   // Show subtle loading indicator on the card
   toast('📷 Reading passport…','');
@@ -4121,6 +4154,7 @@ async function captureDriverDoc(event,driverIdx,field){
     // Upload to Supabase storage
     const driverName=(co.drivers[driverIdx].name||`driver_${driverIdx}`).replace(/[^a-zA-Z0-9]/g,'_');
     const _bk=co&&co.v?bkKey(co.v):'';
+    if(!docBelongsHere(co.drivers[driverIdx].name)){hideBanner();return;}   // wrong client's document
     const path=_bk?`bookings/${_bk}/id-docs/${driverName}_${field}_${Date.now()}.jpg`:`clients/${driverName}/${field}_${Date.now()}.jpg`;
     const blob=await(await fetch(b64)).blob();
     const{error}=await SB.storage.from('client-docs').upload(path,blob,{contentType:'image/jpeg',upsert:true});
@@ -6557,6 +6591,34 @@ function curBkKey(fn){
   if(typeof ci!=='undefined'&&ci&&ci.v&&ci.v.fn===fn)return bkKey(ci.v);
   return '';
 }
+// Peter only. A scan filed against the wrong booking is somebody else's passport sitting in a
+// stranger's file — it has to be removable, and the removal is recorded.
+async function rfDeleteDoc(encPath,bucket,ev){
+  try{if(ev){ev.stopPropagation();ev.preventDefault();}}catch(e){}
+  if(!isAdmin()){toast('Only Peter can remove a document','err');return;}
+  var path='';try{path=decodeURIComponent(encPath||'');}catch(e){path=encPath||'';}
+  if(!path){toast('Nothing to remove','err');return;}
+  var nm=path.split('/').pop();
+  if(!confirm('REMOVE THIS FILE\n\n'+nm+'\n\nThis deletes it permanently from storage. It cannot be undone.\n\nOnly do this if the file does not belong to this client.'))return;
+  try{
+    var r=await SB.storage.from(bucket||'client-docs').remove([path]);
+    if(r&&r.error){toast('Could not remove it: '+r.error.message,'err');return;}
+  }catch(e){toast('Could not remove it — check the connection','err');return;}
+  try{
+    await SB.from('management_alerts').insert({
+      booking_id:(window._rfData&&window._rfData.key)||'',
+      fleet_no:(window._rfData&&window._rfData.fn)||'',
+      client:(window._rfData&&window._rfData.client)||'',
+      received_by:(APP_USER&&APP_USER.name)||'Peter',
+      message:'Document removed from the rental file: '+nm,
+      created_at:new Date().toISOString()
+    });
+  }catch(e){}
+  toast('Removed ✅','ok');
+  var d=window._rfData||{};
+  try{closeRentalFile();}catch(e){}
+  if(d.key)try{openRentalFile(d.key,d.fn,d.client);}catch(e){}
+}
 async function rfList(bucket,prefix){
   var out=[];
   var r=await SB.storage.from(bucket).list(prefix,{limit:200});
@@ -6619,7 +6681,12 @@ async function openRentalFile(key,fn,client){
     (cki&&cki.fuel_receipts||[]).forEach(function(u){if(String(u).indexOf('http')===0&&!picUrls.some(function(x){return x.url===u;}))picUrls.push({path:'x/fuel-receipt/x',url:u});});
     window._rfContractHTML=contract&&contract.contract_html||'';
     function sec(t,inner){return '<div style="margin:14px 0 6px;font-size:13px;font-weight:900;letter-spacing:.5px;color:var(--al);text-transform:uppercase;">'+t+'</div>'+inner;}
-    function thumb(url,label){return '<a href="'+url+'" target="_blank" style="display:inline-block;width:150px;margin:0 8px 8px 0;text-decoration:none;vertical-align:top;"><img src="'+url+'" style="width:150px;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--g3);background:#fff;"><div style="font-size:11px;color:var(--g5);margin-top:3px;">'+_bx(label)+'</div></a>';}
+    function thumb(url,label,path,bucket){
+      var del=(path&&isAdmin())?'<button onclick="rfDeleteDoc(\''+encodeURIComponent(path)+'\',\''+(bucket||'client-docs')+'\',event)" title="Remove this file" style="position:absolute;top:4px;right:4px;width:30px;height:30px;line-height:1;border-radius:8px;border:2px solid #fff;background:var(--re);color:#fff;font-size:15px;font-weight:900;cursor:pointer;box-shadow:0 1px 5px rgba(0,0,0,.35);">&times;</button>':'';
+      return '<div style="display:inline-block;position:relative;width:150px;margin:0 8px 8px 0;vertical-align:top;">'
+        +'<a href="'+url+'" target="_blank" style="display:block;text-decoration:none;"><img src="'+url+'" style="width:150px;height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--g3);background:#fff;"><div style="font-size:11px;color:var(--g5);margin-top:3px;">'+_bx(label)+'</div></a>'
+        +del+'</div>';
+    }
     function line(l,v){return '<div style="display:flex;gap:8px;font-size:14px;padding:5px 0;border-bottom:1px solid var(--g2);"><div style="width:44%;color:var(--g5);">'+l+'</div><div style="color:var(--tx);font-weight:700;">'+v+'</div></div>';}
     var idDocs=docs.filter(function(p){return p.indexOf('/id-docs/')>0;});
     var repDocs=docs.filter(function(p){return /\.html$/.test(p);}).sort();
@@ -6632,12 +6699,12 @@ async function openRentalFile(key,fn,client){
       +((RD.handover||RD.ret)?'<div style="display:flex;gap:8px;flex-wrap:wrap;">'+(RD.handover?'<a class="btn s" style="flex:1;text-align:center;text-decoration:none;" href="https://gorent-fleet.github.io/tablet/#r='+encodeURIComponent(RD.handover)+'" target="_blank">🤝 Open handover document</a>':'')+(RD.ret?'<a class="btn s" style="flex:1;text-align:center;text-decoration:none;" href="https://gorent-fleet.github.io/tablet/#r='+encodeURIComponent(RD.ret)+'" target="_blank">🏠 Open return report</a>':'')+'</div>':'');
     h+=sec('📝 Signed contract',contract?(line('Signed by client',_bx(contract.client_name||'')+(contract.client_signed_at?' · '+new Date(contract.client_signed_at).toLocaleString('en-GB'):''))+line('Staff',_bx(contract.staff_signed_by||contract.created_by||'—'))+line('Deposit',contract.deposit_amount?('N$ '+Number(contract.deposit_amount).toLocaleString()):'—')
       +(window._rfContractHTML?'<button class="btn g" style="margin-top:8px;width:auto;padding:10px 16px;" onclick="rfShowContract()">📄 Open full signed contract</button>':'')):'<div style="font-size:13px;color:var(--g5);">No signed contract saved for this booking yet.</div>');
-    h+=sec('🪪 Passport, ID & licence scans',idDocs.length?idDocs.map(function(p){return signed[p]?thumb(signed[p],rfLabel(p)):'';}).join(''):'<div style="font-size:13px;color:var(--g5);">No scans saved for this booking yet.</div>');
+    h+=sec('🪪 Passport, ID & licence scans',idDocs.length?idDocs.map(function(p){return signed[p]?thumb(signed[p],rfLabel(p),p,'client-docs'):'';}).join(''):'<div style="font-size:13px;color:var(--g5);">No scans saved for this booking yet.</div>');
     h+=sec('🚗 Check-out',cko?(line('Prepared by',_bx((cko.prep_by_all||[cko.prep_by]).filter(Boolean).join(', ')||'—'))+line('Handed over by',_bx(cko.handover_by||'—'))+line('Manager',_bx(cko.manager_name||'—'))+line('Km out · fuel out',Number(cko.odo_out||0).toLocaleString()+' km · '+_bx(cko.fuel_out||'—'))+line('Date',new Date(cko.created_at).toLocaleString('en-GB'))):'<div style="font-size:13px;color:var(--g5);">Not checked out on the tablet yet.</div>');
     if(cko&&(cko.out_notes||[]).length)h+=sec('📝 Notes while out',(cko.return_date_new?line('Return date changed to',_bx(cko.return_date_new)):'')+(cko.return_time?line('Expected return time',_bx(cko.return_time)):'')+cko.out_notes.map(function(n){return '<div style="font-size:13px;padding:4px 0;border-bottom:1px solid var(--g2);"><b>'+_bx(n.by||'')+'</b> · '+_bx(new Date(n.at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))+' — '+_bx(n.text)+'</div>';}).join(''));
     h+=sec('🏠 Check-in',cki?(line('Received by',_bx(cki.received_by||'—'))+line('Manager sign-off',_bx(cki.manager_name||'—'))+line('Km in · fuel in',Number(cki.odo_in||0).toLocaleString()+' km · '+_bx(cki.fuel_in||'—'))+line('Deposit decision',_bx(cki.deposit_decision||'—'))+line('Return report',cki.report_link?'<a href="'+cki.report_link+'" target="_blank" style="color:var(--se);">📄 Open report</a> · <a href="https://wa.me/?text='+encodeURIComponent('Your Go Rent 4×4 vehicle return report: '+cki.report_link)+'" target="_blank" style="color:#25d366;">📱 Share on WhatsApp</a>':'—')+(cki.report_whatsapp_at?line('Sent on WhatsApp',new Date(cki.report_whatsapp_at).toLocaleString('en-GB')):'')+line('Return report emailed',cki.report_sent_to?_bx(cki.report_sent_to)+' · '+new Date(cki.report_sent_at).toLocaleString('en-GB'):'Not sent')+line('Date',new Date(cki.created_at).toLocaleString('en-GB'))):'<div style="font-size:13px;color:var(--g5);">Not checked in on the tablet yet.</div>');
-    h+=sec('📷 Photos & fuel receipts',picUrls.length?picUrls.map(function(x){return thumb(x.url,rfLabel(x.path));}).join(''):'<div style="font-size:13px;color:var(--g5);">No photos saved for this booking yet.</div>');
-    h+=sec('✍️ Signatures',sigDocs.length?sigDocs.map(function(p){return signed[p]?thumb(signed[p],rfLabel(p)):'';}).join(''):'<div style="font-size:13px;color:var(--g5);">No signatures saved for this booking yet.</div>');
+    h+=sec('📷 Photos & fuel receipts',picUrls.length?picUrls.map(function(x){return thumb(x.url,rfLabel(x.path),(x.path.indexOf('x/fuel-receipt/')===0?'':x.path),'vehicle-photos');}).join(''):'<div style="font-size:13px;color:var(--g5);">No photos saved for this booking yet.</div>');
+    h+=sec('✍️ Signatures',sigDocs.length?sigDocs.map(function(p){return signed[p]?thumb(signed[p],rfLabel(p),p,'client-docs'):'';}).join(''):'<div style="font-size:13px;color:var(--g5);">No signatures saved for this booking yet.</div>');
     h+='<div style="font-size:11px;color:var(--g5);margin-top:12px;">Tap any picture to open it full size. Scan and signature links are private and expire after 1 hour.</div>';
     body.innerHTML=h;
   }catch(e){body.innerHTML='<div class="al err">Could not load the rental file: '+_bx(e.message||e)+'</div>';}
