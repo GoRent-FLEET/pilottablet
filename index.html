@@ -2710,6 +2710,7 @@ const CO_STEPS=[
 ];
 
 function drawCO(){
+  sigScope('co:'+((co&&co.fn)||''));   // ink belongs to this vehicle's check-out only
   // Safety guard
   if(!co||!co.v){
     var b=document.getElementById('co-body');
@@ -3168,15 +3169,7 @@ function tapPrep(i){
     s.innerHTML=coStep0();
     setTimeout(()=>{
       initSig('co-p-sig');
-      // Restore signature after redraw
-      if(existingSig && sigs['co-p-sig']){
-        const cv=document.getElementById('co-p-sig');
-        if(cv){
-          const img=new Image();
-          img.onload=()=>{sigs['co-p-sig'].ctx.drawImage(img,0,0,cv.offsetWidth,cv.offsetHeight);sigs['co-p-sig'].hasData=true;};
-          img.src=existingSig;
-        }
-      }
+      sigSeed('co-p-sig',existingSig);   // restore after redraw, and keep it restorable
     },60);
   }
 }
@@ -5055,10 +5048,7 @@ function tapHO(k){
     s.innerHTML=coStep5_client();
     setTimeout(()=>{
       initSig('co-c-sig');
-      if(sig&&sigs['co-c-sig']){
-        const cv=document.getElementById('co-c-sig');
-        if(cv){const img=new Image();img.onload=()=>{sigs['co-c-sig'].ctx.drawImage(img,0,0,cv.offsetWidth,cv.offsetHeight);sigs['co-c-sig'].hasData=true;};img.src=sig;}
-      }
+      sigSeed('co-c-sig',sig);   // restore after redraw, and keep it restorable
     },60);
   }
 }
@@ -5584,6 +5574,7 @@ async function startCI(fn){
 }
 
 function drawCI(){
+  sigScope('ci:'+((ci&&ci.fn)||''));   // ink belongs to this vehicle's check-in only
   const r=ci,v=r.v;
   // Compute issues for step progress
   const allItems=RET_GROUPS.flatMap(g=>g.items);
@@ -6051,10 +6042,7 @@ function tapRetItem(i){
     s.innerHTML=ciStep0_CI();
     setTimeout(()=>{
       initSig('ci-ret-sig');
-      if(existingSig&&sigs['ci-ret-sig']){
-        const cv=document.getElementById('ci-ret-sig');
-        if(cv){const img=new Image();img.onload=()=>{sigs['ci-ret-sig'].ctx.drawImage(img,0,0,cv.offsetWidth,cv.offsetHeight);sigs['ci-ret-sig'].hasData=true;};img.src=existingSig;}
-      }
+      sigSeed('ci-ret-sig',existingSig);   // restore after redraw, and keep it restorable
     },60);
   }
 }
@@ -7961,10 +7949,100 @@ function ciEqChecks(){
 function setRetGrp(gi,status){var _who=(ci&&ci.receivedBy)||(APP_USER&&APP_USER.name)||'';var _at=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});if(ci&&!ci.retEqBy)ci.retEqBy={};RET_GROUPS[gi].items.forEach(i=>{retSt[i]=status;if(ci){var _o=ciQtyOut(i);if(_o&&status==='ok'){if(!ci.retQty)ci.retQty={};ci.retQty[i]=_o;}ci.retEqBy[i]={st:status,by:_who,at:_at};}});var _rg=document.getElementById('ret-grps');if(_rg)_rg.innerHTML=renderRetGroups();}
 
 // ── SIGNATURES ────────────────────────────────────────────────────
-function initSig(id){const cv=document.getElementById(id);if(!cv)return;if(sigs[id]&&sigs[id].cv===cv)return; /* redrawn screens get a new canvas: bind it again */cv.width=cv.offsetWidth||540;cv.height=cv.offsetHeight||150;const ctx=cv.getContext('2d');ctx.strokeStyle='#3ddc84';ctx.lineWidth=2.5;ctx.lineCap='round';ctx.lineJoin='round';sigs[id]={ctx,cv:cv,drawing:false,hasData:false};const pos=(e,t)=>{const r=cv.getBoundingClientRect();return t?{x:(t.clientX-r.left)*(cv.width/r.width),y:(t.clientY-r.top)*(cv.height/r.height)}:{x:e.offsetX*(cv.width/cv.offsetWidth),y:e.offsetY*(cv.height/cv.offsetHeight)};};const start=(e,p)=>{e.preventDefault();sigs[id].drawing=true;sigs[id].hasData=true;ctx.beginPath();ctx.moveTo(p.x,p.y);};const move=(e,p)=>{if(!sigs[id].drawing)return;ctx.lineTo(p.x,p.y);ctx.stroke();ctx.beginPath();ctx.moveTo(p.x,p.y);};const stop=()=>{if(sigs[id])sigs[id].drawing=false;};cv.addEventListener('mousedown',e=>start(e,pos(e)));cv.addEventListener('mousemove',e=>{if(sigs[id]&&sigs[id].drawing)move(e,pos(e));});cv.addEventListener('mouseup',stop);cv.addEventListener('mouseleave',stop);cv.addEventListener('touchstart',e=>start(e,pos(e,e.touches[0])),{passive:false});cv.addEventListener('touchmove',e=>move(e,pos(e,e.touches[0])),{passive:false});cv.addEventListener('touchend',stop,{passive:false});}
-function clrSig(id){const cv=document.getElementById(id);if(!cv)return;const s=sigs[id];if(s){s.ctx.clearRect(0,0,cv.width,cv.height);s.hasData=false;}delete sigs[id];}
-function hasSig(id){return!!(sigs[id]&&sigs[id].hasData);}
-function getSig(id){var _c=document.getElementById(id);return (_c&&_c.toDataURL('image/png'))||'';}
+// Every stroke is remembered as points in 0..1 space, not just painted onto the canvas.
+// iOS throws the picture away on a canvas that has scrolled out of view, and a redrawn
+// step hands us a brand new blank canvas — both used to wipe a signature the moment the
+// client scrolled. The points live outside the canvas, so the ink is repainted whenever
+// either happens.
+var SIG_INK={};   // id -> {strokes:[[{x,y}...]...], bg:dataURL, bgImg:Image}
+var SIG_SCOPE='';
+// Ink is remembered across redraws, so it must be dropped the moment we move to a
+// different vehicle or a fresh check-out — otherwise one client's signature would
+// reappear on the next one. The canvases stay bound; only the ink is thrown away.
+function sigScope(k){
+  k=String(k||'');
+  if(k===SIG_SCOPE)return;
+  SIG_SCOPE=k;SIG_INK={};
+  for(var id in sigs){
+    if(!Object.prototype.hasOwnProperty.call(sigs,id)||!sigs[id])continue;
+    sigs[id].hasData=false;sigs[id].drawing=false;sigRepaint(id);
+  }
+}
+function sigInk(id){if(!SIG_INK[id])SIG_INK[id]={strokes:[],bg:'',bgImg:null};return SIG_INK[id];}
+function sigStyle(ctx){ctx.strokeStyle='#1d6b3d';ctx.lineWidth=2.8;ctx.lineCap='round';ctx.lineJoin='round';}
+function sigRepaint(id){
+  var s=sigs[id];if(!s||!s.cv)return;
+  var cv=s.cv;if(!document.body.contains(cv))return;
+  var ctx=s.ctx,ink=sigInk(id),DPR=s.dpr||1;
+  var w=cv.offsetWidth||540,h=cv.offsetHeight||150;
+  try{
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,cv.width,cv.height);
+    ctx.scale(DPR,DPR);
+    if(ink.bgImg)ctx.drawImage(ink.bgImg,0,0,w,h);
+    sigStyle(ctx);
+    for(var i=0;i<ink.strokes.length;i++){
+      var pts=ink.strokes[i];if(!pts||!pts.length)continue;
+      ctx.beginPath();ctx.moveTo(pts[0].x*w,pts[0].y*h);
+      if(pts.length===1)ctx.lineTo(pts[0].x*w+0.1,pts[0].y*h+0.1);
+      for(var j=1;j<pts.length;j++)ctx.lineTo(pts[j].x*w,pts[j].y*h);
+      ctx.stroke();
+    }
+  }catch(e){}
+}
+function sigSeed(id,dataURL){   // restore a signature that was already captured earlier
+  if(!dataURL)return;
+  var ink=sigInk(id);ink.bg=dataURL;
+  var img=new Image();
+  img.onload=function(){ink.bgImg=img;if(sigs[id])sigs[id].hasData=true;sigRepaint(id);};
+  img.src=dataURL;
+}
+function initSig(id){
+  var cv=document.getElementById(id);if(!cv)return;
+  if(sigs[id]&&sigs[id].cv===cv){sigRepaint(id);return;}   // same canvas: just make sure the ink is showing
+  var DPR=window.devicePixelRatio||1;
+  var w=cv.offsetWidth||540,h=cv.offsetHeight||150;
+  cv.width=Math.round(w*DPR);cv.height=Math.round(h*DPR);
+  var ctx=cv.getContext('2d');
+  var ink=sigInk(id);
+  sigs[id]={ctx:ctx,cv:cv,dpr:DPR,drawing:false,hasData:!!(ink.strokes.length||ink.bg)};
+  if(ink.bg&&!ink.bgImg)sigSeed(id,ink.bg);else sigRepaint(id);
+  var cur=null;
+  function pos(e,t){
+    var r=cv.getBoundingClientRect();
+    var cx=t?t.clientX:e.clientX,cy=t?t.clientY:e.clientY;
+    return {x:Math.min(1,Math.max(0,(cx-r.left)/(r.width||1))),y:Math.min(1,Math.max(0,(cy-r.top)/(r.height||1)))};
+  }
+  function start(e,p){e.preventDefault();var s=sigs[id];if(!s)return;s.drawing=true;s.hasData=true;cur=[p];sigInk(id).strokes.push(cur);sigRepaint(id);}
+  function move(e,p){
+    var s=sigs[id];if(!s||!s.drawing||!cur)return;e.preventDefault();cur.push(p);
+    // draw only the new segment — repainting every stroke on each touchmove is too slow on a tablet
+    var W=cv.offsetWidth||540,H=cv.offsetHeight||150,n=cur.length;
+    try{s.ctx.beginPath();s.ctx.moveTo(cur[n-2].x*W,cur[n-2].y*H);s.ctx.lineTo(cur[n-1].x*W,cur[n-1].y*H);s.ctx.stroke();}catch(e2){}
+  }
+  function stop(){var s=sigs[id];if(s)s.drawing=false;cur=null;}
+  cv.addEventListener('mousedown',function(e){start(e,pos(e));});
+  cv.addEventListener('mousemove',function(e){if(sigs[id]&&sigs[id].drawing)move(e,pos(e));});
+  cv.addEventListener('mouseup',stop);
+  cv.addEventListener('mouseleave',stop);
+  cv.addEventListener('touchstart',function(e){start(e,pos(e,e.touches[0]));},{passive:false});
+  cv.addEventListener('touchmove',function(e){move(e,pos(e,e.touches[0]));},{passive:false});
+  cv.addEventListener('touchend',stop,{passive:false});
+  cv.addEventListener('touchcancel',stop,{passive:false});
+}
+function clrSig(id){SIG_INK[id]={strokes:[],bg:'',bgImg:null};var s=sigs[id];if(s){s.hasData=false;s.drawing=false;sigRepaint(id);}}
+function hasSig(id){var ink=SIG_INK[id];if(ink&&(ink.strokes.length||ink.bg))return true;return !!(sigs[id]&&sigs[id].hasData);}
+function getSig(id){sigRepaint(id);var c=document.getElementById(id);try{return (c&&c.toDataURL('image/png'))||'';}catch(e){return '';}}
+function sigRepaintAll(){for(var k in sigs){if(Object.prototype.hasOwnProperty.call(sigs,k))sigRepaint(k);}}
+var _sigRT=null;
+function sigRepaintSoon(){if(_sigRT)clearTimeout(_sigRT);_sigRT=setTimeout(sigRepaintAll,120);}
+try{
+  window.addEventListener('scroll',sigRepaintSoon,true);
+  window.addEventListener('resize',sigRepaintSoon);
+  window.addEventListener('orientationchange',sigRepaintSoon);
+  window.addEventListener('pageshow',sigRepaintAll);
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)sigRepaintSoon();});
+}catch(e){}
 
 // ── INSURANCE PACK ────────────────────────────────────────────────
 async function openInsurancePack(contractId,clientName,fleetNo){
