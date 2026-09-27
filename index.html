@@ -1011,6 +1011,7 @@ async function autoRefresh(force){
     // swapped in the Fleet Manager has to reach the tablets, and reloading the list
     // does not touch the check-out that is open — only the screen redraw is held back.
     await loadBookings();
+    await loadDoneSets();   // so a finished check-out stops showing as in progress
     LAST_SYNC=new Date();
     checkVehicleSwap();
     if(!force&&busyNow())return;
@@ -1331,14 +1332,16 @@ function renderCOPicker(){
   upcoming.forEach(function(v){
     var isToday=v.pu===today;
     var dDiff=puDiff(v),late=dDiff<0,lateTxt=Math.abs(dDiff)+' day'+(Math.abs(dDiff)===1?'':'s')+' ago';
-    var ip=ipInfo(v.fn,v.bid);
+    var ip=coIsDone(v)?null:ipInfo(v.fn,v.bid);
+    var fin=coIsDone(v);
     var badge=isToday?'<span style="background:#4a6fa5;color:#fff;font-size:11px;font-weight:800;padding:3px 10px;border-radius:8px;">TODAY</span>':'<span style="background:var(--g2);color:var(--g5);font-size:11px;font-weight:800;padding:3px 10px;border-radius:8px;">UPCOMING</span>';
     var dt=new Date(v.pu+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
     if(ip)badge='<span style="background:var(--ag);color:var(--al);border:1px solid var(--am);font-size:11px;font-weight:900;padding:3px 10px;border-radius:8px;">IN PROGRESS</span>';
-    if(late)badge='<span style="background:var(--re);color:#fff;font-size:11px;font-weight:900;padding:3px 10px;border-radius:8px;">NOT COLLECTED</span>'+(ip?'<div style="margin-top:4px;">'+badge+'</div>':'');
-    if(late)dt='⚠ Was due '+dt+' — '+lateTxt;
-    var col=late?'var(--re)':ip?'var(--am)':isToday?'#4a6fa5':'var(--g3)';
-    rows+='<div data-fn="'+v.fn+'" class="picker-row" ontouchend="event.preventDefault();startCO(this.dataset.fn);" style="background:'+(late?'var(--rg)':ip?'var(--ag)':'var(--g1)')+';border:2px solid '+col+';border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;">'
+    if(late&&!fin)badge='<span style="background:var(--re);color:#fff;font-size:11px;font-weight:900;padding:3px 10px;border-radius:8px;">NOT COLLECTED</span>'+(ip?'<div style="margin-top:4px;">'+badge+'</div>':'');
+    if(fin)badge='<span style="background:var(--se);color:#fff;font-size:11px;font-weight:900;padding:3px 10px;border-radius:8px;">\u2705 COMPLETED</span>';
+    if(late&&!fin)dt='⚠ Was due '+dt+' — '+lateTxt;
+    var col=fin?'var(--gb)':late?'var(--re)':ip?'var(--am)':isToday?'#4a6fa5':'var(--g3)';
+    rows+='<div data-fn="'+v.fn+'" class="picker-row" ontouchend="event.preventDefault();startCO(this.dataset.fn);" style="background:'+(fin?'var(--gr)':late?'var(--rg)':ip?'var(--ag)':'var(--g1)')+';border:2px solid '+col+';border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;">'
       +'<div><div style="font-size:16px;font-weight:900;color:var(--se);">'+v.fn+'</div>'
       +'<div style="font-size:13px;font-weight:700;color:var(--tx);margin-top:2px;">'+v.cl+'</div>'
@@ -1353,7 +1356,7 @@ function renderCOPicker(){
       +'<div>'+badge+'</div></div></div>';
   });
   if(!upcoming.length) rows='<div style="padding:40px;text-align:center;color:var(--g5);font-size:13px;">No check-outs due in this period</div>';
-  var lateN=upcoming.filter(function(v){return puDiff(v)<0;}).length;
+  var lateN=upcoming.filter(function(v){return puDiff(v)<0&&!coIsDone(v);}).length;
   var back='<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:12px;">'
     +'<span style="font-size:12px;font-weight:800;color:var(--g5);">Also show departures from:</span>'
     +[[1,'Yesterday'],[7,'Last 7 days'],[30,'Last 30 days']].map(function(o){
@@ -1693,6 +1696,7 @@ async function restoreSession(){
   await showApp();
 }
 async function loadFleetFromDB(){
+  loadDoneSets();   // finished check-outs, so nothing stale shows as in progress on first draw
   if(await loadBookings())return;
   const {data}=await SB.from('vehicles').select('*');
   if(!data)return;
@@ -1956,8 +1960,10 @@ function _renderOV(){
     var bg = isRemote ? '#fff5f5' : '#fff';
     var border = isRemote ? '#fed7d7' : '#e8e8e8';
     var inprog=null; try{var r=localStorage.getItem(ipKey(v.fn));if(r)inprog=JSON.parse(r);}catch(e){}
-    var isIP=inprog&&((isOut&&inprog.type==='checkout')||(!isOut&&inprog.type==='checkin'));
+    var _fin=isOut?coIsDone(v):ciIsDone(v);
+    var isIP=!_fin&&inprog&&((isOut&&inprog.type==='checkout')||(!isOut&&inprog.type==='checkin'));
     if(isIP){bg='#fff5f5';border='#e53e3e';}
+    else if(_fin){bg='#f0f9f2';border='#2a9d5c';}
     // Everyone: find ALL staff working on this vehicle
     var allStaffOnVeh=[];
     if(true){
@@ -1983,7 +1989,8 @@ function _renderOV(){
       +'<div style="font-size:14px;font-weight:800;color:#1a1a1a;margin-bottom:2px;">'+v.fn+' — '+(isOut?'OUT':'BACK')+' · '+v.cl+'</div>'
       +'<div style="font-size:12px;color:#666;margin-bottom:3px;">'+locLbl+': '+loc+' · Quote '+(v.quote||'—')+(isRemote?' · ':'')+'</div>'
       +(isRemote?'<div style="font-size:11px;font-weight:900;color:#c53030;letter-spacing:.3px;margin-bottom:3px;">REMOTE ARRANGEMENTS</div>':'')
-      +(isIP?'<div style="font-size:11px;font-weight:900;color:#e53e3e;margin-bottom:3px;">🔴 IN PROGRESS</div>':'')
+      +(isIP?'<div style="font-size:11px;font-weight:900;color:#e53e3e;margin-bottom:3px;">🔴 IN PROGRESS</div>'
+        :_fin?'<div style="font-size:11px;font-weight:900;color:#12803c;margin-bottom:3px;">✅ COMPLETED</div>':'')
       +'<div style="font-size:12px;font-weight:800;color:'+campCol+';">'+camp+'</div>'
       +'</div>'
       +(isRemote?'<span style="font-size:16px;flex-shrink:0;">⚠️</span>':'')
@@ -2496,10 +2503,40 @@ async function drLoadFor(kind,key){
 }
 // Finished / reset: remove everywhere (queued if there is no internet)
 async function drFinish(id){
+  var fn=(DR_SRV[id]&&DR_SRV[id].fleet_no)||'';
   delete DR_LAST[id];delete DR_SRV[id];
   await drPut(id,{id:id,deleted:true});
+  // The "in progress" badges read ip_ markers, not the draft. Left behind they keep a finished
+  // check-out looking unfinished on the dashboard for ever, whoever started it.
+  try{
+    if(!fn){var p=String(id||'').split(':');fn=p[1]||'';}
+    var kill=[];
+    for(var i=0;i<localStorage.length;i++){
+      var k=localStorage.key(i);
+      if(k&&k.indexOf('ip_')===0&&(k.endsWith('_'+fn)||id.indexOf(k.split('_').pop())>-1))kill.push(k);
+    }
+    kill.forEach(function(k){try{localStorage.removeItem(k);}catch(e){}});
+  }catch(e){}
   drPush();
 }
+// A finished check-out must stop looking unfinished. The tablet's own checkouts / checkins
+// tables are the authority: once a row exists for that booking, the job is done — that also
+// heals markers already stranded on a tablet, without anyone clearing anything by hand.
+var DONE_CO={},DONE_CI={};
+async function loadDoneSets(){
+  try{
+    var a=await SB.from('checkouts').select('booking_id').order('created_at',{ascending:false}).limit(500);
+    var m={};((a&&a.data)||[]).forEach(function(x){if(x&&x.booking_id)m[x.booking_id]=true;});
+    if(a&&!a.error)DONE_CO=m;
+  }catch(e){}
+  try{
+    var b=await SB.from('checkins').select('booking_id').order('created_at',{ascending:false}).limit(500);
+    var m2={};((b&&b.data)||[]).forEach(function(x){if(x&&x.booking_id)m2[x.booking_id]=true;});
+    if(b&&!b.error)DONE_CI=m2;
+  }catch(e){}
+}
+function coIsDone(v){try{return !!(v&&DONE_CO[bkKey(v)]);}catch(e){return false;}}
+function ciIsDone(v){try{return !!(v&&DONE_CI[bkKey(v)]);}catch(e){return false;}}
 async function drFinishFleet(fn){
   var ids=Object.keys(DR_SRV).filter(function(k){return DR_SRV[k].fleet_no===fn;});
   (await drAll()).forEach(function(r){if(r.fn===fn&&ids.indexOf(r.id)<0)ids.push(r.id);});
@@ -2661,6 +2698,17 @@ async function startCO(fn){
   const v=pickVeh(fn,'out');
   if(!v){toast('Vehicle '+fn+' not found','err');return;}
   if(v.st==='rented'){toast('Already checked out','err');return;}
+  // Opening a finished check-out used to build a blank one and push that empty draft over the
+  // saved work — the screen came up with nothing on it. The saved record is the real thing.
+  if(coIsDone(v)){
+    if(confirm(fn+' has already been checked out to '+(v.cl||'this client')+'.\n\n'
+      +'Everything signed is saved in the rental file.\n\n'
+      +'OK  =  open the rental file (contract, ID scans, photos, signatures)\n'
+      +'Cancel  =  go back')){
+      try{openRentalFile(bkKey(v),v.fn,v.cl||'');}catch(e){toast('Could not open the rental file','err');}
+    }
+    return;
+  }
   // Returning to a vehicle you left earlier: carry on where you stopped
   var _dk=v.bid||fn;
   // Work saved on this device or on another iPad/laptop: carry on from there
