@@ -7031,14 +7031,41 @@ function sharedReportBack(){
   try{window.close();}catch(e){}                         // opened in its own tab: this lands back on the app
   setTimeout(function(){location.replace(location.pathname);},150);   // only tab: drop the link and start the app
 }
+// Send this same document to the client again, without redoing the check-out. The link handed
+// over is the viewer one, so it opens as a document on their phone rather than as page source.
+function sharedReportWA(){
+  try{
+    var u=sharedReportLink();
+    if(!u||u==='#bad'){toast('This document link is not complete — open it again from the app','err');return;}
+    var link=clientDocLink(u);
+    var name='',veh='',ret='';
+    try{
+      var labels=document.querySelectorAll('.meta-label');
+      for(var i=0;i<labels.length;i++){
+        var k=(labels[i].textContent||'').trim().toUpperCase();
+        var v=labels[i].nextElementSibling?(labels[i].nextElementSibling.textContent||'').trim():'';
+        if(k==='CLIENT')name=v;else if(k==='VEHICLE')veh=v;else if(k==='RETURN')ret=v;
+      }
+    }catch(e){}
+    var first=String(name||'').replace(/\(.*\)/,'').trim().split(/\s+/)[0]||'';
+    var msg='Hi '+first+',\n\nHere is your Go Rent 4x4 Namibia document again'
+      +(veh?'\n\nVehicle: '+veh:'')+(ret?'\nReturn: '+ret:'')
+      +'\n\nIt opens straight on your phone:\n'+link
+      +'\n\nWhatsApp us any time: +264 81 861 8085\n- Go Rent 4x4 Team';
+    window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+  }catch(e){
+    try{toast('Could not open WhatsApp','err');}catch(e2){alert('Could not open WhatsApp');}
+  }
+}
 async function showSharedReport(u){
   document.documentElement.style.overflow='auto';
   document.body.setAttribute('style','overflow:auto;background:#f3f3f3;height:auto;min-height:100vh;margin:0;');
   var staff=sharedIsStaff();
-  var bar='<div id="shared-bar" style="position:sticky;top:0;z-index:99999;display:flex;gap:10px;align-items:center;'
+  var bar='<div id="shared-bar" style="position:sticky;top:0;z-index:99999;display:flex;gap:8px;align-items:center;flex-wrap:wrap;'
     +'padding:10px 12px;background:#1d6b3d;box-shadow:0 2px 8px rgba(0,0,0,.22);">'
     +(staff?'<button onclick="sharedReportBack()" style="padding:13px 20px;font-size:16px;font-weight:900;border:0;border-radius:10px;background:#fff;color:#1d6b3d;cursor:pointer;">&larr; Back to app</button>':'')
     +'<div style="flex:1;color:#fff;font-weight:800;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Go Rent 4&times;4 Namibia</div>'
+    +(staff?'<button onclick="sharedReportWA()" style="padding:13px 18px;font-size:16px;font-weight:900;border:0;border-radius:10px;background:#25d366;color:#04240f;cursor:pointer;white-space:nowrap;">&#128172; Send to client</button>':'')
     +'<button onclick="window.print()" style="padding:13px 20px;font-size:16px;font-weight:900;border:0;border-radius:10px;background:#3ddc84;color:#052010;cursor:pointer;">&#128424; Save / Print</button>'
     +'</div>'
     +'<style>@media print{#shared-bar{display:none!important;}}</style>';
