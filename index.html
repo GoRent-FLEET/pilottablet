@@ -4035,6 +4035,24 @@ function docBelongsHere(name){
       +'          Nothing is filed — open the right vehicle first.');
   }catch(e){return true;}
 }
+// The reader's reply is not always a bare block of JSON: a model may put a thinking block
+// first, or wrap the JSON in a sentence. Take the first text block, then the JSON inside it.
+function aiText(data){
+  try{
+    var c=(data&&data.content)||[];
+    for(var i=0;i<c.length;i++)if(c[i]&&c[i].type==='text'&&typeof c[i].text==='string')return c[i].text;
+    for(var j=0;j<c.length;j++)if(c[j]&&typeof c[j].text==='string')return c[j].text;
+  }catch(e){}
+  return '';
+}
+function aiJSON(data){
+  var t=String(aiText(data)||'').replace(/```json|```/g,'').trim();
+  if(!t)throw new Error('The reader sent nothing back');
+  try{return JSON.parse(t);}catch(e){}
+  var a=t.indexOf('{'),b=t.lastIndexOf('}');
+  if(a>=0&&b>a)return JSON.parse(t.slice(a,b+1));
+  throw new Error('Could not make sense of the reply');
+}
 async function extractPassportData(b64DataUrl, driverIdx){
   // Show subtle loading indicator on the card
   toast('📷 Reading passport…','');
@@ -4076,12 +4094,7 @@ If a field is not visible or unclear, use an empty string. Return only the JSON.
     });
 
     const data = await response.json();
-    if(!data.content || !data.content[0]) throw new Error('No response');
-
-    const raw = data.content[0].text.trim();
-    // Strip any accidental markdown fences
-    const clean = raw.replace(/```json|```/g,'').trim();
-    const parsed = JSON.parse(clean);
+    const parsed = aiJSON(data);
 
     const d = co.drivers[driverIdx];
     if(!d) return;
@@ -4126,6 +4139,7 @@ If a field is not visible or unclear, use an empty string. Return only the JSON.
         if(m.nationality&&!d2.nationality){d2.nationality=m.nationality;ch.push('nationality');}
         if(m.passport_number&&!d2.passport){d2.passport=m.passport_number;ch.push('passport #');}
         if(m.expiry&&!d2.ppExpiry){d2.ppExpiry=m.expiry;ch.push('passport expiry');}
+        setRead(driverIdx,true,ch.length?('✅ Read from the passport code lines: '+ch.join(', ')+' — please check each one'):'Passport read — the fields were already filled in');
         coRedrawDrivers();
         toast(ch.length?('✅ Read from the passport code lines: '+ch.join(', ')+' — please check'):'Passport read — details already filled','ok');
         return;
@@ -4176,9 +4190,7 @@ If a field is not visible, use an empty string. Return only the JSON.` }
     });
 
     const data = await response.json();
-    if(!data.content || !data.content[0]) throw new Error('No response');
-    const raw = data.content[0].text.trim().replace(/```json|```/g,'').trim();
-    const parsed = JSON.parse(raw);
+    const parsed = aiJSON(data);
 
     const d = co.drivers[driverIdx];
     if(!d) return;
