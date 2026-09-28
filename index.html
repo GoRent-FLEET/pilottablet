@@ -1399,7 +1399,7 @@ function goPage(p,_fromBack){
   else if(p==='co')renderCOPicker();
   else if(p==='ci')renderCIPicker();
   else if(p==='out')renderOut();
-  else if(p==='doc')renderDoc();
+  else if(p==='doc'){DOC_PART='';renderDoc();}   // lists stay closed until Checked in / Checked out is tapped
 }
 
 // How far back the check-out list reaches. A client who lands late often collects the next
@@ -1497,7 +1497,7 @@ function renderCOPicker(){
 // Staff can add notes and change the return date / expected time at any time.
 var OUT_ROWS=[],OUT_OPEN=null;
 // ── 📁 Documentation: every completed hand-over, by vehicle or client ──
-var DOC_ROWS=[], DOC_FIND='', DOC_FN='', DOC_PART='out', DOC_GROUP='veh', DOC_LIST=[];
+var DOC_ROWS=[], DOC_FIND='', DOC_FN='', DOC_PART='', DOC_GROUP='veh', DOC_LIST=[];
 async function renderDoc(){
   var body=document.getElementById('doc-body');if(!body)return;
   if(!canViewReports()){body.innerHTML='<div style="padding:40px;text-align:center;color:var(--g5);">🔒 Documentation is not available for '+(APP_USER?_bx(APP_USER.name):'you')+'</div>';return;}
