@@ -1673,13 +1673,21 @@ async function renderOut(){
   var body=document.getElementById('out-body');if(!body)return;
   body.innerHTML='<div style="padding:30px;text-align:center;color:var(--g5);">Loading vehicles out…</div>';
   var co_=[],ci_=[];
-  try{var r1=await SB.from('checkouts').select('id,booking_id,fleet_no,customer_name,created_at,return_time,return_date_new,out_notes,handover_by,return_place,return_address,return_place_time').order('created_at',{ascending:false}).limit(300);co_=(r1&&r1.data)||[];}catch(e){}
+  try{var r1=await SB.from('checkouts').select('id,booking_id,fleet_no,client,customer_name,created_at,return_time,return_date_new,out_notes,handover_by,return_place,return_address,return_place_time').order('created_at',{ascending:false}).limit(300);co_=(r1&&r1.data)||[];}catch(e){}
   try{var r2=await SB.from('checkins').select('booking_id');ci_=(r2&&r2.data)||[];}catch(e){}
   var back={};ci_.forEach(function(x){back[x.booking_id]=1;});
   var seen={},seenFn={};OUT_ROWS=co_.filter(function(x){if(!x.booking_id||back[x.booking_id]||seen[x.booking_id])return false;seen[x.booking_id]=1;if(seenFn[x.fleet_no])return false;seenFn[x.fleet_no]=1;return true;});
   drawOut();
 }
-function outVeh(row){return FLEET.filter(function(v){return bkKey(v)===row.booking_id;})[0]||FLEET.filter(function(v){return v.fn===row.fleet_no;})[0]||{fn:row.fleet_no,cl:row.customer_name,reg:'',pu:'',rt:''};}
+// The booking this check-out belongs to. If Fleet Manager has no matching booking, do NOT borrow
+// another client's booking on the same vehicle (that showed the wrong name and a June return date):
+// use the check-out's own client, the vehicle's reg, and no return date.
+function outVeh(row){
+  var exact=FLEET.filter(function(v){return bkKey(v)===row.booking_id;})[0];
+  if(exact)return exact;
+  var any=FLEET.filter(function(v){return v.fn===row.fleet_no;})[0]||{};
+  return {fn:row.fleet_no,cl:row.client||row.customer_name||'',reg:any.reg||'',pu:'',rt:'',_noBooking:true};
+}
 function outDue(row,v){return row.return_date_new||v.rt||'';}
 function drawOut(){
   var body=document.getElementById('out-body');if(!body)return;
@@ -1696,7 +1704,7 @@ function drawOut(){
       +'<div onclick="OUT_OPEN='+(open?'null':o.i)+';drawOut()" style="padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;">'
       +'<div><div style="font-size:16px;font-weight:900;color:var(--se);">'+_bx(v.fn)+' <span style="font-size:12px;color:var(--g5);font-weight:700;">'+_bx(v.reg||'')+'</span></div>'
       +'<div style="font-size:13px;font-weight:700;color:var(--tx);margin-top:2px;">'+_bx(v.cl||r.customer_name||'')+nameEditBtn(r.booking_id,v.cl||r.customer_name||'','drawOut')+(waChip(v)?' · '+waChip(v):'')+'</div>'
-      +'<div style="font-size:12px;color:var(--g5);margin-top:3px;">Out since '+fmt((r.created_at||'').slice(0,10))+' · Return '+fmt(due)+(r.return_time?' <b style="color:#7db8ff;">🕑 '+_bx(r.return_time)+'</b>':'')
+      +'<div style="font-size:12px;color:var(--g5);margin-top:3px;">Out since '+fmt((r.created_at||'').slice(0,10))+' · Return '+(due?fmt(due):'<b style="color:var(--al);">⚠ no booking in Fleet Manager — return date unknown</b>')+(r.return_time?' <b style="color:#7db8ff;">🕑 '+_bx(r.return_time)+'</b>':'')
       +(r.return_date_new&&v.rt&&r.return_date_new!==v.rt?' <span style="color:var(--al);font-weight:800;">(moved from '+fmt(v.rt)+')</span>':'')
       +(notes?' · 📝 '+notes+' note'+(notes>1?'s':''):'')+'</div>'
       +remoteFlag(r,true)+'</div>'
