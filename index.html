@@ -9229,6 +9229,52 @@ function closeResumePanel() {
   var overlay = document.getElementById('resume-overlay');
   if (overlay) overlay.style.display = 'none';
 }
+
+// ── AUTO-UPDATE ───────────────────────────────────────────────────
+// The Blackview/Android app keeps showing an old copy of this page from its cache.
+// Every few minutes (and whenever the app comes back to the front) ask the server when
+// the page was last published. If that is newer than the copy on screen, load the new
+// one — straight away when no check-out / check-in is open, otherwise via a green bar
+// the staff tap when they are ready (all work is kept in the draft either way).
+(function(){
+  var LOADED=Date.parse(document.lastModified)||Date.now();
+  var checking=false,shown=false;
+  function busy(){
+    try{if(co&&co.v&&!co._done)return true;}catch(e){}
+    try{if(ci&&ci.v&&!ci._done)return true;}catch(e){}
+    var ae=document.activeElement;return !!(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName));
+  }
+  function load(){
+    try{localStorage.setItem('gr_upd_at',String(Date.now()));}catch(e){}
+    var u=location.href.replace(/([?&])v=\d+&?/,'$1').replace(/[?&]$/,'');
+    location.replace(u+(u.indexOf('?')>-1?'&':'?')+'v='+Date.now());
+  }
+  window.grUpdateNow=load;
+  function bar(){
+    if(shown)return;shown=true;
+    var b=document.createElement('div');
+    b.style.cssText='position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:100000;background:#12803c;color:#fff;padding:14px 22px;border-radius:14px;font:800 16px system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.35);cursor:pointer';
+    b.textContent='⬆ New version of the app — tap to update (your work is kept)';
+    b.onclick=load;document.body.appendChild(b);
+  }
+  async function check(){
+    if(checking||navigator.onLine===false)return;checking=true;
+    try{
+      var r=await fetch(location.pathname+'?chk='+Date.now(),{method:'HEAD',cache:'no-store'});
+      var lm=Date.parse(r.headers.get('last-modified')||'');
+      if(lm&&lm>LOADED+1000){
+        var last=0;try{last=+localStorage.getItem('gr_upd_at')||0;}catch(e){}
+        if(Date.now()-last<120000){bar();}          // just reloaded and still old (server catching up): don't loop, just offer
+        else if(busy())bar();
+        else load();
+      }
+    }catch(e){}
+    checking=false;
+  }
+  setTimeout(check,4000);
+  setInterval(check,5*60000);
+  document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')check();});
+})();
 </script>
 
 <!-- RESUME PANEL -->
