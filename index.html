@@ -1488,16 +1488,16 @@ function renderCOPicker(){
 // Staff can add notes and change the return date / expected time at any time.
 var OUT_ROWS=[],OUT_OPEN=null;
 // ── 📁 Documentation: every completed hand-over, by vehicle or client ──
-var DOC_ROWS=[], DOC_FIND='', DOC_FN='';
+var DOC_ROWS=[], DOC_FIND='', DOC_FN='', DOC_PART='out', DOC_GROUP='veh', DOC_LIST=[];
 async function renderDoc(){
   var body=document.getElementById('doc-body');if(!body)return;
   if(!canViewReports()){body.innerHTML='<div style="padding:40px;text-align:center;color:var(--g5);">🔒 Documentation is not available for '+(APP_USER?_bx(APP_USER.name):'you')+'</div>';return;}
   body.innerHTML='<div style="padding:30px;text-align:center;color:var(--g5);">Loading rental documents…</div>';
   var co_=[],ci_=[],ct_=[];
   try{var r1=await SB.from('checkouts').select('booking_id,fleet_no,client,customer_name,created_at,odo_out,fuel_out,handover_by,manager_name').order('created_at',{ascending:false}).limit(400);co_=(r1&&r1.data)||[];}catch(e){}
-  try{var r2=await SB.from('checkins').select('booking_id,created_at');ci_=(r2&&r2.data)||[];}catch(e){}
+  try{var r2=await SB.from('checkins').select('booking_id,fleet_no,client,created_at,received_by,manager_name,force_closed_by');ci_=(r2&&r2.data)||[];}catch(e){}
   try{var r3=await SB.from('rental_contracts').select('booking_id,client_name,created_at');ct_=(r3&&r3.data)||[];}catch(e){}
-  var back={};ci_.forEach(function(x){back[x.booking_id]=x.created_at||1;});
+  var back={},ciRow={};ci_.forEach(function(x){back[x.booking_id]=x.created_at||1;if(!ciRow[x.booking_id])ciRow[x.booking_id]=x;});
   var signed={};ct_.forEach(function(x){signed[x.booking_id]=x.client_name||1;});
   var seen={};
   var rows=co_.filter(function(x){if(!x.booking_id||seen[x.booking_id])return false;seen[x.booking_id]=1;return true;})
@@ -1505,8 +1505,17 @@ async function renderDoc(){
       var v=FLEET.filter(function(f){return bkKey(f)===x.booking_id;})[0]||{};
       return {bid:x.booking_id,fn:x.fleet_no,cl:x.client||x.customer_name||signed[x.booking_id]||v.cl||'',
               out:x.created_at,back:back[x.booking_id]||null,contract:!!signed[x.booking_id],
-              pu:v.pu||'',rt:v.rt||'',by:x.handover_by||'',mgr:x.manager_name||'',also:[]};
+              pu:v.pu||'',rt:v.rt||'',by:x.handover_by||'',mgr:x.manager_name||'',also:[],
+              bno:v.bid||v.quote||'',ci:ciRow[x.booking_id]||null};
     });
+  // Check-ins with no tablet check-out on record (old rentals, or closed off by Peter) still belong under Check-in documentation
+  var haveCO={};rows.forEach(function(r){haveCO[r.bid]=1;});
+  Object.keys(ciRow).forEach(function(k){
+    if(haveCO[k])return;var x=ciRow[k];
+    var v=FLEET.filter(function(f){return bkKey(f)===k;})[0]||{};
+    rows.push({bid:k,fn:x.fleet_no||v.fn||String(k).split('_')[0],cl:x.client||v.cl||'',out:null,back:x.created_at||1,contract:!!signed[k],
+      pu:v.pu||String(k).split('_')[1]||'',rt:v.rt||'',by:'',mgr:x.manager_name||'',also:[],bno:v.bid||v.quote||'',ci:x,noCO:true});
+  });
   // A check-out started again under a different date leaves two records for one rental. They are
   // the same vehicle and the same person, so they are shown as one — newest first, with the
   // earlier one's documents folded in. Nothing is deleted; both records are still there.
@@ -1530,42 +1539,81 @@ async function renderDoc(){
 function drawDoc(){
   var body=document.getElementById('doc-body');if(!body)return;
   var q=(DOC_FIND||'').toLowerCase().trim();
-  var list=DOC_ROWS.filter(function(r){
+  var base=DOC_ROWS.filter(function(r){
     if(DOC_FN&&r.fn!==DOC_FN)return false;
     if(!q)return true;
-    return (r.fn+' '+r.cl+' '+(r.pu||'')+' '+(r.rt||'')).toLowerCase().indexOf(q)>=0;
+    return (r.fn+' '+r.cl+' '+(r.bno||'')+' '+(r.pu||'')+' '+(r.rt||'')).toLowerCase().indexOf(q)>=0;
   });
-  var fmt=function(d){return d?new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';};
-  var rows=list.map(function(r,i){
-    return '<div onclick="docOpen('+i+')" style="cursor:pointer;background:var(--g0);border:2px solid '+(r.back?'var(--g3)':'var(--gb)')+';border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;">'
-      +'<div style="min-width:0;">'
-      +'<div style="font-size:16px;font-weight:900;color:var(--se);">'+_bx(r.fn)+' <span style="font-size:13px;color:var(--g5);font-weight:700;">'+_bx(r.cl||'—')+'</span></div>'
-      +'<div style="font-size:12px;color:var(--g5);margin-top:3px;">📅 '+(r.pu||fmt(r.out))+' → '+(r.rt||'—')+' · handed over by '+_bx(r.by||'—')+'</div>'
-      +((r.also&&r.also.length)?'<div style="font-size:11px;font-weight:800;color:var(--al);margin-top:3px;">\uD83D\uDD17 '+r.also.length+' earlier check-out'+(r.also.length===1?'':'s')+' for this rental combined here</div>':'')
-      +'<div style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap;">'
-      +'<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:8px;background:'+(r.contract?'var(--sg)':'var(--rg)')+';color:'+(r.contract?'var(--se)':'var(--rl)')+';">'+(r.contract?'📋 Contract signed':'📋 No contract')+'</span>'
-      +'<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:8px;background:'+(r.back?'var(--g2)':'var(--ag)')+';color:'+(r.back?'var(--g5)':'var(--al)')+';">'+(r.back?'🏠 Returned '+fmt(r.back):'🚙 Still out')+'</span>'
-      +'</div></div>'
+  var outList=base.filter(function(r){return !r.noCO;});
+  var inList=base.filter(function(r){return !!r.back;});
+  var fmt=function(d){return d&&d!==1?new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';};
+  var chip=function(ok,t){return '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:8px;background:'+(ok?'var(--sg)':'var(--rg)')+';color:'+(ok?'var(--se)':'var(--rl)')+';">'+t+'</span>';};
+  // one entry (a rental) inside a group
+  function entry(r,part){
+    DOC_LIST.push({r:r,part:part});var i=DOC_LIST.length-1;
+    var head=DOC_GROUP==='veh'?_bx(r.cl||'—'):_bx(r.fn);
+    var info=part==='out'
+      ?'📅 '+(r.pu||fmt(r.out))+' → '+(r.rt||'—')+' · handed over by '+_bx(r.by||'—')
+      :'🏠 Returned '+fmt(r.back)+' · received by '+_bx((r.ci&&r.ci.received_by)||'—');
+    var chips=part==='out'
+      ?chip(r.contract,r.contract?'📋 Contract signed':'📋 No contract')+' '+(r.back?chip(true,'🏠 Returned'):'<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:8px;background:var(--ag);color:var(--al);">🚙 Still out</span>')
+      :((r.ci&&r.ci.force_closed_by)?'<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:8px;background:var(--ag);color:var(--al);">⚠ Closed off by '+_bx(r.ci.force_closed_by)+'</span>':chip(true,'✅ Check-in complete'));
+    return '<div onclick="docOpen('+i+')" style="cursor:pointer;background:var(--g0);border:1px solid var(--g3);border-radius:10px;padding:10px 12px;margin:0 0 6px 10px;display:flex;justify-content:space-between;align-items:center;gap:10px;">'
+      +'<div style="min-width:0;"><div style="font-size:14px;font-weight:900;color:var(--tx);">'+head+(r.bno?' <span style="font-size:12px;color:var(--g5);font-weight:700;">· Booking '+_bx(String(r.bno))+'</span>':'')+'</div>'
+      +'<div style="font-size:12px;color:var(--g5);margin-top:2px;">'+info+'</div>'
+      +((part==='out'&&r.also&&r.also.length)?'<div style="font-size:11px;font-weight:800;color:var(--al);margin-top:2px;">🔗 '+r.also.length+' earlier check-out'+(r.also.length===1?'':'s')+' combined here</div>':'')
+      +'<div style="margin-top:4px;display:flex;gap:5px;flex-wrap:wrap;">'+chips+'</div></div>'
       +'<div style="font-size:13px;font-weight:900;color:var(--bl);white-space:nowrap;">Open 📁</div></div>';
-  }).join('');
+  }
+  // group rentals under the vehicle or under the client
+  function grouped(list,part){
+    if(!list.length)return '<div style="padding:16px;text-align:center;color:var(--g5);font-size:13px;">No '+(part==='out'?'check-out':'check-in')+' documents'+(DOC_FN?' for '+_bx(DOC_FN):'')+' yet</div>';
+    var g={},order=[];
+    list.slice().sort(function(a,b){return ((b.back&&part==='in'?b.back:b.out)||'')>((a.back&&part==='in'?a.back:a.out)||'')?1:-1;}).forEach(function(r){
+      var k=DOC_GROUP==='veh'?r.fn:(String(r.cl||'—').trim()||'—');
+      var kk=DOC_GROUP==='veh'?k:k.toLowerCase();
+      if(!g[kk]){g[kk]={label:k,rows:[]};order.push(kk);}
+      g[kk].rows.push(r);
+    });
+    if(DOC_GROUP==='veh')order.sort(function(a,b){return fnNum(a)-fnNum(b);});else order.sort();
+    return order.map(function(kk){
+      var G=g[kk];
+      var sub=DOC_GROUP==='veh'?((FLEET.filter(function(v){return v.fn===G.label;})[0]||{}).reg||''):G.rows.map(function(r){return r.fn;}).filter(function(v,i,a){return a.indexOf(v)===i;}).join(', ');
+      return '<div style="margin:10px 0 4px;font-size:15px;font-weight:900;color:var(--se);">'+(DOC_GROUP==='veh'?'🚗 ':'👤 ')+_bx(G.label)
+        +' <span style="font-size:12px;color:var(--g5);font-weight:700;">'+_bx(sub)+' · '+G.rows.length+'</span></div>'
+        +G.rows.map(function(r){return entry(r,part);}).join('');
+    }).join('');
+  }
+  function partRow(part,title,n,note){
+    var on=DOC_PART===part;
+    return '<div onclick="DOC_PART=\''+(on?'':part)+'\';drawDoc();" style="cursor:pointer;margin-top:10px;background:'+(on?'var(--gr)':'var(--g1)')+';border:2px solid '+(on?'var(--gb)':'var(--g3)')+';border-radius:12px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px;">'
+      +'<div><div style="font-size:17px;font-weight:900;color:var(--tx);">'+title+' <span style="font-size:13px;color:var(--g5);">('+n+')</span></div>'
+      +'<div style="font-size:12px;color:var(--g5);margin-top:2px;">'+note+'</div></div>'
+      +'<div style="font-size:20px;font-weight:900;color:var(--g5);">'+(on?'▾':'▸')+'</div></div>';
+  }
+  DOC_LIST=[];
+  var gbtn=function(k,t){var on=DOC_GROUP===k;return '<button onclick="DOC_GROUP=\''+k+'\';drawDoc();" style="padding:10px 14px;border-radius:8px;border:2px solid '+(on?'var(--gb)':'var(--g3)')+';background:'+(on?'var(--gr)':'var(--g0)')+';color:var(--tx);font-size:14px;font-weight:900;cursor:pointer;">'+t+'</button>';};
   body.innerHTML='<div style="padding:16px;">'
-    +'<div style="font-size:13px;font-weight:800;color:var(--g5);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">📁 Rental documents — '+list.length+' hand-over'+(list.length===1?'':'s')+'</div>'
+    +'<div style="font-size:13px;font-weight:800;color:var(--g5);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">📁 Documentation</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
     +'<select id="doc-fn" onchange="DOC_FN=this.value;drawDoc();" style="color-scheme:light;padding:12px;font-size:15px;font-weight:800;border-radius:var(--rs);border:2px solid var(--g3);background:var(--g0);color:var(--tx);min-width:190px;">'
       +'<option value="">🚗 All vehicles</option>'
       +FLEET.map(function(v){return v.fn;}).concat(DOC_ROWS.map(function(r){return r.fn;})).filter(function(v,i,a){return v&&a.indexOf(v)===i;}).sort(function(a,b){return fnNum(a)-fnNum(b);})
         .map(function(fn){return '<option'+(DOC_FN===fn?' selected':'')+'>'+_bx(fn)+'</option>';}).join('')
     +'</select>'
-    +'<input class="search-bar" id="doc-find" style="flex:1;min-width:220px;margin:0;" placeholder="🔎 Search client name" value="'+_bx(DOC_FIND)+'" oninput="DOC_FIND=this.value;drawDoc();document.getElementById(\'doc-find\').focus();">'
+    +'<input class="search-bar" id="doc-find" style="flex:1;min-width:220px;margin:0;" placeholder="🔎 Search client name, fleet no. or booking no." value="'+_bx(DOC_FIND)+'" oninput="DOC_FIND=this.value;drawDoc();document.getElementById(\'doc-find\').focus();">'
     +'</div>'
-    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 12px;">'
-    +'<div style="font-size:12px;color:var(--g5);">Contract, booking details, passports, photos, damage, handover and return report — with print.</div>'
+    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;"><span style="font-size:13px;font-weight:800;color:var(--g5);">Group by</span>'+gbtn('veh','🚗 Vehicle')+gbtn('cl','👤 Client')+'</div>'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 4px;">'
+    +'<div style="font-size:12px;color:var(--g5);">Tap a row to open it. Each rental opens with print / save as PDF.</div>'
     +'<button onclick="backupNow(false)" style="padding:8px 14px;border-radius:8px;border:2px solid var(--g3);background:var(--g0);color:var(--tx);font-size:13px;font-weight:900;cursor:pointer;white-space:nowrap;">💾 Backup to this computer</button>'
     +wipeTabletBtn()
     +'</div>'
     +docVehPanel()
-    +(rows?'<div style="font-size:12px;font-weight:900;color:var(--g5);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;">📁 Documents on file</div>'+rows
-          :'<div style="padding:26px;text-align:center;color:var(--g5);font-size:13px;">No hand-over documents'+(DOC_FN?' for '+_bx(DOC_FN):'')+' yet</div>')
+    +partRow('out','📤 Check-out documentation',outList.length,'Contract, passports &amp; licences, vehicle checks, damage at hand-over, handover document')
+    +(DOC_PART==='out'?'<div style="margin-top:6px;">'+grouped(outList,'out')+'</div>':'')
+    +partRow('in','📥 Check-in documentation',inList.length,'Return check, km &amp; fuel in, new damage, equipment returned, signatures, return report')
+    +(DOC_PART==='in'?'<div style="margin-top:6px;">'+grouped(inList,'in')+'</div>':'')
     +'</div>';
 }
 // Vehicle details and every client booked on it
@@ -1605,13 +1653,8 @@ function docOpenBooking(bid){
   if(r)openRentalFile(r.bid,r.fn,r.cl,(r.also||[]).map(function(a){return a.bid;}));
 }
 function docOpen(i){
-  var q=(DOC_FIND||'').toLowerCase().trim();
-  var list=DOC_ROWS.filter(function(r){
-    if(DOC_FN&&r.fn!==DOC_FN)return false;
-    return !q||(r.fn+' '+r.cl+' '+(r.pu||'')+' '+(r.rt||'')).toLowerCase().indexOf(q)>=0;
-  });
-  var r=list[i];if(!r)return;
-  openRentalFile(r.bid,r.fn,r.cl,(r.also||[]).map(function(a){return a.bid;}));
+  var o=DOC_LIST[i];if(!o)return;var r=o.r;
+  openRentalFile(r.bid,r.fn,r.cl,(r.also||[]).map(function(a){return a.bid;}),o.part);
 }
 async function renderOut(){
   var body=document.getElementById('out-body');if(!body)return;
@@ -6895,13 +6938,14 @@ function rfShowContract(){
     +'<meta name="viewport" content="width=device-width,initial-scale=1">'
     +'<title>Signed contract</title></head><body style="margin:0;padding:10px;background:#fff;">'+h+'</body></html>','Signed contract');
 }
-async function openRentalFile(key,fn,client,alsoKeys){
+async function openRentalFile(key,fn,client,alsoKeys,part){
+  part=(part==='out'||part==='in')?part:'';
   closeRentalFile();closeBookingDetail();
   var m=document.createElement('div');m.id='rf-modal';
   m.setAttribute('style','position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.55);display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow-y:auto;-webkit-overflow-scrolling:touch;');
   m.onclick=function(e){if(e.target===m)closeRentalFile();};
   m.innerHTML='<div style="background:var(--g1);border:2px solid var(--g2);border-radius:16px;width:100%;max-width:760px;padding:16px;">'
-    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-size:18px;font-weight:900;color:var(--tx);">📁 Rental file · '+_bx(fn||'')+' · '+_bx(client||'')+'</div>'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><div style="font-size:18px;font-weight:900;color:var(--tx);">'+(part==='out'?'📤 Check-out documentation':part==='in'?'📥 Check-in documentation':'📁 Rental file')+' · '+_bx(fn||'')+' · '+_bx(client||'')+'</div>'
     +'<button onclick="closeRentalFile()" style="padding:8px 14px;height:auto;width:auto;border-radius:10px;font-size:15px;font-weight:900;white-space:nowrap;border:1px solid var(--g3);background:var(--g0);color:var(--tx);">← Back</button></div>'
     +'<div id="rf-body" style="color:var(--g5);padding:10px;">Loading documents…</div></div>';
   document.body.appendChild(m);
@@ -6936,8 +6980,19 @@ async function openRentalFile(key,fn,client,alsoKeys){
     }
     var picUrls=pics.map(function(p){return {path:p,url:SB.storage.from('vehicle-photos').getPublicUrl(p).data.publicUrl};});
     (cki&&cki.fuel_receipts||[]).forEach(function(u){if(String(u).indexOf('http')===0&&!picUrls.some(function(x){return x.url===u;}))picUrls.push({path:'x/fuel-receipt/x',url:u});});
+    // Check-out / check-in documentation: keep only that part's photos and signatures
+    if(part){
+      var _inPic=function(x){return /\/(damage-in|fuel-receipt)\//.test(x.path);};
+      picUrls=picUrls.filter(function(x){return part==='in'?_inPic(x):!_inPic(x);});
+      docs=docs.filter(function(p){if(/\.html$/.test(p)||p.indexOf('/id-docs/')>0)return true;var isIn=p.indexOf('/signatures/')>0;return part==='in'?isIn:!isIn;});
+    }
     window._rfContractHTML=contract&&contract.contract_html||'';
-    function sec(t,inner){return '<div style="margin:14px 0 6px;font-size:13px;font-weight:900;letter-spacing:.5px;color:var(--al);text-transform:uppercase;">'+t+'</div>'+inner;}
+    var _OUTSEC=['📝 Signed contract','🪪 Passport','🚗 Check-out','📝 Notes while out','📷 Photos','✍️ Signatures'],_INSEC=['🏠 Check-in','📷 Photos','✍️ Signatures'];
+    function sec(t,inner){
+      if(part&&!(part==='out'?_OUTSEC:_INSEC).some(function(k){return t.indexOf(k)===0;}))return '';
+      return _sec0(t,inner);
+    }
+    function _sec0(t,inner){return '<div style="margin:14px 0 6px;font-size:13px;font-weight:900;letter-spacing:.5px;color:var(--al);text-transform:uppercase;">'+t+'</div>'+inner;}
     function thumb(url,label,path,bucket){
       var del=(path&&isAdmin())?'<button onclick="rfDeleteDoc(\''+encodeURIComponent(path)+'\',\''+(bucket||'client-docs')+'\',event)" title="Remove this file" style="position:absolute;top:4px;right:4px;width:30px;height:30px;line-height:1;border-radius:8px;border:2px solid #fff;background:var(--re);color:#fff;font-size:15px;font-weight:900;cursor:pointer;box-shadow:0 1px 5px rgba(0,0,0,.35);">&times;</button>':'';
       return '<div style="display:inline-block;position:relative;width:150px;margin:0 8px 8px 0;vertical-align:top;">'
@@ -6953,7 +7008,7 @@ async function openRentalFile(key,fn,client,alsoKeys){
     var RD=window._rfData;
     h+='<button class="btn g" style="width:100%;margin-bottom:6px;" onclick="rfPrintPicker()">🖨 Print / save documents (choose what)</button>'
       +'<div style="font-size:12px;color:var(--g5);margin-bottom:6px;">Pick what you need — contract, passports, equipment &amp; vehicle checks, damage, photos, return report — then print it or save it as a PDF.</div>'
-      +((RD.handover||RD.ret)?'<div style="display:flex;gap:8px;flex-wrap:wrap;">'+(RD.handover?'<a class="btn s" style="flex:1;text-align:center;text-decoration:none;" href="https://gorent-fleet.github.io/tablet/#r='+encodeURIComponent(RD.handover)+'" target="_blank">🤝 Open handover document</a>':'')+(RD.ret?'<a class="btn s" style="flex:1;text-align:center;text-decoration:none;" href="https://gorent-fleet.github.io/tablet/#r='+encodeURIComponent(RD.ret)+'" target="_blank">🏠 Open return report</a>':'')+'</div>':'');
+      +(((RD.handover&&part!=='in')||(RD.ret&&part!=='out'))?'<div style="display:flex;gap:8px;flex-wrap:wrap;">'+((RD.handover&&part!=='in')?'<a class="btn s" style="flex:1;text-align:center;text-decoration:none;" href="https://gorent-fleet.github.io/tablet/#r='+encodeURIComponent(RD.handover)+'" target="_blank">🤝 Open handover document</a>':'')+((RD.ret&&part!=='out')?'<a class="btn s" style="flex:1;text-align:center;text-decoration:none;" href="https://gorent-fleet.github.io/tablet/#r='+encodeURIComponent(RD.ret)+'" target="_blank">🏠 Open return report</a>':'')+'</div>':'');
     h+=sec('📝 Signed contract',contract?(line('Signed by client',_bx(contract.client_name||'')+(contract.client_signed_at?' · '+new Date(contract.client_signed_at).toLocaleString('en-GB'):''))+line('Staff',_bx(contract.staff_signed_by||contract.created_by||'—'))+line('Deposit',contract.deposit_amount?('N$ '+Number(contract.deposit_amount).toLocaleString()):'—')
       +(window._rfContractHTML?'<button class="btn g" style="margin-top:8px;width:auto;padding:10px 16px;" onclick="rfShowContract()">📄 Open full signed contract</button>':'')):'<div style="font-size:13px;color:var(--g5);">No signed contract saved for this booking yet.</div>');
     h+=sec('🪪 Passport, ID & licence scans',idDocs.length?idDocs.map(function(p){return signed[p]?thumb(signed[p],rfLabel(p)+(_from[p]&&_from[p]!==key?' · from '+_from[p]:''),p,'client-docs'):'';}).join(''):'<div style="font-size:13px;color:var(--g5);">No scans saved for this booking yet.</div>');
