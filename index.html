@@ -6020,9 +6020,42 @@ function sendHandoverWA(){
 //  Simon / Robbie / Peter receives vehicle
 //  Damage → Equipment → Customer sign → Management → DONE
 // ═══════════════════════════════════════════════════════════════
+function ciShowDone(v,r){
+  ci={};ciStep=0;
+  goPage('ci');
+  var body=document.getElementById('ci-body');if(!body)return;
+  var when=r.created_at?new Date(r.created_at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+  var line=function(l,val){return '<div style="display:flex;gap:8px;font-size:15px;padding:7px 0;border-bottom:1px solid var(--g2);"><div style="width:45%;color:var(--g5);">'+l+'</div><div style="color:var(--tx);font-weight:800;">'+val+'</div></div>';};
+  var key=bkKey(v),safeCl=_bx(String(v.cl||'').replace(/'/g,''));
+  body.innerHTML='<div style="padding:16px;max-width:640px;margin:0 auto;">'
+    +'<div class="done"><div class="done-ico">✅</div><div class="done-title">Already checked in</div>'
+    +'<div class="done-sub">'+_bx(v.fn)+' · '+_bx(v.cl||'')+(when?'<br>'+when:'')+'</div></div>'
+    +'<div style="background:var(--g1);border:2px solid var(--gb);border-radius:12px;padding:10px 14px;margin:10px 0;">'
+    +line('Received by',_bx(r.received_by||'—'))
+    +line('Odometer in',r.odo_in?Number(r.odo_in).toLocaleString()+' km':'—')
+    +line('Fuel in',_bx(r.fuel_in||'—'))
+    +line('New damage',r.new_damage?'⚠ Yes':'None')
+    +line('Items not returned',(r.missing_items&&r.missing_items.length)?_bx(r.missing_items.join(', ')):'None')
+    +line('Closed by',_bx(r.manager_name||'—'))
+    +(r.force_closed_by?line('⚠ Closed off',_bx(r.force_closed_by)+(r.force_closed_reason?' — '+_bx(r.force_closed_reason):'')):'')
+    +'</div>'
+    +'<button class="btn g" style="width:100%;margin-bottom:8px;" onclick="openRentalFile(\''+_bx(key)+'\',\''+_bx(v.fn)+'\',\''+safeCl+'\',null,\'in\')">📥 Open check-in documentation</button>'
+    +'<button class="btn s" style="width:100%;margin-bottom:8px;" onclick="ci={};renderCIPicker()">← Back to the list</button>'
+    +(isAdmin()?'<button class="btn s" style="width:100%;border-color:var(--re);color:var(--rl);" onclick="if(confirm(\'Start the check-in of '+_bx(v.fn)+' again?\\n\\nThe check-in already saved stays on file; a second one is added.\')){window._ciRedo=\''+_bx(key)+'\';startCI(\''+_bx(v.fn)+'\');}">↻ Start the check-in again (Peter)</button>':'')
+    +'</div>';
+}
 async function startCI(fn){
   if(!canCheckIn()){toast('🔒 Check-in is not available for '+(APP_USER?APP_USER.name:'you'),'err');return;}
   const v=pickVeh(fn,'in');if(!v){toast('Vehicle not found','err');return;}
+  // Already checked in? Show what was saved — never open a blank check-in over it
+  // (a finished check-in used to reopen empty, which looked as if nothing had been saved).
+  if(window._ciRedo!==bkKey(v)&&!(ci&&ci.v&&drKeyOf(ci)===(v.bid||fn)&&!ci._done)){
+    var _doneRow=null;
+    try{var _q=await SB.from('checkins').select('booking_id,received_by,odo_in,fuel_in,created_at,manager_name,force_closed_by,force_closed_reason,missing_items,new_damage').eq('booking_id',bkKey(v)).order('created_at',{ascending:false}).limit(1);_doneRow=_q&&_q.data&&_q.data[0];}catch(e){}
+    if(!_doneRow&&ciIsDone(v))_doneRow={};
+    if(_doneRow){ciShowDone(v,_doneRow);return;}
+  }
+  window._ciRedo=null;
   // Work saved on this device or on another iPad/laptop: carry on from there
   var _ck=v.bid||fn;
   if(!(ci&&ci.v&&drKeyOf(ci)===_ck&&!ci._done)){
