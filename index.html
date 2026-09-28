@@ -2942,7 +2942,9 @@ function coWhatsLeft(){
     var left=[];
     if(!handoverClosed())left.push('the client\u2019s signature on the handover');
     if(!co.mgmtSig)left.push('the manager\u2019s sign-off to release the vehicle');
-    if(!left.length)return '<div style="margin:-10px 0 8px;padding:9px 14px;border-radius:9px;background:var(--ag);border:2px solid var(--am);font-size:13px;font-weight:900;color:var(--al);">\uD83D\uDC49 Everything is signed \u2014 tap FINISH CHECK-OUT at the bottom to send '+_bx(co.fn)+' out and get the client\u2019s WhatsApp document</div>';
+    if(!left.length)return '<div style="margin:-10px 0 8px;padding:9px 14px;border-radius:9px;background:var(--ag);border:2px solid var(--am);font-size:13px;font-weight:900;color:var(--al);">\uD83D\uDC49 Everything is signed \u2014 tap COMPLETE CHECK-OUT at the bottom of the Management page to send '+_bx(co.fn)+' out and get the client\u2019s WhatsApp document'
+      +(coStep!==7?' <button onclick="coGoStep(7)" style="margin-left:6px;padding:5px 11px;border-radius:7px;border:2px solid var(--gb);background:var(--se);color:#fff;font-size:12px;font-weight:900;cursor:pointer;">Go to Management</button>':'')
+      +'</div>';
     return '<div style="margin:-10px 0 8px;padding:9px 14px;border-radius:9px;background:var(--ag);border:2px solid var(--am);font-size:13px;font-weight:800;color:var(--al);">'
       +'\u23F3 Not finished yet \u2014 still needed: '+left.join(' and ')+'<div style=\"font-weight:700;margin-top:3px;\">The client\u2019s WhatsApp document appears once this is finished.</div>'
       +(!co.mgmtSig?' <button onclick="coGoStep(7)" style="margin-left:6px;padding:5px 11px;border-radius:7px;border:2px solid var(--gb);background:var(--se);color:#fff;font-size:12px;font-weight:900;cursor:pointer;">Go to Management</button>':'')
@@ -3016,7 +3018,10 @@ function drawCO(){
   var _campLbl=_cov.camping?'🏕 CAMPING':'🏨 NO CAMPING';
   var _xbHtml=_cov.xb?'<span style="font-size:14px;font-weight:800;color:#000000;margin-top:4px;display:inline-block;background:#ffffff;border:1px solid rgba(11,58,34,.25);padding:3px 10px;border-radius:8px;">🌍 '+_bx(_cov.xb)+'</span>':'';
   var _backBtn=coStep>0?'<button class="btn s" style="flex:1" onclick="coGoStep(coStep-1)">← Back</button>':'';
-  var _nextBtn=coStep<6?'<button class="btn g" style="flex:2" onclick="coGoStep(coStep+1)">Next →</button>':'';
+  // The Handover page used to have only "← Back", so staff could not find the way on to
+  // Management, where the Complete Check-Out button lives.
+  var _nextBtn=coStep<6?'<button class="btn g" style="flex:2" onclick="coGoStep(coStep+1)">Next →</button>'
+    :coStep===6?'<button class="btn g" style="flex:2" onclick="coGoStep(7)">'+(co.mgmtSig?'Next → Management to finish ✅':'Next → Management')+'</button>':'';
   document.getElementById('co-body').innerHTML=
     '<div class="chg-veh-bar">'
       +'<button onclick="coChangeVehicle()" style="padding:10px 18px;border-radius:22px;border:2px solid var(--gb);background:var(--g1);color:var(--tx);font-size:15px;font-weight:900;cursor:pointer;">← Choose another vehicle</button>'
