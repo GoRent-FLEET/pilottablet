@@ -1271,6 +1271,36 @@ async function forceCompleteCO(fn,ev){
   toast(fn+' closed off ✅','ok');
   renderCOPicker();
 }
+function forceBtnCI(v){
+  if(!isAdmin()||!v)return '';
+  return '<button onclick="forceCompleteCI(\''+_bx(v.fn)+'\',\''+_bx(v.bid||'')+'\',event)" style="margin-left:8px;background:var(--gr);border:2px solid var(--gb);color:var(--gb);border-radius:8px;font-size:11px;font-weight:900;padding:5px 10px;cursor:pointer;">✅ Close off</button>';
+}
+// Peter only: mark a return finished without (or without finishing) the tablet check-in.
+// Recorded as a forced close with who and why — never passes as a check-in that was carried out.
+async function forceCompleteCI(fn,bid,ev){
+  try{if(ev){ev.stopPropagation();ev.preventDefault();}}catch(e){}
+  if(!isAdmin()){toast('Only Peter can close off a check-in','err');return;}
+  var v=(FLEET||[]).find(function(x){return x.fn===fn&&(!bid||String(x.bid||'')===String(bid));})||pickVeh(fn,'in');
+  if(!v){toast('Vehicle '+fn+' not found','err');return;}
+  if(ciIsDone(v)){toast(fn+' is already checked in','ok');return;}
+  if(!confirm('CLOSE OFF CHECK-IN '+fn+' — '+(v.cl||'')+'\n\nThis marks the return finished WITHOUT completing the tablet check-in.\nAnything not captured (km, fuel, damage, equipment, signatures) will be missing from the record.'))return;
+  var why=prompt('Why is the check-in of '+fn+' being closed off? (this is recorded against it)','');
+  if(why===null)return;
+  why=String(why||'').trim();
+  if(!why){toast('A reason is needed','err');return;}
+  var who=(APP_USER&&APP_USER.name)||'Peter',now=new Date().toISOString();
+  try{
+    var res=await SB.from('checkins').insert({booking_id:bkKey(v),fleet_no:v.fn,client:v.cl||'',manager_name:who,
+      force_closed_by:who,force_closed_at:now,force_closed_reason:why,created_at:now});
+    if(res&&res.error){toast('Could not close it off: '+res.error.message,'err');return;}
+  }catch(e){toast('Could not close it off — check the connection','err');return;}
+  try{await drFinish(drId('checkin',{v:v,fn:v.fn}));}catch(e){}
+  try{if(ci&&ci.fn===fn){ci={};ciStep=0;}}catch(e){}
+  try{localStorage.removeItem(ipKey(fn));}catch(e){}
+  await loadDoneSets();
+  toast(fn+' check-in closed off ✅','ok');
+  renderCIPicker();
+}
 function resetBtn(fn){
   if(!isAdmin())return '';
   return '<button onclick="resetProcess(\''+_bx(fn)+'\',event)" style="margin-left:8px;background:var(--rg);border:1px solid var(--re);color:var(--rl);border-radius:8px;font-size:11px;font-weight:900;padding:4px 9px;cursor:pointer;">🗑 Reset</button>';
@@ -1671,8 +1701,11 @@ function renderCIPicker(){
     var srch=(v.fn+' '+(v.cl||'')+' '+(v.reg||'')).toLowerCase();
     var _ip=(typeof DR_SRV==='object'&&DR_SRV['checkin:'+(v.bid||v.fn)])||null;
     if(!_ip){try{for(var _i=0;_i<localStorage.length;_i++){var _k=localStorage.key(_i);if(_k&&_k.indexOf('ip_')===0&&_k.endsWith('_'+v.fn)){var _r=JSON.parse(localStorage.getItem(_k)||'null');if(_r&&_r.type==='checkin'){_ip={staff:_r.staff||_k.split('_')[1]};break;}}}}catch(e){}}
+    var _fin=ciIsDone(v);
+    if(_fin){_ip=null;col='var(--gb)';badge='<span style="background:var(--sg);color:var(--se);border:1px solid var(--gb);font-size:11px;font-weight:900;padding:3px 10px;border-radius:8px;">✅ DONE</span>';}
     if(_ip){col='var(--am)';badge='<span style="background:var(--ag);color:var(--al);border:1px solid var(--am);font-size:11px;font-weight:900;padding:3px 10px;border-radius:8px;">IN PROGRESS</span>';}
-    var _ipLine=_ip?'<div style="font-size:12px;font-weight:800;color:var(--al);margin-top:4px;">⏳ Check-in started'+((_ip.staff||_ip.updated_by)?' · '+_bx(_ip.staff||_ip.updated_by):'')+resetBtn(v.fn)+'</div>':'';
+    var _ipLine=_ip?'<div style="font-size:12px;font-weight:800;color:var(--al);margin-top:4px;">⏳ Check-in started'+((_ip.staff||_ip.updated_by)?' · '+_bx(_ip.staff||_ip.updated_by):'')+resetBtn(v.fn)+forceBtnCI(v)+'</div>'
+      :((!_fin&&!early&&d<=0)?'<div style="margin-top:6px;">'+forceBtnCI(v)+'</div>':'');
     return '<div data-fn="'+v.fn+'" data-bid="'+_bx(v.bid||'')+'" data-s="'+_bx(srch)+'" class="picker-row-ci" style="background:var(--g1);border:2px solid '+col+';border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;">'
       +'<div><div style="font-size:16px;font-weight:900;color:var(--se);">'+v.fn+'</div>'
@@ -6257,6 +6290,21 @@ function ciChecklistSummary(){
     +'</div>';
 }
 // What must be done before the manager can close the return
+// Peter (management) may close a check-in even when some checks were not done.
+// He confirms which ones are missing and types why; both are stored on the check-in.
+function ciPeterOverride(open){
+  if(!isAdmin()){toast('Not complete yet: '+open[0].lbl+' — only Peter can close it with checks missing','err');return false;}
+  if(ci.forceClosedBy)return true;
+  var who=(APP_USER&&APP_USER.name)||'Peter';
+  if(!confirm('CLOSE WITH CHECKS MISSING\n\nNot done yet:\n • '+open.map(function(x){return x.lbl;}).join('\n • ')+'\n\nClose this check-in anyway? It is recorded as closed off by '+who+'.'))return false;
+  var why=prompt('Why is it closed with checks missing? (recorded on the check-in)','');
+  if(why===null)return false;
+  why=String(why||'').trim();
+  if(!why){toast('A reason is needed','err');return false;}
+  ci.forceClosedBy=who;ci.forceClosedAt=new Date().toISOString();
+  ci.forceClosedReason=why+' — not done: '+open.map(function(x){return x.lbl;}).join('; ');
+  return true;
+}
 function ciCompletion(){
   var all=RET_GROUPS.reduce(function(a,g){return a.concat(g.items);},[]);
   var unmarked=all.filter(function(i){return !retSt[i];}).length;
@@ -6310,7 +6358,7 @@ function ciReportHeader(){
 // Issues: the team finishes the return; management decides the deposit (normally the next working day)
 async function ciHandToMgmt(){
   var _open=ciCompletion().filter(function(x){return !x.ok;});
-  if(_open.length){toast('Not complete yet: '+_open[0].lbl,'err');return;}
+  if(_open.length&&!ciPeterOverride(_open))return;
   ci.depositPending=true;ci.depositDue=nextWorkingDay();ci.deposit='Pending — management decision';
   var _n=document.getElementById('ci-hnotes');if(_n&&_n.value)ci.mgmtNotes=_n.value;
   try{await uploadPhotos(ci.fuelPhotos,ci.fn,ci.v.cl,'fuel-receipt');await uploadPhotos(ci.dmgPhotos,ci.fn,ci.v.cl,'damage-in');}catch(e){}
@@ -6735,12 +6783,12 @@ function ciMgrSelect(val){
 }
 async function signMgmtCI(){
   var _open=ciCompletion().filter(function(x){return !x.ok;});
-  if(_open.length){toast('Not complete yet: '+_open[0].lbl,'err');return;}
+  if(_open.length&&!ciPeterOverride(_open))return;
   ci.mgmtName=String((function(){var _e=document.getElementById('ci-mgmt');return _e?_e.value:'';})()||'').trim()||ci.mgmtName||(APP_USER&&APP_USER.name)||'';
   ci.deposit=(function(){var _e=document.getElementById('ci-dep');return _e?_e.value:undefined;})()||ci.deposit;
   ci.mgmtNotes=(function(){var _e=document.getElementById('ci-mnotes');return _e?_e.value:undefined;})()||ci.mgmtNotes;
   if(!ci.mgmtName){toast('Enter manager name','err');return;}
-  if(!!ci.fuelIn&&ci.fuelIn!==ci.v.fuelOut&&!(ci.fuelPhotos&&ci.fuelPhotos.length)){toast('Fuel is short — take a photo of the fuel receipt first','err');return;}
+  if(!ci.forceClosedBy&&!!ci.fuelIn&&ci.fuelIn!==ci.v.fuelOut&&!(ci.fuelPhotos&&ci.fuelPhotos.length)){toast('Fuel is short — take a photo of the fuel receipt first','err');return;}
   if(!hasSig('ci-m-sig')){toast('Manager must sign','err');return;}
   try{await uploadPhotos(ci.fuelPhotos,ci.fn,ci.v.cl,'fuel-receipt');await uploadPhotos(ci.dmgPhotos,ci.fn,ci.v.cl,'damage-in');}catch(e){}
   ci.mgmtSig=getSig('ci-m-sig');ci.mgmtAt=now();
@@ -7251,8 +7299,9 @@ async function completeCI(){
   const damaged=allItems.filter(i=>retSt[i]==='dmg');
   var _ciRes;try{_ciRes=await SB.from('checkins').insert({
     booking_id:ci.fn+'_'+ci.v.pu,fleet_no:ci.fn,client:ci.v.cl,
-    received_by:ci.receivedBy,odo_in:ci.odoIn,odo_out:ci.v.odo,
-    km_driven:ci.odoIn-ci.v.odo,fuel_in:ci.fuelIn,fuel_out:ci.v.fuelOut,
+    received_by:ci.receivedBy,odo_in:(+ci.odoIn||null),odo_out:(+ci.v.odo||null),
+    km_driven:((+ci.odoIn&&+ci.v.odo)?(+ci.odoIn)-(+ci.v.odo):null),
+    force_closed_by:ci.forceClosedBy||null,force_closed_at:ci.forceClosedAt||null,force_closed_reason:ci.forceClosedReason||null,fuel_in:ci.fuelIn,fuel_out:ci.v.fuelOut,
     fuel_short:(!!ci.fuelIn&&ci.fuelIn!==ci.v.fuelOut),new_damage:newDmg.length>0,
     new_damage_panels:newDmg,equipment_status:retSt,
     missing_items:missing,damaged_items:damaged,
@@ -7284,7 +7333,7 @@ async function completeCI(){
     <div class="chg-veh-bar"><button onclick="ciChangeVehicle()" style="padding:10px 18px;border-radius:22px;border:2px solid var(--gb);background:var(--g1);color:var(--tx);font-size:15px;font-weight:900;cursor:pointer;">← Choose another vehicle</button></div>
     <div class="done"><div class="done-ico">${hasIssues?'⚠️':'✅'}</div>
       <div class="done-title">Return Complete</div>
-      <div class="done-sub">${ci.fn} · ${ci.v.cl}<br>${(ci.odoIn-ci.v.odo).toLocaleString()} km · Received by ${ci.receivedBy}</div>
+      <div class="done-sub">${ci.fn} · ${ci.v.cl}<br>${(+ci.odoIn&&+ci.v.odo)?((+ci.odoIn)-(+ci.v.odo)).toLocaleString()+' km · ':''}Received by ${ci.receivedBy||'—'}${ci.forceClosedBy?'<br><b style="color:var(--al)">Closed off by '+_bx(ci.forceClosedBy)+' with checks missing</b>':''}</div>
     </div>
     ${hasIssues?`<div style="background:var(--rg);border:2px solid var(--re);border-radius:var(--r);padding:14px;margin-bottom:12px">
       <div style="font-size:14px;font-weight:800;color:var(--rl);margin-bottom:8px">${WARN_TRI} Recover from ${ci.v.cl}</div>
