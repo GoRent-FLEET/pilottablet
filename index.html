@@ -8265,14 +8265,28 @@ function photoHTML(key,title,sub,max){
     <div style="font-size:13px;color:var(--g5);margin-top:5px;text-align:center">${arr.length}/${max}</div>
   </div>`;
 }
-function handlePhotos(e,key,max){
-  const arr=getPA(key);const files=Array.from(e.target.files);
+async function handlePhotos(e,key,max){
+  const arr=getPA(key);const files=Array.from((e&&e.target&&e.target.files)||[]);
   // the limit each section declares was ignored here, so a counter could read 8/3
   const cap=parseInt(max)||8;
-  const toAdd=Math.max(0,Math.min(files.length,cap-arr.length));let loaded=0;
+  const toAdd=Math.max(0,Math.min(files.length,cap-arr.length));
   if(files.length>toAdd){try{toast('Only '+cap+' photos here — '+(toAdd?'added the first '+toAdd:'none added'),'err');}catch(e2){}}
-  if(!toAdd){try{e.target.value='';}catch(e3){}return;}
-  for(let i=0;i<toAdd;i++){const r=new FileReader();r.onload=ev=>{arr.push(ev.target.result);loaded++;if(loaded===toAdd)redraw();};r.readAsDataURL(files[i]);}
+  try{e.target.value='';}catch(e3){}
+  if(!toAdd)return;
+  // Camera photos are 4–5 MB each. Kept at full size they filled the tablet's memory and the
+  // work draft (saved every 2 s), so photos — and signatures — were lost and a check-in could
+  // not be completed. Shrink them first: 1920 px is still sharp enough as damage evidence.
+  try{banner('Saving '+toAdd+' photo'+(toAdd>1?'s':'')+'…');}catch(e4){}
+  let failed=0;
+  for(let i=0;i<toAdd;i++){
+    let url=null;
+    try{const b=await compressImg(files[i],1920,0.8);if(b)url=await drBlobToData(b);}catch(err){}
+    if(url)arr.push(url);else failed++;
+  }
+  try{hideBanner();}catch(e5){}
+  if(failed){try{toast(failed+' photo'+(failed>1?'s':'')+' could not be read — please take '+(failed>1?'them':'it')+' again','err');}catch(e6){}}
+  redraw();
+  try{drTick();}catch(e7){}   // save the draft straight away, don't wait for the next 2-second tick
 }
 function delPhoto(key,i){if(!canDelete('photos'))return;const arr=getPA(key);arr.splice(i,1);redraw();}
 function redraw(){
@@ -8297,9 +8311,10 @@ async function uploadPhotos(arr,fn,client,stage){
 async function compressImg(file,maxW,q){
   return new Promise(res=>{
     const img=new Image();const url=URL.createObjectURL(file);
-    img.onload=()=>{const r=Math.min(maxW/img.width,1);const cv=document.createElement('canvas');
-      cv.width=img.width*r;cv.height=img.height*r;cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
-      cv.toBlob(b=>res(b),'image/jpeg',q);URL.revokeObjectURL(url);};
+    img.onload=()=>{try{const r=Math.min(maxW/Math.max(img.width,img.height),1);const cv=document.createElement('canvas');
+      cv.width=Math.round(img.width*r);cv.height=Math.round(img.height*r);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+      cv.toBlob(b=>{URL.revokeObjectURL(url);res(b);},'image/jpeg',q);}catch(err){URL.revokeObjectURL(url);res(null);}};
+    img.onerror=()=>{URL.revokeObjectURL(url);res(null);};
     img.src=url;
   });
 }
