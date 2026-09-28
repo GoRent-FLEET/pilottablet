@@ -150,15 +150,17 @@ textarea{resize:vertical;min-height:60px;}
 /* LIABILITY / SIGN */
 .liab{background:#180505;border:2px solid var(--re);border-radius:var(--r);padding:14px;margin-bottom:12px;font-size:12px;color:var(--rl);line-height:1.6;}
 .liab strong{color:var(--rl);font-size:14px;}
-.sig-area{background:var(--g0);border:2px solid var(--g3);border-radius:var(--r);overflow:hidden;margin:8px 0;}
+.sig-area{background:var(--g0);border:2px solid var(--g3);border-radius:var(--r);overflow:hidden;margin:8px auto;max-width:600px;}
 .sig-hdr{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--g1);border-bottom:1px solid var(--g2);}
 .sig-lbl{font-size:10px;font-weight:700;color:var(--g5);text-transform:uppercase;}
-.sig-clr{font-size:10px;color:var(--g4);cursor:pointer;padding:3px 8px;border-radius:4px;}
+.sig-clr{font-size:13px;font-weight:700;color:var(--g4);cursor:pointer;padding:6px 10px;border-radius:6px;border:1px solid var(--g2);margin-left:6px;}
 .sig-clr:hover{color:var(--re);}
 .sig-cv{display:block;width:100%;height:90px;cursor:crosshair;touch-action:none;}
-#ci-ret-sig{height:220px!important;}
-#ci-m-sig{height:340px!important;}
-#ci-c-sig{height:340px!important;}
+#ci-ret-sig{height:150px!important;}
+#ci-m-sig{height:150px!important;}
+#ci-c-sig{height:170px!important;}
+#co-c-sig{height:170px!important;}
+#co-m-sig{height:130px!important;}
 .signed{display:flex;align-items:center;gap:10px;background:var(--sg);border:2px solid var(--gb);border-radius:var(--r);padding:12px 14px;margin:8px 0;font-size:18px;}
 .signed-name{font-size:14px;font-weight:700;color:var(--se);}
 .signed-time{font-size:10px;color:var(--gb);margin-left:auto;}
@@ -5423,7 +5425,7 @@ function coStep5_client(){
         <div class="sig-area" style="border-color:var(--gb)">
           <div class="sig-hdr" style="background:#15532f;border-bottom-color:var(--gb)">
             <span class="sig-lbl" style="color:var(--se)">${v.cl} — sign here</span>
-            <span class="sig-clr" onclick="clrSig('co-c-sig')">Clear</span>
+            <span><span class=\"sig-clr\" onclick=\"undoSig('co-c-sig')\">&#8630; Undo</span><span class=\"sig-clr\" onclick=\"clrSig('co-c-sig')\">Clear</span></span>
           </div>
           <canvas class="sig-cv" id="co-c-sig" style="height:248px"></canvas>
         </div>
@@ -5567,7 +5569,7 @@ function coStep6_mgmt(){
     ${hasIssues&&!allResolved?`<div style="background:var(--ag);border:1px solid var(--am);border-radius:var(--rs);padding:8px 12px;margin-bottom:8px;font-size:14px;color:var(--al);">
       ⚠ Signing with unresolved items — you take responsibility for these gaps
     </div>`:''}
-    <div class="sig-area"><div class="sig-hdr"><span class="sig-lbl">Manager — sign to clear vehicle</span><span class="sig-clr" onclick="clrSig('co-m-sig')">Clear</span></div><canvas class="sig-cv" id="co-m-sig" style="height:135px"></canvas></div>
+    <div class="sig-area"><div class="sig-hdr"><span class="sig-lbl">Manager — sign to clear vehicle</span><span><span class=\"sig-clr\" onclick=\"undoSig('co-m-sig')\">&#8630; Undo</span><span class=\"sig-clr\" onclick=\"clrSig('co-m-sig')\">Clear</span></span></div><canvas class="sig-cv" id="co-m-sig" style="height:135px"></canvas></div>
     <button class="btn g" onclick="signMgmt()">✅ Clear Vehicle for Departure</button>`}`;
 }
 
@@ -6212,7 +6214,7 @@ function ciStep0_CI(){
     `<div class="signed">✅<div class="signed-name">${r.receivedBy} — Vehicle check signed</div><div class="signed-time">${r.retAt}</div></div>`:
     `<div class="liab">⚠️ By signing, <strong>${r.receivedBy||'[select name above]'}</strong> confirms the checklist above reflects the vehicle as returned.<br>
     Every ⬜ grey item = <strong>NOT CHECKED = personal liability.</strong></div>
-    <div class="sig-area"><div class="sig-hdr"><span class="sig-lbl">Your signature</span><span class="sig-clr" onclick="clrSig('ci-ret-sig')">Clear</span></div><canvas class="sig-cv" id="ci-ret-sig"></canvas></div>
+    <div class="sig-area"><div class="sig-hdr"><span class="sig-lbl">Your signature</span><span><span class=\"sig-clr\" onclick=\"undoSig('ci-ret-sig')\">&#8630; Undo</span><span class=\"sig-clr\" onclick=\"clrSig('ci-ret-sig')\">Clear</span></span></div><canvas class="sig-cv" id="ci-ret-sig"></canvas></div>
     <button class="btn g" onclick="signRetCheck()">✓ Sign & Confirm — Vehicle Return Check</button>`}`;
 }
 
@@ -6589,7 +6591,7 @@ function ciStep3_CI(){
         `<div class="sig-area" style="border-color:${hasIssues?'var(--re)':'var(--gb)'}">
           <div class="sig-hdr" style="background:${hasIssues?'#200505':'#15532f'};border-bottom-color:${hasIssues?'var(--re)':'var(--gb)'}">
             <span class="sig-lbl" style="color:${hasIssues?'var(--rl)':'var(--se)'}">${v.cl} — sign to confirm return</span>
-            <span class="sig-clr" onclick="clrSig('ci-c-sig')">Clear</span>
+            <span><span class=\"sig-clr\" onclick=\"undoSig('ci-c-sig')\">&#8630; Undo</span><span class=\"sig-clr\" onclick=\"clrSig('ci-c-sig')\">Clear</span></span>
           </div>
           <canvas class="sig-cv" id="ci-c-sig" style="height:248px"></canvas>
         </div>
@@ -6658,7 +6660,7 @@ function ciStep4_CI(){
         <div class="fi"><label>Manager name *</label>${ciMgrSelect(r.mgmtName)}</div>
       </div>
       <div class="fi"><label>Notes</label><textarea id="ci-mnotes" oninput="ci.mgmtNotes=this.value" placeholder="Deposit decision notes..." style="min-height:50px">${r.mgmtNotes||''}</textarea></div>
-      <div class="sig-area"><div class="sig-hdr"><span class="sig-lbl" id="ci-m-lbl">${r.mgmtName?r.mgmtName+' — ':'Manager — '}sign to close rental</span><span class="sig-clr" onclick="clrSig('ci-m-sig')">Clear</span></div><canvas class="sig-cv" id="ci-m-sig" style="height:135px"></canvas></div>
+      <div class="sig-area"><div class="sig-hdr"><span class="sig-lbl" id="ci-m-lbl">${r.mgmtName?r.mgmtName+' — ':'Manager — '}sign to close rental</span><span><span class=\"sig-clr\" onclick=\"undoSig('ci-m-sig')\">&#8630; Undo</span><span class=\"sig-clr\" onclick=\"clrSig('ci-m-sig')\">Clear</span></span></div><canvas class="sig-cv" id="ci-m-sig" style="height:135px"></canvas></div>
       <button class="btn ${hasIssues?'r':'g'}" style="${hasIssues?'background:#c0392b;color:#fff':''}" onclick="signMgmtCI()">✅ Close Rental &amp; Sign Off</button>
     </div>`}`;
 }
@@ -6697,7 +6699,7 @@ function ciReturnView(v,r,newDmg,fuelShort,missing,damaged){
       <div class="sig-area" style="border-color:${hasIssues?'var(--re)':'var(--gb)'}">
         <div class="sig-hdr" style="background:${hasIssues?'#200505':'#15532f'};border-bottom-color:${hasIssues?'var(--re)':'var(--gb)'}">
           <span class="sig-lbl" style="color:${hasIssues?'var(--rl)':'var(--se)'}">${v.cl} — sign to confirm return</span>
-          <span class="sig-clr" onclick="clrSig('ci-c-sig')">Clear</span>
+          <span><span class=\"sig-clr\" onclick=\"undoSig('ci-c-sig')\">&#8630; Undo</span><span class=\"sig-clr\" onclick=\"clrSig('ci-c-sig')\">Clear</span></span>
         </div>
         <canvas class="sig-cv" id="ci-c-sig" style="height:248px"></canvas>
       </div>
@@ -8586,14 +8588,27 @@ function initSig(id){
     var cx=t?t.clientX:e.clientX,cy=t?t.clientY:e.clientY;
     return {x:Math.min(1,Math.max(0,(cx-r.left)/(r.width||1))),y:Math.min(1,Math.max(0,(cy-r.top)/(r.height||1)))};
   }
-  function start(e,p){e.preventDefault();var s=sigs[id];if(!s)return;s.drawing=true;s.hasData=true;cur=[p];sigInk(id).strokes.push(cur);sigRepaint(id);}
+  var t0=0;
+  function start(e,p){e.preventDefault();var s=sigs[id];if(!s)return;s.drawing=true;s.hasData=true;cur=[p];t0=Date.now();sigInk(id).strokes.push(cur);sigRepaint(id);}
   function move(e,p){
     var s=sigs[id];if(!s||!s.drawing||!cur)return;e.preventDefault();cur.push(p);
     // draw only the new segment — repainting every stroke on each touchmove is too slow on a tablet
     var W=cv.offsetWidth||540,H=cv.offsetHeight||150,n=cur.length;
     try{s.ctx.beginPath();s.ctx.moveTo(cur[n-2].x*W,cur[n-2].y*H);s.ctx.lineTo(cur[n-1].x*W,cur[n-1].y*H);s.ctx.stroke();}catch(e2){}
   }
-  function stop(){var s=sigs[id];if(s)s.drawing=false;cur=null;}
+  function stop(){
+    var s=sigs[id];if(s)s.drawing=false;
+    // A finger meant for scrolling: one fast, almost straight up/down line across most of the pad.
+    // Nobody signs like that, so drop it instead of leaving a stray line on the signature.
+    try{
+      if(cur&&cur.length>1&&Date.now()-t0<450){
+        var W=cv.offsetWidth||540,H=cv.offsetHeight||150,x0=1,x1=0,y0=1,y1=0;
+        cur.forEach(function(q){x0=Math.min(x0,q.x);x1=Math.max(x1,q.x);y0=Math.min(y0,q.y);y1=Math.max(y1,q.y);});
+        if((y1-y0)>0.55&&(x1-x0)*W<0.25*(y1-y0)*H){undoSig(id,true);}
+      }
+    }catch(e3){}
+    cur=null;
+  }
   cv.addEventListener('mousedown',function(e){start(e,pos(e));});
   cv.addEventListener('mousemove',function(e){if(sigs[id]&&sigs[id].drawing)move(e,pos(e));});
   cv.addEventListener('mouseup',stop);
@@ -8602,6 +8617,12 @@ function initSig(id){
   cv.addEventListener('touchmove',function(e){move(e,pos(e,e.touches[0]));},{passive:false});
   cv.addEventListener('touchend',stop,{passive:false});
   cv.addEventListener('touchcancel',stop,{passive:false});
+}
+function undoSig(id,quiet){
+  var ink=sigInk(id);
+  if(ink.strokes.length)ink.strokes.pop();
+  else if(!quiet&&ink.bg){ink.bg='';ink.bgImg=null;}   // an earlier saved signature: Undo removes it
+  var s=sigs[id];if(s){s.drawing=false;s.hasData=!!(ink.strokes.length||ink.bg);sigRepaint(id);}
 }
 function clrSig(id){SIG_INK[id]={strokes:[],bg:'',bgImg:null};var s=sigs[id];if(s){s.hasData=false;s.drawing=false;sigRepaint(id);}}
 function hasSig(id){var ink=SIG_INK[id];if(ink&&(ink.strokes.length||ink.bg))return true;return !!(sigs[id]&&sigs[id].hasData);}
