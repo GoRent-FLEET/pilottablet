@@ -1595,7 +1595,7 @@ function drawDoc(){
   }
   function partRow(part,title,n,note){
     var on=DOC_PART===part;
-    return '<div onclick="DOC_PART=\''+(on?'':part)+'\';drawDoc();" style="cursor:pointer;margin-top:10px;background:'+(on?'var(--gr)':'var(--g1)')+';border:2px solid '+(on?'var(--gb)':'var(--g3)')+';border-radius:12px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px;">'
+    return '<div onclick="DOC_PART=\''+(on?'':part)+'\';drawDoc();" style="cursor:pointer;margin-top:10px;height:calc(100% - 10px);box-sizing:border-box;background:'+(on?'var(--gr)':'var(--g1)')+';border:2px solid '+(on?'var(--gb)':'var(--g3)')+';border-radius:12px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px;">'
       +'<div><div style="font-size:17px;font-weight:900;color:var(--tx);">'+title+' <span style="font-size:13px;color:var(--g5);">('+n+')</span></div>'
       +'<div style="font-size:12px;color:var(--g5);margin-top:2px;">'+note+'</div></div>'
       +'<div style="font-size:20px;font-weight:900;color:var(--g5);">'+(on?'▾':'▸')+'</div></div>';
@@ -1619,10 +1619,14 @@ function drawDoc(){
     +wipeTabletBtn()
     +'</div>'
     +docVehPanel()
-    +partRow('out','📤 Check-out documentation',outList.length,'Contract, passports &amp; licences, vehicle checks, damage at hand-over, handover document')
-    +(DOC_PART==='out'?'<div style="margin-top:6px;">'+grouped(outList,'out')+'</div>':'')
-    +partRow('in','📥 Check-in documentation',inList.length,'Return check, km &amp; fuel in, new damage, equipment returned, signatures, return report')
+    // the two headings sit side by side; the list for the one tapped opens underneath both
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'
+    +partRow('in','📥 Checked in documentation',inList.length,'Return check, km &amp; fuel in, new damage, equipment returned, signatures, return report')
+    +partRow('out','📤 Checked out documentation',outList.length,'Contract, passports &amp; licences, vehicle checks, damage at hand-over, handover document')
+    +'</div>'
     +(DOC_PART==='in'?'<div style="margin-top:6px;">'+grouped(inList,'in')+'</div>':'')
+    +(DOC_PART==='out'?'<div style="margin-top:6px;">'+grouped(outList,'out')+'</div>':'')
+    +(!DOC_PART?'<div style="padding:16px;text-align:center;color:var(--g5);font-size:13px;">Tap Checked in or Checked out above to see the documents</div>':'')
     +'</div>';
 }
 // Vehicle details and every client booked on it
