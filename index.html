@@ -63,6 +63,15 @@ html,body{height:100%;overflow:hidden;max-width:100%;background:var(--bg);color:
 /* FLOW */
 .fhdr{background:#C7E9C0;border-radius:var(--r);padding:8px 12px;margin-bottom:8px;border-left:4px solid #12803c;color:#000000;}
 .fhdr-fn{font-size:18px;font-weight:800;color:#000000;}
+/* check-out header: every info chip the same size, in a tidy grid */
+.fh-top{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-bottom:6px;}
+.fh-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:4px;}
+.fh-grid>*{box-sizing:border-box!important;height:36px!important;min-width:0!important;max-width:none!important;margin:0!important;padding:0 6px!important;display:flex!important;align-items:center;justify-content:flex-start;gap:4px;font-size:14px!important;font-weight:800!important;line-height:1!important;border-radius:7px!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis;background:#ffffff;color:#000000;border:1px solid rgba(11,58,34,.32);box-shadow:none!important;cursor:default;}
+.fh-grid>button,.fh-grid>a,.fh-grid>[onclick]{cursor:pointer;}
+.fh-grid .fh-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.fh-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:6px;padding-top:6px;border-top:1px solid rgba(11,58,34,.15);}
+.fh-fuel{display:flex;align-items:center;gap:4px;margin-left:auto;}
+.fh-fuel button{min-width:46px;padding:6px 8px;border-radius:7px;font-size:13px;font-weight:900;cursor:pointer;touch-action:manipulation;}
 .fhdr-fn span{font-size:13px;font-weight:400;color:#333333;margin-left:8px;}
 .fhdr-cl{font-size:14px;color:#000000;margin-top:2px;}
 .name-edit{margin-left:8px;border-radius:6px;padding:3px 8px;font-size:14px;line-height:1;cursor:pointer;border:1px solid var(--g3);background:var(--g0);}
@@ -442,7 +451,7 @@ input[type=file]{display:none;}
     <button class="nb on" id="nb-ov" onclick="goPage('ov')">📊 Dashboard</button>
     <button class="nb" id="nb-co" onclick="goPage('co')"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;background:#4a6fa5;color:#fff;font-size:13px;font-weight:900;margin-right:5px;vertical-align:-4px;">↗</span>Check-Out</button>
     <button class="nb" id="nb-ci" onclick="goPage('ci')"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;background:#2a9d5c;color:#fff;font-size:13px;font-weight:900;margin-right:5px;vertical-align:-4px;">↙</span>Check-In</button>
-    <button class="nb" id="nb-out" onclick="goPage('out')">🚙 On Rental</button>
+    <button class="nb" id="nb-out" onclick="goPage('out')"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;background:#d13636;color:#fff;font-size:14px;font-weight:900;margin-right:5px;vertical-align:-3px;">&#8593;&#xFE0E;</span>On Rental</button>
     <button class="nb" id="nb-cal" onclick="openCalendar()">📅 Calendar</button>
     <button class="nb" id="nb-doc" onclick="goPage('doc')">📁 Documentation</button>
     <button class="nb" id="nb-rp" onclick="goPage('rp')">🔧 Vehicle Reports</button>
@@ -2326,16 +2335,19 @@ function _renderOV(){
     +(true?(function(){
       var active=getActiveStaff();
       if(!active.length) return '';
-      var chips=active.map(function(a){
-        var isOut=a.type==='checkout';
-        return '<div onclick="showWorkProgress(\''+(isOut?'checkout':'checkin')+'\',\''+_bx(a.fn)+'\')" title="See progress" style="cursor:pointer;display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #e0e0e0;border-radius:20px;padding:4px 10px 4px 4px;white-space:nowrap;">'
-          +'<div style="width:26px;height:26px;border-radius:50%;background:'+(isOut?'#4a6fa5':'#2a9d5c')+';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:#fff;flex-shrink:0;">'+a.staffName.slice(0,2)+'</div>'
-          +'<span style="font-size:11px;font-weight:800;color:#1a1a1a;">'+a.staffName+'</span>'
-          +'<span style="font-size:10px;color:#888;">'+(isOut?'CO':'CI')+' · '+a.fn+'</span>'
-          +'</div>';
+      // one compact chip per person, listing the vehicles they have open (was one big chip per vehicle)
+      var byName={},order=[];
+      active.forEach(function(a){if(!byName[a.staffName]){byName[a.staffName]=[];order.push(a.staffName);}byName[a.staffName].push(a);});
+      var chips=order.map(function(nm){
+        var tags=byName[nm].map(function(a){
+          var isOut=a.type==='checkout';
+          return '<span onclick="showWorkProgress(\''+(isOut?'checkout':'checkin')+'\',\''+_bx(a.fn)+'\')" title="See progress" style="cursor:pointer;font-size:11px;font-weight:800;padding:2px 6px;border-radius:5px;background:'+(isOut?'#e3ebf6':'#e2f4ea')+';color:'+(isOut?'#274b7a':'#1d6b40')+';">'+(isOut?'↗':'↙')+' '+_bx(a.fn)+'</span>';
+        }).join('');
+        return '<span style="display:inline-flex;align-items:center;gap:3px;background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:2px 4px;white-space:nowrap;">'
+          +'<span style="font-size:11px;font-weight:900;color:#1a1a1a;margin-right:2px;">'+_bx(nm)+'</span>'+tags+'</span>';
       }).join('');
-      return '<div style="background:#fffbf0;border-bottom:1px solid #f6ad55;padding:6px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0;">'
-        +'<span style="font-size:10px;font-weight:900;color:#c07a00;letter-spacing:.3px;white-space:nowrap;">STAFF ACTIVE:</span>'
+      return '<div style="background:#fffbf0;border-bottom:1px solid #f6ad55;padding:4px 14px;display:flex;align-items:center;gap:5px;flex-wrap:wrap;flex-shrink:0;">'
+        +'<span style="font-size:10px;font-weight:900;color:#c07a00;letter-spacing:.3px;white-space:nowrap;">STAFF ACTIVE <span style="font-weight:700;color:#999;">↗ out · ↙ in</span></span>'
         +chips+'</div>';
     })():'')
     // Remote returns due in the next 7 days
@@ -3082,19 +3094,18 @@ function drawCO(){
   }
 
   var _cov=co.v;
+  // every piece of booking info as one same-size chip, laid out in a grid
+  var _fhChip=function(txt,style,extra){return '<span '+(extra||'')+' style="'+(style||'')+'"><span class="fh-t">'+txt+'</span></span>';};
+  var _fhDate=function(d){try{if(!d)return '?';var x=new Date(d+'T00:00:00');return x.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][x.getMonth()];}catch(e){return d||'?';}};
   var _specialHtml='';
   if(_cov.special&&_cov.special.length){
-    _specialHtml='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:7px">';
     for(var _si=0;_si<_cov.special.length;_si++){
-      _specialHtml+='<span style="font-size:13px;font-weight:700;padding:2px 8px;border-radius:8px;background:var(--ag);color:var(--al);border:1px solid var(--am)">⚠ '+_cov.special[_si]+'</span>';
+      _specialHtml+=_fhChip('⚠ '+_bx(_cov.special[_si]),'background:var(--ag);color:var(--al);border:1px solid var(--am);','title="'+_bx(_cov.special[_si])+'"');
     }
-    _specialHtml+='</div>';
   }
-  // on the dark green header these were green-on-green and grey-on-green, so the words
-  // were there but unreadable — hence the tent icon on its own
-  var _campStyle=_cov.camping?'background:#ffffff;color:#000000;border:1px solid rgba(11,58,34,.25)':'background:#ffffff;color:#8a4b00;border:1px solid rgba(11,58,34,.25)';
+  var _campStyle=_cov.camping?'':'color:#8a4b00;';
   var _campLbl=_cov.camping?'🏕 CAMPING':'🏨 NO CAMPING';
-  var _xbHtml=_cov.xb?'<span style="font-size:14px;font-weight:800;color:#000000;margin-top:4px;display:inline-block;background:#ffffff;border:1px solid rgba(11,58,34,.25);padding:3px 10px;border-radius:8px;">🌍 '+_bx(_cov.xb)+'</span>':'';
+  var _xbHtml=_cov.xb?_fhChip('🌍 '+_bx(_cov.xb)):'';
   var _backBtn=coStep>0?'<button class="btn s" style="flex:1" onclick="coGoStep(coStep-1)">← Back</button>':'';
   // The Handover page used to have only "← Back", so staff could not find the way on to
   // Management, where the Complete Check-Out button lives.
@@ -3105,77 +3116,58 @@ function drawCO(){
       +'<button onclick="coChangeVehicle()" style="padding:10px 18px;border-radius:22px;border:2px solid var(--gb);background:var(--g1);color:var(--tx);font-size:15px;font-weight:900;cursor:pointer;">← Choose another vehicle</button>'
     +'</div>'+
     '<div class="fhdr">'+
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start">'+
-        '<div>'+
-          // fleet number, client, WhatsApp and the dates all on one line
-          '<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;">'+
-            '<span class="fhdr-fn">'+co.fn+' <span>'+_cov.reg+'</span></span>'+
-            '<span class="fhdr-cl" style="margin-top:0;font-size:20px;font-weight:900;color:#000000;letter-spacing:-.2px;">'+_bx(mainRenter()||_cov.cl||'No booking')+(bookedByName()?'<span style="font-size:14px;font-weight:700;color:#444;"> (booked by '+_bx(bookedByName())+')</span>':'')+'</span>'+
-            '<span class="fhdr-cl" style="margin-top:0;">'+nameEditBtn(bkKey(_cov),co.clientName||_cov.cl,'drawCO')+(waChip(_cov)?' '+waChip(_cov):'')+'</span>'+
-            '<span onclick="editQuoteNo()" title="Tap to change the quote number" style="cursor:pointer;font-size:13px;font-weight:900;color:#000;background:#ffffff;border:1px solid rgba(11,58,34,.25);border-radius:7px;padding:3px 9px;white-space:nowrap;">\uD83D\uDCCB '+_bx(co.quoteNo||_cov.quote||'Add quote no.')+' \u270E</span>'+
-            '<span class="fhdr-cl" style="font-size:13px;margin-top:0;white-space:nowrap;">\uD83D\uDCC5 '+(_cov.pu||'?')+' \u2192 '+(_cov.rt||'?')
-              +(rentalDays(_cov)?'<span style="margin-left:6px;padding:2px 9px;border-radius:6px;background:rgba(11,58,34,.12);font-weight:800;color:#000000;">'+rentalDays(_cov)+' days</span>':'')+'</span>'+
-          '</div>'+
-          '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:5px;">'+hdrTripChips(_cov)
-            +'<span style="font-size:11px;font-weight:900;color:#7a3f00;padding:4px 10px;background:#ffffff;border:1px solid rgba(11,58,34,.25);border-radius:7px;white-space:nowrap;">\uD83E\uDDF9 '+_bx(co.prepBy||(APP_USER&&APP_USER.name)||'\u2014')+'</span>'
-            +'</div>'+
-
-        '</div>'+
-        '<div style="text-align:right">'+
-          '<span style="display:inline-block;margin-bottom:6px;font-size:14px;font-weight:800;padding:3px 10px;border-radius:8px;background:#1d4ed8;color:#ffffff;border:1px solid #1d4ed8">CHECK-OUT ▶</span><br>'+
-          '<div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;">'+
-            '<span style="font-size:14px;font-weight:800;padding:4px 11px;border-radius:8px;white-space:nowrap;'+_campStyle+'">'+_campLbl+'</span>'+
-            '<span style="font-size:14px;font-weight:800;padding:4px 11px;border-radius:8px;white-space:nowrap;background:#ffffff;color:#000000;border:1px solid rgba(11,58,34,.25);">\uD83D\uDC65 PAX '+(_cov.pax||'\u2014')+'</span>'+
-            _xbHtml+
-          '</div>'+
-        '</div>'+
+      // fleet number, client and the check-out badge on one line
+      '<div class="fh-top">'+
+        '<span class="fhdr-fn">'+co.fn+' <span>'+_cov.reg+'</span></span>'+
+        '<span style="font-size:20px;font-weight:900;color:#000000;letter-spacing:-.2px;">'+_bx(mainRenter()||_cov.cl||'No booking')+(bookedByName()?'<span style="font-size:14px;font-weight:700;color:#444;"> (booked by '+_bx(bookedByName())+')</span>':'')+'</span>'+
+        '<span style="margin-left:auto;font-size:13px;font-weight:800;padding:4px 10px;border-radius:8px;background:#1d4ed8;color:#ffffff;">CHECK-OUT ▶</span>'+
       '</div>'+
-      _specialHtml+
-    // Vehicle status strip
-    (function(){
-      var licExp=(_cov.lic&&_cov.lic.expiry)||'';
-      var licDiff=licExp?Math.round((new Date(licExp+'T00:00:00')-new Date())/86400000):99;
-      licDiff=licExp?discDaysLeft(licExp):99;
-      var licCol=!licExp?'var(--al)':licDiff<0?'var(--rl)':licDiff<=DISC_WARN_DAYS?'var(--al)':'#333333';
-      var licTxt=licExp?(licDiff<0?'⚠ Disc EXPIRED':'Disc: '+new Date(licExp+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})+(licDiff<=DISC_WARN_DAYS?' ('+licDiff+'d)':'')):'＋ Add disc date';
-      var fuelTxt='Fuel: '+(co.fuelOut||_cov.fuelOut||'Full');
-      var fuelCol='#333333';
-      var odoTxt='ODO: '+(_cov.odo||'—')+' km';
-      var svcKm=(_cov.svc&&_cov.svc.lastKm&&_cov.svc.intKm)?(_cov.svc.lastKm+_cov.svc.intKm-_cov.odo):null;
-      var svcTxt=svcKm!==null?(svcKm<=0?'⚠ Service DUE':'Svc in '+svcKm+' km'):'';
-      var svcCol=svcKm!==null&&svcKm<=0?'var(--rl)':svcKm!==null&&svcKm<1000?'var(--al)':'#333333';
-      var tyreKm=(_cov.tyres&&_cov.tyres.lastKm&&_cov.tyres.intKm)?(_cov.tyres.lastKm+_cov.tyres.intKm-_cov.odo):null;
-      var tyreTxt=tyreKm!==null?(tyreKm<=0?'⚠ Tyres DUE':'Tyres in '+tyreKm+' km'):'';
-      var tyreCol=tyreKm!==null&&tyreKm<=0?'var(--rl)':tyreKm!==null&&tyreKm<2000?'var(--al)':'#333333';
-      return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:6px 12px;border-top:1px solid rgba(11,58,34,.15);">'
-        +(function(){
-          var missing=!licExp, bad=licExp&&licDiff<0, soon=licExp&&licDiff<=DISC_WARN_DAYS;
-          var bg=missing||bad?'#d13636':soon?'#e08a00':'#ffffff';
-          var fg=(missing||bad||soon)?'#fff':'#000000';
-          return '<button onclick="co._discEdit=!co._discEdit;drawCO();" class="'+((missing||soon||bad)?'disc-flash':'')+'" '
-            +'style="font-size:13px;font-weight:900;padding:7px 14px;border-radius:8px;background:'+bg+';color:'+fg+';border:2px solid '+(missing||bad?'#ff8a8a':soon?'#f0c27a':'rgba(11,58,34,.3)')+';cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.3);">'
-            +'<span class="disc-ico"></span> '+(missing?'＋ ADD LICENCE DISC DATE':licTxt)+' ✎</button>';
-        })()
-        +(svcTxt?'<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(11,58,34,.07);color:'+svcCol+';">'+svcTxt+'</span>':'')
-        +(tyreTxt?'<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(11,58,34,.07);color:'+tyreCol+';">'+tyreTxt+'</span>':'')
-        // odometer and fuel sit on the same line as the disc
-        +(function(){
-          var km=co.odometerOut||_cov.odo||'';
-          var src=_cov.lastRet?('↩ Last return '+Number(_cov.lastRet.km).toLocaleString()+' km · '+new Date(_cov.lastRet.at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})):(_cov.odo?'From Fleet Manager':'No previous reading');
-          var fuel=co.fuelOut||'Full';
-          var fb=['Empty','1/4','1/2','3/4','Full'].map(function(f){
-            var on=fuel===f;
-            return '<button onclick="co.fuelOut=\''+f+'\';drawCO();" style="min-width:62px;padding:10px 14px;border-radius:9px;font-size:15px;font-weight:900;cursor:pointer;touch-action:manipulation;border:2px solid '+(on?'#0a5c2a':'rgba(11,58,34,.3)')+';background:'+(on?'#12803c':'#ffffff')+';color:'+(on?'#ffffff':'#333333')+';box-shadow:'+(on?'0 2px 6px rgba(11,58,34,.35)':'none')+';">'+f+'</button>';
-          }).join('');
-          return '<label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:#333333;">🛣 CURRENT ODO READING'
-            +'<input type="number" inputmode="numeric" pattern="[0-9]*" id="co-odo-out" class="'+(km?'':'need-flash')+'" value="'+km+'" placeholder="Odo km" onfocus="this.select()" oninput="co.odometerOut=+this.value" '
-            +'style="width:120px;padding:6px 8px;font-size:16px;font-weight:900;background:#ffffff;border:2px solid '+(km?'var(--gb)':'var(--re)')+';border-radius:6px;color:#0f172a;"></label>'
-            +'<span style="font-size:10px;color:#444444;">'+src+'</span>'
-            +'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-left:auto;"><span style="font-size:13px;font-weight:900;color:#000000;margin-right:4px;">⛽ FUEL OUT</span>'+fb+'</div>'
-            +'</div>';
-        })()
-        +(co._discEdit?'<div style="padding:0 14px 10px;"><div id="lic-banner-out">'+licDiscBanner(_cov,'out')+'</div></div>':'');
-    })()+
+      (function(){
+        var licExp=(_cov.lic&&_cov.lic.expiry)||'';
+        var licDiff=licExp?discDaysLeft(licExp):99;
+        var licTxt=licExp?(licDiff<0?'⚠ Disc EXPIRED':'Disc: '+new Date(licExp+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})+(licDiff<=DISC_WARN_DAYS?' ('+licDiff+'d)':'')):'＋ DISC DATE';
+        var svcKm=(_cov.svc&&_cov.svc.lastKm&&_cov.svc.intKm)?(_cov.svc.lastKm+_cov.svc.intKm-_cov.odo):null;
+        var tyreKm=(_cov.tyres&&_cov.tyres.lastKm&&_cov.tyres.intKm)?(_cov.tyres.lastKm+_cov.tyres.intKm-_cov.odo):null;
+        var warnCol=function(km,soon){return km<=0?'color:var(--rl);':km<soon?'color:var(--al);':'';};
+        var missing=!licExp, bad=licExp&&licDiff<0, soon=licExp&&licDiff<=DISC_WARN_DAYS;
+        var disc='<button onclick="co._discEdit=!co._discEdit;drawCO();" class="'+((missing||soon||bad)?'disc-flash':'')+'" style="'
+          +((missing||bad)?'background:#d13636;color:#fff;border:1px solid #ff8a8a;':soon?'background:#e08a00;color:#fff;border:1px solid #f0c27a;':'')+'">'
+          +'<span class="disc-ico"></span><span class="fh-t">'+licTxt+' ✎</span></button>';
+        return '<div class="fh-grid">'
+          +nameEditBtn(bkKey(_cov),co.clientName||_cov.cl,'drawCO')
+          +(waChip(_cov)||'')
+          +'<span onclick="editQuoteNo()" title="Tap to change the quote number"><span class="fh-t">📋 '+_bx(co.quoteNo||_cov.quote||'Add quote no.')+' ✎</span></span>'
+          +_fhChip('📅 '+_fhDate(_cov.pu)+' → '+_fhDate(_cov.rt),'','title="'+_bx((_cov.pu||'?')+' → '+(_cov.rt||'?'))+'"')
+          +(rentalDays(_cov)?_fhChip('⏱ '+rentalDays(_cov)+' days'):'')
+          +hdrTripChips(_cov)
+          +_fhChip('🧹 '+_bx(co.prepBy||(APP_USER&&APP_USER.name)||'—'),'color:#7a3f00;')
+          +_fhChip(_campLbl,_campStyle)
+          +_fhChip('👥 PAX '+(_cov.pax||'—'))
+          +_xbHtml
+          +_specialHtml
+          +disc
+          +(svcKm!==null?_fhChip(svcKm<=0?'⚠ Service DUE':'🔧 Svc in '+svcKm+' km',warnCol(svcKm,1000)):'')
+          +(tyreKm!==null?_fhChip(tyreKm<=0?'⚠ Tyres DUE':'🛞 Tyres in '+tyreKm+' km',warnCol(tyreKm,2000)):'')
+          +'</div>';
+      })()+
+      // odometer and fuel on one line under the chips
+      (function(){
+        var km=co.odometerOut||_cov.odo||'';
+        var src=_cov.lastRet?('↩ Last return '+Number(_cov.lastRet.km).toLocaleString()+' km · '+new Date(_cov.lastRet.at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})):(_cov.odo?'From Fleet Manager':'No previous reading');
+        var fuel=co.fuelOut||'Full';
+        var fb=['Empty','1/4','1/2','3/4','Full'].map(function(f){
+          var on=fuel===f;
+          return '<button onclick="co.fuelOut=\''+f+'\';drawCO();" style="border:2px solid '+(on?'#0a5c2a':'rgba(11,58,34,.3)')+';background:'+(on?'#12803c':'#ffffff')+';color:'+(on?'#ffffff':'#333333')+';">'+f+'</button>';
+        }).join('');
+        return '<div class="fh-row">'
+          +'<label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:#333333;">🛣 ODO OUT'
+          +'<input type="number" inputmode="numeric" pattern="[0-9]*" id="co-odo-out" class="'+(km?'':'need-flash')+'" value="'+km+'" placeholder="Odo km" onfocus="this.select()" oninput="co.odometerOut=+this.value" '
+          +'style="width:110px;padding:5px 8px;font-size:16px;font-weight:900;background:#ffffff;border:2px solid '+(km?'var(--gb)':'var(--re)')+';border-radius:6px;color:#0f172a;"></label>'
+          +'<span style="font-size:10px;color:#444444;">'+src+'</span>'
+          +'<div class="fh-fuel"><span style="font-size:12px;font-weight:900;color:#000000;margin-right:2px;">⛽ FUEL</span>'+fb+'</div>'
+          +'</div>';
+      })()+
+      (co._discEdit?'<div style="padding-top:8px;"><div id="lic-banner-out">'+licDiscBanner(_cov,'out')+'</div></div>':'')+
     '</div>'+
     '<div class="stg-bar s7">'+bar+'</div>'+
     coWhatsLeft()+
@@ -3229,8 +3221,8 @@ function hdrTripChips(v){
   };
   var out='';
   var fi=(v&&v.flightIn)||'',fo=(v&&v.flightOut)||'';
-  out+=chip(fi?'✈ IN '+fi:'✈ No arrival flight',false,'Arrival flight');
-  out+=chip(fo?'🛫 OUT '+fo:'🛫 No departure flight',false,'Departure flight');
+  out+=chip(fi?'🛬 '+fi.replace(/\s*·\s*arr\s*/,' · '):'🛬 No arrival flight',false,'Arrival flight: '+fi);
+  out+=chip(fo?'🛫 '+fo.replace(/\s*·\s*dep\s*/,' · '):'🛫 No departure flight',false,'Departure flight: '+fo);
   // what the contract step says if somebody has answered there; otherwise what the
   // booking itself says, so a remote dropoff is flagged before anyone opens the contract
   var eff=function(field,bookingVal){
@@ -6160,37 +6152,36 @@ function drawCI(){
       <button onclick="ciChangeVehicle()" style="padding:10px 18px;border-radius:22px;border:2px solid var(--gb);background:var(--g1);color:var(--tx);font-size:15px;font-weight:900;cursor:pointer;">← Choose another vehicle</button>
     </div>
     <div class="fhdr">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div>
-          <div class="fhdr-fn">${r.fn} <span>${v.reg}</span></div>
-          <div class="fhdr-cl">${v.cl}${nameEditBtn(bkKey(v),v.cl,'drawCI')}${waChip(v)?' · '+waChip(v):''}</div>
-          <div class="fhdr-cl" style="font-size:13px;opacity:.75;margin-top:1px">📅 ${v.pu||'?'} → ${v.rt||'?'}</div>
-          <div style="margin-top:5px;font-size:11px;font-weight:800;color:#333333;">👤 ${ci.receivedBy||APP_USER&&APP_USER.name||"—"}</div>
-        </div>
-        <div style="text-align:right">
-          <span style="display:inline-block;margin-bottom:6px;font-size:14px;font-weight:700;padding:3px 10px;border-radius:8px;background:rgba(240,80,80,.15);color:var(--rl);border:1px solid var(--re)">◀ CHECK-IN</span><br>
-          ${ciCampBadge(v)}
-          ${isAdmin()?`<div style="margin-top:8px;"><button onclick="resetProcess('${_bx(r.fn)}',event)" style="background:var(--rg);border:2px solid var(--re);color:var(--rl);border-radius:8px;font-size:13px;font-weight:900;padding:7px 12px;cursor:pointer;">🗑 Reset check-in</button></div>`:''}
-        </div>
+      <div class="fh-top">
+        <span class="fhdr-fn">${r.fn} <span>${v.reg}</span></span>
+        <span style="font-size:20px;font-weight:900;color:#000000;letter-spacing:-.2px;">${_bx(v.cl||'')}</span>
+        <span style="margin-left:auto;font-size:13px;font-weight:800;padding:4px 10px;border-radius:8px;background:#b91c1c;color:#ffffff;">◀ CHECK-IN</span>
+        ${isAdmin()?`<button onclick="resetProcess('${_bx(r.fn)}',event)" style="background:var(--rg);border:2px solid var(--re);color:var(--rl);border-radius:8px;font-size:13px;font-weight:900;padding:4px 10px;cursor:pointer;">🗑 Reset check-in</button>`:''}
       </div>
-      ${ciTripInfo(v)}
-    <div style="display:flex;flex-wrap:wrap;gap:5px;padding:6px 14px 8px;border-top:1px solid rgba(11,58,34,.15);">
-      ${(function(){
-        var licExp=(v.lic&&v.lic.expiry)||'';
-        var licDiff=licExp?Math.round((new Date(licExp+'T00:00:00')-new Date())/86400000):99;
-        var licCol=licDiff<30?'var(--rl)':licDiff<60?'var(--al)':'#333333';
-        var licTxt=licExp?(licDiff<0?'⚠ Disc EXPIRED':'Disc: '+new Date(licExp+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})):'No disc date';
-        var fuelTxt='Fuel out: '+(v.fuelOut||'Full');
-        var odoTxt='ODO out: '+(r.odometerOut||v.odo||'—')+' km';
-        var svcKm=(v.svc&&v.svc.lastKm&&v.svc.intKm)?(v.svc.lastKm+v.svc.intKm-v.odo):null;
-        var svcTxt=svcKm!==null?(svcKm<=0?'⚠ Service DUE':'Svc in '+svcKm+' km'):'';
-        var svcCol=svcKm!==null&&svcKm<=0?'var(--rl)':svcKm!==null&&svcKm<1000?'var(--al)':'#333333';
-        var pills='<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(11,58,34,.07);color:'+licCol+';">'+licTxt+'</span>'
-          +'<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(11,58,34,.07);color:#333333;">'+fuelTxt+'</span>'
-          +'<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(11,58,34,.07);color:#333333;">'+odoTxt+'</span>'
-          +(svcTxt?'<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(11,58,34,.07);color:'+svcCol+';">'+svcTxt+'</span>':'');
-        return pills;
-      })()}
+      <div class="fh-grid">
+        ${nameEditBtn(bkKey(v),v.cl,'drawCI')}
+        ${waChip(v)||''}
+        ${(function(){
+          var fd=function(d){if(!d)return '?';var x=new Date(d+'T00:00:00');return x.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][x.getMonth()];};
+          var days=rentalDays(v);
+          return '<span title="'+_bx((v.pu||'?')+' → '+(v.rt||'?'))+'"><span class="fh-t">📅 '+fd(v.pu)+' → '+fd(v.rt)+'</span></span>'
+            +(days?'<span><span class="fh-t">⏱ '+days+' days</span></span>':'');
+        })()}
+        <span><span class="fh-t">👤 ${_bx(ci.receivedBy||APP_USER&&APP_USER.name||"—")}</span></span>
+        ${ciCampBadge(v)}
+        ${ciTripInfo(v)}
+        ${(function(){
+          var licExp=(v.lic&&v.lic.expiry)||'';
+          var licDiff=licExp?Math.round((new Date(licExp+'T00:00:00')-new Date())/86400000):99;
+          var licCol=!licExp?'#555':licDiff<30?'var(--rl)':licDiff<60?'var(--al)':'#000';
+          var licTxt=licExp?(licDiff<0?'⚠ Disc EXPIRED':'🪪 Disc: '+new Date(licExp+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})):'🪪 No disc date';
+          var svcKm=(v.svc&&v.svc.lastKm&&v.svc.intKm)?(v.svc.lastKm+v.svc.intKm-v.odo):null;
+          var svcTxt=svcKm!==null?(svcKm<=0?'⚠ Service DUE':'🔧 Svc in '+svcKm+' km'):'';
+          var svcCol=svcKm!==null&&svcKm<=0?'var(--rl)':svcKm!==null&&svcKm<1000?'var(--al)':'#000';
+          var c=function(t,col){return '<span style="color:'+(col||'#000')+';"><span class="fh-t">'+t+'</span></span>';};
+          return c(licTxt,licCol)+c('⛽ Fuel out: '+(v.fuelOut||'Full'))+c('🛣 ODO out: '+(r.odometerOut||v.odo||'—')+' km')+(svcTxt?c(svcTxt,svcCol):'');
+        })()}
+      </div>
     </div>
     <div class="stg-bar s5">${bar}</div>
     <div id="ci-step-body">${bodyHTML}</div>
@@ -6335,23 +6326,25 @@ var CI_SKIP=['Exterior washed','Canopy & roof','Mounting brackets & load bars','
 // and anything the check-out marked as not issued (N/A) or optional extras that were not issued
 // Check-in header: camping choice, airport transfer and flights from the booking
 function ciCampBadge(v){
-  var st=v.camping?'background:rgba(61,220,132,.15);color:var(--se);border:1px solid var(--gb)':'background:var(--g2);color:var(--g5);border:1px solid var(--g3)';
-  return '<span style="font-size:14px;font-weight:700;padding:3px 10px;border-radius:8px;'+st+'">'+(v.camping?'🏕 Camping':'🏨 No camping')+'</span>'
-    +(v.camping&&v.pax?'<div style="font-size:12px;color:rgba(255,255,255,.55);margin-top:3px;">👥 '+v.pax+' pax</div>':'');
+  return '<span style="'+(v.camping?'':'color:#8a4b00;')+'"><span class="fh-t">'+(v.camping?'🏕 CAMPING':'🏨 NO CAMPING')+'</span></span>'
+    +(v.pax?'<span><span class="fh-t">👥 PAX '+_bx(v.pax)+'</span></span>':'');
 }
 function ciTripInfo(v){
+  // same-size chips for the check-in header grid (.fh-grid); dark text so it reads on the light green
   var b=v.b||{};
   var tr=b.airport_transfer||'';var trl=tr.toLowerCase();
-  var trCol=/on us|included/.test(trl)?'var(--se)':(/client|paid/.test(trl)?'var(--al)':'rgba(255,255,255,.6)');
-  function chip(ico,lbl,val,col){return '<div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:5px 9px;font-size:12px;"><span>'+ico+'</span><span style="color:rgba(255,255,255,.5);font-weight:700;text-transform:uppercase;font-size:10px;">'+lbl+'</span><span style="font-weight:800;color:'+(col||'#fff')+';">'+val+'</span></div>';}
+  var trCol=/on us|included/.test(trl)?'#0a5c2a':(/client|paid/.test(trl)?'#8a4b00':'#000000');
+  function chip(ico,lbl,val,col,style){return '<span title="'+_bx(lbl+': '+String(val).replace(/<[^>]*>/g,''))+'" style="'+(style||'')+'"><span class="fh-t">'+ico+' <span style="color:'+(col||'#000')+';">'+val+'</span></span></span>';}
   var h='';
-  if(ci&&ci.early)h+='<div style="display:flex;align-items:center;gap:6px;background:rgba(245,166,35,.18);border:2px solid var(--am);border-radius:8px;padding:5px 9px;font-size:12px;font-weight:900;color:var(--al);">⏪ EARLY RETURN — was due back '+_bx(new Date(ci.dueBack+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}))+'</div>';
-  if(ci&&ci.returnTime)h+=chip('🕑','Expected',_bx(ci.returnTime),'#7db8ff');
-  if(ci&&isRemoteReturn(ci.remote))h+='<div class="insp-flash" style="background:var(--rg);border:2px solid var(--re);border-radius:8px;padding:5px 9px;font-size:12px;font-weight:900;color:var(--rl);">🚩 REMOTE RETURN — '+_bx(ci.remote.return_place+(ci.remote.return_place_time?' · collect '+ci.remote.return_place_time:''))+'</div>';
-  h+=chip('🚐','Transfer',_bx(tr||'None arranged'),tr?trCol:'rgba(255,255,255,.6)');
-  if(b.arrival_flight)h+=chip('🛬','Arrived',_bx(b.arrival_flight));
-  h+=chip('🛫','Departs',b.departure_flight?_bx(b.departure_flight):'No flight on booking',b.departure_flight?'#7db8ff':'rgba(255,255,255,.6)');
-  return '<div style="display:flex;flex-wrap:wrap;gap:6px;padding:8px 14px 2px;">'+h+'</div>';
+  if(ci&&ci.early)h+=chip('⏪','Early · due',_bx(new Date(ci.dueBack+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'})),'#8a4b00','background:var(--ag);border:1px solid var(--am);');
+  if(ci&&ci.returnTime)h+=chip('🕑','Expected',_bx(ci.returnTime));
+  if(ci&&isRemoteReturn(ci.remote))h+='<span class="insp-flash" title="'+_bx(ci.remote.return_place+(ci.remote.return_place_time?' · collect '+ci.remote.return_place_time:''))+'" style="background:var(--rg);border:1px solid var(--re);color:var(--rl);"><span class="fh-t">🚩 REMOTE: '+_bx(ci.remote.return_place+(ci.remote.return_place_time?' · '+ci.remote.return_place_time:''))+'</span></span>';
+  h+=chip('🚐','Transfer',_bx(tr||'None'),trCol);
+  // "LH4298/14 SEP/07:35" is too long for a chip: flight number and time only (full text on long-press/hover)
+  var fl=function(x){var m=String(x||'').match(/^\s*([^\/]+?)\s*\/[^\/]*\/\s*(\d{1,2}:\d{2})/);return m?m[1]+' · '+m[2]:x;};
+  if(b.arrival_flight)h+=chip('🛬','Arrived '+b.arrival_flight,_bx(fl(b.arrival_flight)));
+  h+=chip('🛫','Departs '+(b.departure_flight||''),b.departure_flight?_bx(fl(b.departure_flight)):'No flight',b.departure_flight?'#1d4ed8':'#555');
+  return h;
 }
 // Summary of the vehicle check + equipment for the customer to sign
 function ciChecklistSummary(){
