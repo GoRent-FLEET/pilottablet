@@ -2319,37 +2319,52 @@ function _renderOV(){
   const body=document.getElementById('ov-body');
   if(!body) return;
 
+  // Staff activity (everyone)
+  var _ovStaff=(function(){
+    var active=getActiveStaff();
+    if(!active.length) return '';
+    // one compact chip per person, listing the vehicles they have open (was one big chip per vehicle)
+    var byName={},order=[];
+    active.forEach(function(a){if(!byName[a.staffName]){byName[a.staffName]=[];order.push(a.staffName);}byName[a.staffName].push(a);});
+    var chips=order.map(function(nm){
+      var tags=byName[nm].map(function(a){
+        var isOut=a.type==='checkout';
+        return '<span onclick="showWorkProgress(\''+(isOut?'checkout':'checkin')+'\',\''+_bx(a.fn)+'\')" title="See progress" style="cursor:pointer;font-size:11px;font-weight:800;padding:2px 6px;border-radius:5px;background:'+(isOut?'#e3ebf6':'#e2f4ea')+';color:'+(isOut?'#274b7a':'#1d6b40')+';">'+(isOut?'↗':'↙')+' '+_bx(a.fn)+'</span>';
+      }).join('');
+      return '<span style="display:inline-flex;align-items:center;gap:3px;background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:2px 4px;white-space:nowrap;">'
+        +'<span style="font-size:11px;font-weight:900;color:#1a1a1a;margin-right:2px;">'+_bx(nm)+'</span>'+tags+'</span>';
+    }).join('');
+    return '<span style="font-size:10px;font-weight:900;color:#c07a00;letter-spacing:.3px;white-space:nowrap;">STAFF ACTIVE <span style="font-weight:700;color:#999;">↗ out · ↙ in</span></span>'
+      +chips;
+  })();
+  // Licence disc alerts (45 days ahead)
+  var _ovDisc=(function(){
+    var list=Object.keys(DISCS).map(function(fn){return {fn:fn,exp:DISCS[fn],d:discDaysLeft(DISCS[fn])};})
+      .filter(function(x){return x.d!==null&&x.d<=DISC_WARN_DAYS;}).sort(function(a,b){return a.d-b.d;});
+    if(!list.length) return '';
+    var chips=list.map(function(x){
+      var exp=x.d<0;
+      return '<span class="disc-flash-lt" onclick="openVehReport(\''+_bx(x.fn)+'\')" style="cursor:pointer;font-size:11px;font-weight:800;padding:3px 9px;border-radius:12px;white-space:nowrap;background:'+(exp?'#fde2e2':'#fff3d6')+';color:'+(exp?'#b91c1c':'#92400e')+';border:1px solid '+(exp?'#f5a3a3':'#f6cf7a')+';">'
+        +x.fn+' · '+(exp?'EXPIRED':x.d===0?'expires today':x.d+' day'+(x.d===1?'':'s'))+' ('+new Date(x.exp+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'})+')</span>';
+    }).join('');
+    return '<span style="font-size:11px;font-weight:900;color:#92400e;letter-spacing:.3px;white-space:nowrap;"><span class="disc-ico" style="width:1.8em;height:1.8em;vertical-align:-0.6em;"></span> LICENCE DISCS DUE:</span>'+chips;
+  })();
   body.innerHTML =
     // Top bar: date + clock + tabs
     '<div style="background:#fff;border-bottom:1px solid #e0e0e0;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">'
+    // date with the clock right beside it
+    +'<div style="display:flex;align-items:center;gap:10px;">'
     +'<div style="font-size:11px;font-weight:800;color:#666;letter-spacing:.3px;">'+dateStr+'</div>'
+    +'<div id="ov-clock" style="font-size:15px;font-weight:900;color:#2a9d5c;font-variant-numeric:tabular-nums;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:8px;padding:3px 9px;">'+timeStr+'</div>'
+    +'</div>'
     +'<div style="display:flex;align-items:center;gap:8px;">'
     +'<button ontouchend="event.preventDefault();ovSetView(\'week\')" onclick="ovSetView(\'week\')" style="padding:6px 14px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:2px solid '+(view==='week'?'#f6ad55':'#e0e0e0')+';background:'+(view==='week'?'#fffbf0':'#fff')+';color:'+(view==='week'?'#c07a00':'#888')+';">📅 Next 14 Days</button>'
     +'<button ontouchend="event.preventDefault();ovSetView(\'past\')" onclick="ovSetView(\'past\')" style="padding:6px 14px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:2px solid '+(view==='past'?'#68d391':'#e0e0e0')+';background:'+(view==='past'?'#f0fff4':'#fff')+';color:'+(view==='past'?'#276749':'#888')+';">📋 Past 14 Days</button>'
-    +'<div style="background:#f5f5f5;border:1px solid #e0e0e0;border-radius:8px;padding:5px 10px;text-align:center;">'
-    +'<div id="ov-clock" style="font-size:16px;font-weight:900;color:#2a9d5c;font-variant-numeric:tabular-nums;">'+timeStr+'</div>'
     +'</div>'
     +'</div>'
-    +'</div>'
-    // Staff activity panel (everyone)
-    +(true?(function(){
-      var active=getActiveStaff();
-      if(!active.length) return '';
-      // one compact chip per person, listing the vehicles they have open (was one big chip per vehicle)
-      var byName={},order=[];
-      active.forEach(function(a){if(!byName[a.staffName]){byName[a.staffName]=[];order.push(a.staffName);}byName[a.staffName].push(a);});
-      var chips=order.map(function(nm){
-        var tags=byName[nm].map(function(a){
-          var isOut=a.type==='checkout';
-          return '<span onclick="showWorkProgress(\''+(isOut?'checkout':'checkin')+'\',\''+_bx(a.fn)+'\')" title="See progress" style="cursor:pointer;font-size:11px;font-weight:800;padding:2px 6px;border-radius:5px;background:'+(isOut?'#e3ebf6':'#e2f4ea')+';color:'+(isOut?'#274b7a':'#1d6b40')+';">'+(isOut?'↗':'↙')+' '+_bx(a.fn)+'</span>';
-        }).join('');
-        return '<span style="display:inline-flex;align-items:center;gap:3px;background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:2px 4px;white-space:nowrap;">'
-          +'<span style="font-size:11px;font-weight:900;color:#1a1a1a;margin-right:2px;">'+_bx(nm)+'</span>'+tags+'</span>';
-      }).join('');
-      return '<div style="background:#fffbf0;border-bottom:1px solid #f6ad55;padding:4px 14px;display:flex;align-items:center;gap:5px;flex-wrap:wrap;flex-shrink:0;">'
-        +'<span style="font-size:10px;font-weight:900;color:#c07a00;letter-spacing:.3px;white-space:nowrap;">STAFF ACTIVE <span style="font-weight:700;color:#999;">↗ out · ↙ in</span></span>'
-        +chips+'</div>';
-    })():'')
+    // Licence discs and Staff Active share one line
+    +((_ovDisc||_ovStaff)?'<div style="background:#fffbeb;border-bottom:1px solid #f6cf7a;padding:4px 14px;display:flex;align-items:center;gap:6px 8px;flex-wrap:wrap;flex-shrink:0;">'
+      +_ovDisc+((_ovDisc&&_ovStaff)?'<span style="width:1px;align-self:stretch;background:#f6cf7a;margin:0 4px;"></span>':'')+_ovStaff+'</div>':'')
     // Remote returns due in the next 7 days
     +(function(){
       var list=(window.REMOTE_RETURNS||[]).filter(function(x){
@@ -2364,19 +2379,6 @@ function _renderOV(){
       }).join(' ');
       return '<div style="background:#fffbeb;border-bottom:1px solid #f6ad55;padding:7px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0;">'
         +'<span style="font-size:11px;font-weight:900;color:#92400e;white-space:nowrap;">🚩 REMOTE COLLECTION:</span>'+chips+'</div>';
-    })()
-    // Licence disc alerts (45 days ahead)
-    +(function(){
-      var list=Object.keys(DISCS).map(function(fn){return {fn:fn,exp:DISCS[fn],d:discDaysLeft(DISCS[fn])};})
-        .filter(function(x){return x.d!==null&&x.d<=DISC_WARN_DAYS;}).sort(function(a,b){return a.d-b.d;});
-      if(!list.length) return '';
-      var chips=list.map(function(x){
-        var exp=x.d<0;
-        return '<span class="disc-flash-lt" onclick="openVehReport(\''+_bx(x.fn)+'\')" style="cursor:pointer;font-size:11px;font-weight:800;padding:3px 9px;border-radius:12px;white-space:nowrap;background:'+(exp?'#fde2e2':'#fff3d6')+';color:'+(exp?'#b91c1c':'#92400e')+';border:1px solid '+(exp?'#f5a3a3':'#f6cf7a')+';">'
-          +x.fn+' · '+(exp?'EXPIRED':x.d===0?'expires today':x.d+' day'+(x.d===1?'':'s'))+' ('+new Date(x.exp+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'})+')</span>';
-      }).join('');
-      return '<div style="background:#fffbeb;border-bottom:1px solid #f6cf7a;padding:7px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0;">'
-        +'<span style="font-size:11px;font-weight:900;color:#92400e;letter-spacing:.3px;white-space:nowrap;"><span class="disc-ico" style="width:1.8em;height:1.8em;vertical-align:-0.6em;"></span> LICENCE DISCS DUE:</span>'+chips+'</div>';
     })()
         // 3 columns
     +'<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);flex:1;overflow:hidden;background:#f5f5f7;">'
