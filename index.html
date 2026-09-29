@@ -454,6 +454,10 @@ input[type=file]{display:none;}
     <button class="nb" id="nb-doc" onclick="goPage('doc')">📁 Documentation</button>
     <button class="nb" id="nb-rp" onclick="goPage('rp')">🔧 Vehicle Reports</button>
     <div style="margin-left:auto;display:flex;align-items:center;gap:6px;padding-right:6px;">
+      <button id="nav-override" onclick="peterOverrideCI()" title="Peter only: close this check-in now, even with steps not done" style="display:none;font-size:12px;font-weight:900;padding:7px 14px;border-radius:8px;border:2px solid #7c2d12;background:#ea580c;color:#ffffff;cursor:pointer;white-space:nowrap;line-height:1.3;text-align:center;">
+  <span style="display:block;font-size:13px;">⚡ OVERRIDE</span>
+  <span style="font-size:10px;">Close check-in</span>
+</button>
       <span id="nav-user" style="font-size:11px;font-weight:700;color:var(--se);white-space:nowrap;"></span>
       <button id="nav-logout" onclick="logoutUser()" style="display:none;font-size:12px;font-weight:800;padding:7px 14px;border-radius:8px;border:2px solid var(--re);background:var(--rg);color:var(--rl);cursor:pointer;white-space:nowrap;line-height:1.3;text-align:center;">
   <span id="nav-user-name" style="display:block;font-size:13px;font-weight:800;color:#000000;">—</span>
@@ -1583,7 +1587,7 @@ function drawDoc(){
       if(!g[kk]){g[kk]={label:k,rows:[]};order.push(kk);}
       g[kk].rows.push(r);
     });
-    if(DOC_GROUP==='veh')order.sort(function(a,b){return fnNum(a)-fnNum(b);});else order.sort();
+    // groups keep newest-first order: the vehicle / client with the latest hand-over (or return) is on top
     return order.map(function(kk){
       var G=g[kk];
       var sub=DOC_GROUP==='veh'?((FLEET.filter(function(v){return v.fn===G.label;})[0]||{}).reg||''):G.rows.map(function(r){return r.fn;}).filter(function(v,i,a){return a.indexOf(v)===i;}).join(', ');
@@ -6406,8 +6410,9 @@ function ciChecklistSummary(){
 // What must be done before the manager can close the return
 // Peter (management) may close a check-in even when some checks were not done.
 // He confirms which ones are missing and types why; both are stored on the check-in.
+function isPeter(){ return !!(APP_USER && APP_USER.name==='Peter'); }
 function ciPeterOverride(open){
-  if(!isAdmin()){toast('Not complete yet: '+open[0].lbl+' — only Peter can close it with checks missing','err');return false;}
+  if(!isPeter()){toast('Not complete yet: '+open[0].lbl+' — only Peter can close it with checks missing','err');return false;}
   if(ci.forceClosedBy)return true;
   var who=(APP_USER&&APP_USER.name)||'Peter';
   if(!confirm('CLOSE WITH CHECKS MISSING\n\nNot done yet:\n • '+open.map(function(x){return x.lbl;}).join('\n • ')+'\n\nClose this check-in anyway? It is recorded as closed off by '+who+'.'))return false;
@@ -6418,6 +6423,37 @@ function ciPeterOverride(open){
   ci.forceClosedBy=who;ci.forceClosedAt=new Date().toISOString();
   ci.forceClosedReason=why+' — not done: '+open.map(function(x){return x.lbl;}).join('; ');
   return true;
+}
+// ⚡ OVERRIDE (header, next to Peter's sign-in): Peter closes the open check-in from any step.
+// Nothing captured so far is lost; missing steps + his reason are stored on the check-in,
+// and the deposit goes to the Deposits list for a proper management decision.
+function ciOverrideOpen(){
+  return !!(isPeter()&&ci&&ci.fn&&ci.v&&!ci._done&&(document.querySelector('.page.on')||{}).id==='page-ci'&&document.getElementById('ci-body'));
+}
+function ciOverrideBtnSync(){
+  var b=document.getElementById('nav-override');if(!b)return;
+  var show=false;try{show=ciOverrideOpen();}catch(e){}
+  b.style.display=show?'':'none';
+}
+setInterval(ciOverrideBtnSync,700);
+async function peterOverrideCI(){
+  if(!isPeter()){toast('🔒 Only Peter can override a check-in','err');ciOverrideBtnSync();return;}
+  if(!ciOverrideOpen()){toast('Open a vehicle on Check-In first','err');return;}
+  try{ci.dmgd=getDmgData();}catch(e){ci.dmgd=ci.dmgd||[];}
+  var open=ciCompletion().filter(function(x){return !x.ok;});
+  if(!ci.odoIn)open.unshift({lbl:'Odometer in (Step 1)'});
+  if(!ci.fuelIn)open.unshift({lbl:'Fuel in (Step 1)'});
+  if(!retSt['WiFi device'])open.unshift({lbl:'WiFi device returned? (Step 1)'});
+  if(!open.length)open=[{lbl:'Management sign-off (Step 5)'}];
+  ci.forceClosedBy=null;           // always ask Peter to confirm + give a reason for this override
+  if(!ciPeterOverride(open))return;
+  if(!ci.receivedBy)ci.receivedBy=APP_USER.name;
+  ci.depositPending=true;ci.depositDue=nextWorkingDay();ci.deposit='Pending — management decision';
+  ci.mgmtNotes=((ci.mgmtNotes||'')+(ci.mgmtNotes?'\n':'')+'OVERRIDE by '+ci.forceClosedBy+': '+ci.forceClosedReason).trim();
+  try{await uploadPhotos(ci.fuelPhotos,ci.fn,ci.v.cl,'fuel-receipt');await uploadPhotos(ci.dmgPhotos,ci.fn,ci.v.cl,'damage-in');}catch(e){}
+  await completeCI();
+  if(!ci._done){ci.forceClosedBy=null;ci.forceClosedAt=null;ci.forceClosedReason=null;}
+  ciOverrideBtnSync();
 }
 function ciCompletion(){
   var all=RET_GROUPS.reduce(function(a,g){return a.concat(g.items);},[]);
