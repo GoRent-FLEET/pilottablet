@@ -6531,23 +6531,40 @@ function ciReportHeader(){
              :'✅ ALL CLEAR — full deposit can be released')
     +'</div></div>';
 }
-// Issues: the team finishes the return; management decides the deposit (normally the next working day)
-async function ciHandToMgmt(){
-  var _open=ciCompletion().filter(function(x){return !x.ok;});
-  if(_open.length&&!ciPeterOverride(_open))return;
-  ci.depositPending=true;ci.depositDue=nextWorkingDay();ci.deposit='Pending — management decision';
-  var _n=document.getElementById('ci-hnotes');if(_n&&_n.value)ci.mgmtNotes=_n.value;
-  try{await uploadPhotos(ci.fuelPhotos,ci.fn,ci.v.cl,'fuel-receipt');await uploadPhotos(ci.dmgPhotos,ci.fn,ci.v.cl,'damage-in');}catch(e){}
-  await completeCI();
-}
-function ciMgmtHandoverBox(x){
-  return '<div style="background:var(--rg);border:3px solid var(--re);border-radius:var(--r);padding:14px;margin-bottom:12px;">'
-    +'<div style="font-size:16px;font-weight:900;color:var(--rl);margin-bottom:6px;">👔 Management takes over the deposit</div>'
-    +'<div style="font-size:14px;color:var(--g6);margin-bottom:10px;">There are issues with this return. Finish the return now; management decides how much of the deposit is returned — normally the next working day (<b>'+fmtDay(nextWorkingDay())+'</b>). The client is told the deposit is being assessed.</div>'
-    +'<div class="fi"><label>Notes for management</label><textarea id="ci-hnotes" oninput="ci.mgmtNotes=this.value" placeholder="What happened, what the client said, quotes needed..." style="min-height:60px">'+_bx(ci.mgmtNotes||'')+'</textarea></div>'
-    +'<button class="btn r" style="background:#c0392b;color:#fff;font-size:15px;padding:16px;" onclick="ciHandToMgmt()">📨 Hand over to management &amp; finish return</button>'
+// ONE way to close a check-in: "Finish return".
+// Clean return → full deposit released now. Issues → decide the deposit now, or leave it for the
+// Deposits list (due the next working day). Only people who may do check-ins (managers, Peter) get here.
+function ciFinishBox(hasIssues){
+  var sel=ci.finishDep||(hasIssues?'':'Full deposit returned');
+  var opts=(hasIssues?[['','⏳ Decide later — goes to the Deposits list (by '+fmtDay(nextWorkingDay())+')']]:[])
+    .concat(DEP_REASONS.map(function(o){return [o,o];}));
+  return '<div style="background:var(--g1);border:3px solid '+(hasIssues?'var(--re)':'var(--gb)')+';border-radius:var(--r);padding:14px;">'
+    +'<div class="fi"><label>Deposit</label><select id="ci-dep" onchange="ci.finishDep=this.value" style="color-scheme:light">'
+      +opts.map(function(o){return '<option value="'+_bx(o[0])+'"'+(o[0]===sel?' selected':'')+'>'+_bx(o[1])+'</option>';}).join('')
+    +'</select></div>'
+    +'<div class="fi"><label>Notes for management (optional)</label><textarea id="ci-hnotes" oninput="ci.mgmtNotes=this.value" placeholder="What happened, what the client said, quotes needed..." style="min-height:56px">'+_bx(ci.mgmtNotes||'')+'</textarea></div>'
+    +'<button class="btn '+(hasIssues?'r':'g')+'" style="font-size:17px;padding:18px;'+(hasIssues?'background:#c0392b;color:#fff;':'')+'" onclick="ciFinish()">✅ Finish return</button>'
+    +'<div style="font-size:12px;color:var(--g5);margin-top:6px;text-align:center;">Closed by '+_bx((APP_USER&&APP_USER.name)||'')+' · the client gets the return report on WhatsApp next</div>'
     +'</div>';
 }
+async function ciFinish(){
+  var open=ciCompletion().filter(function(x){return !x.ok;});
+  if(open.length&&!ciPeterOverride(open))return;
+  if(!ci.forceClosedBy&&!!ci.fuelIn&&ci.fuelIn!==ci.v.fuelOut&&!(ci.fuelPhotos&&ci.fuelPhotos.length)){toast('Fuel is short — take a photo of the fuel receipt first','err');return;}
+  var el=document.getElementById('ci-dep');var dec=el?el.value:(ci.finishDep||'');
+  var n=document.getElementById('ci-hnotes');if(n)ci.mgmtNotes=n.value;
+  var x=ciIssues();
+  if(!x.any&&!dec)dec='Full deposit returned';
+  ci.mgmtName=(APP_USER&&APP_USER.name)||ci.mgmtName||'';ci.mgmtAt=now();
+  if(dec){ci.deposit=dec;ci.depositPending=false;ci.mgmtDecided=true;}
+  else{ci.depositPending=true;ci.depositDue=nextWorkingDay();ci.deposit='Pending — management decision';ci.mgmtDecided=false;}
+  try{await uploadPhotos(ci.fuelPhotos,ci.fn,ci.v.cl,'fuel-receipt');await uploadPhotos(ci.dmgPhotos,ci.fn,ci.v.cl,'damage-in');}catch(e){}
+  await completeCI();
+  if(!ci._done){ci.mgmtDecided=false;ci.depositPending=false;}
+}
+// older names still called from saved screens
+function ciHandToMgmt(){return ciFinish();}
+function signMgmtCI(){return ciFinish();}
 // ── Management: open deposit decisions ──
 var WARN_TRI='<svg class="wtri" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 1 21h22L12 2z" fill="#e11d2e"/><path d="M11 9h2v6h-2zm0 8h2v2h-2z" fill="#fff"/></svg>';
 var DEP_PENDING=[];
@@ -6869,28 +6886,7 @@ function ciStep4_CI(){
     <div style="font-size:13px;color:var(--am);margin-top:8px">📷 ${(r.dmgPhotos&&r.dmgPhotos.length)||0} photos on file as evidence</div>
   </div>`:''}
 
-  ${(hasIssues&&!r.mgmtSig)?ciMgmtHandoverBox()+(canViewReports()?'<div style="font-size:13px;font-weight:800;color:var(--g5);margin:6px 0;">Manager here now? You can also decide the deposit straight away:</div>':''):''}
-  ${(hasIssues&&!r.mgmtSig&&!canViewReports())?'':r.mgmtSig?
-    `<div class="signed">✅<div class="signed-name">${r.mgmtName} — Rental closed · ${r.deposit}</div><div class="signed-time">${r.mgmtAt}</div></div>
-    <button class="btn g" style="margin-top:8px" onclick="completeCI()">✅ Complete Return</button>`:
-    `<div style="background:var(--g1);border:2px solid var(--g2);border-radius:var(--r);padding:13px;">
-      <div class="fg">
-        <div class="fi"><label>Deposit decision</label>
-          <select id="ci-dep" onchange="ci.deposit=this.value" style="color-scheme:light">
-            <option>Full deposit returned</option>
-            <option>Partial deduction — new damage</option>
-            <option>Full deduction — major damage</option>
-            <option>Partial deduction — missing equipment</option>
-            <option>Partial deduction — fuel shortage</option>
-            <option>Withhold pending investigation</option>
-          </select>
-        </div>
-        <div class="fi"><label>Manager name *</label>${ciMgrSelect(r.mgmtName)}</div>
-      </div>
-      <div class="fi"><label>Notes</label><textarea id="ci-mnotes" oninput="ci.mgmtNotes=this.value" placeholder="Deposit decision notes..." style="min-height:50px">${r.mgmtNotes||''}</textarea></div>
-      <div class="sig-area"><div class="sig-hdr"><span class="sig-lbl" id="ci-m-lbl">${r.mgmtName?r.mgmtName+' — ':'Manager — '}sign to close rental</span><span><span class=\"sig-clr\" onclick=\"undoSig('ci-m-sig')\">&#8630; Undo</span><span class=\"sig-clr\" onclick=\"clrSig('ci-m-sig')\">Clear</span></span></div><canvas class="sig-cv" id="ci-m-sig" style="height:135px"></canvas></div>
-      <button class="btn ${hasIssues?'r':'g'}" style="${hasIssues?'background:#c0392b;color:#fff':''}" onclick="signMgmtCI()">✅ Close Rental &amp; Sign Off</button>
-    </div>`}`;
+  ${ciFinishBox(hasIssues)}`;
 }
 
 function ciReturnView(v,r,newDmg,fuelShort,missing,damaged){
@@ -6960,19 +6956,6 @@ function ciMgrSelect(val){
     +'<option value="">— Select manager —</option>'
     +list.map(function(n){return '<option'+(n===val?' selected':'')+'>'+n+'</option>';}).join('')
     +'</select>';
-}
-async function signMgmtCI(){
-  var _open=ciCompletion().filter(function(x){return !x.ok;});
-  if(_open.length&&!ciPeterOverride(_open))return;
-  ci.mgmtName=String((function(){var _e=document.getElementById('ci-mgmt');return _e?_e.value:'';})()||'').trim()||ci.mgmtName||(APP_USER&&APP_USER.name)||'';
-  ci.deposit=(function(){var _e=document.getElementById('ci-dep');return _e?_e.value:undefined;})()||ci.deposit;
-  ci.mgmtNotes=(function(){var _e=document.getElementById('ci-mnotes');return _e?_e.value:undefined;})()||ci.mgmtNotes;
-  if(!ci.mgmtName){toast('Enter manager name','err');return;}
-  if(!ci.forceClosedBy&&!!ci.fuelIn&&ci.fuelIn!==ci.v.fuelOut&&!(ci.fuelPhotos&&ci.fuelPhotos.length)){toast('Fuel is short — take a photo of the fuel receipt first','err');return;}
-  if(!hasSig('ci-m-sig')){toast('Manager must sign','err');return;}
-  try{await uploadPhotos(ci.fuelPhotos,ci.fn,ci.v.cl,'fuel-receipt');await uploadPhotos(ci.dmgPhotos,ci.fn,ci.v.cl,'damage-in');}catch(e){}
-  ci.mgmtSig=getSig('ci-m-sig');ci.mgmtAt=now();
-  toast('Rental closed ✅','ok');drawCI();
 }
 
 // ── RENTAL FILE: everything for one booking in one place ───────────
@@ -7498,10 +7481,10 @@ async function completeCI(){
     new_damage_panels:newDmg,equipment_status:retSt,
     missing_items:missing,damaged_items:damaged,
     customer_signed_at:ci.custSig?new Date().toISOString():null,
-    manager_name:ci.mgmtName,manager_signed_at:ci.mgmtSig?new Date().toISOString():null,
+    manager_name:ci.mgmtName,manager_signed_at:(ci.mgmtSig||ci.mgmtDecided)?new Date().toISOString():null,
     deposit_decision:ci.deposit,manager_notes:ci.mgmtNotes,client_notes:ci.notes,
-    deposit_status:ci.depositPending?'pending':(ci.mgmtSig?'decided':null),deposit_due:ci.depositPending?ci.depositDue:null,
-    deposit_decided_by:(!ci.depositPending&&ci.mgmtSig)?ci.mgmtName:null,deposit_decided_at:(!ci.depositPending&&ci.mgmtSig)?new Date().toISOString():null,
+    deposit_status:ci.depositPending?'pending':((ci.mgmtSig||ci.mgmtDecided)?'decided':null),deposit_due:ci.depositPending?ci.depositDue:null,
+    deposit_decided_by:(!ci.depositPending&&(ci.mgmtSig||ci.mgmtDecided))?ci.mgmtName:null,deposit_decided_at:(!ci.depositPending&&(ci.mgmtSig||ci.mgmtDecided))?new Date().toISOString():null,
     fuel_receipts:ci.fuelPhotos||[],
     item_checks:ciItemChecks(),equipment_checked_by:ciEqChecks(),receiver_log:ci.rcvLog||[],
     signature_urls:ci._sigUrls||{},report_link:ci._reportLink||null,
