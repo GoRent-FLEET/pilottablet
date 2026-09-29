@@ -3332,6 +3332,8 @@ function coStep1(){
         ${d.passportImg&&!d.name?`<div style="font-size:13px;color:var(--al);margin-top:6px;">📖 Reading passport details automatically…</div>`:''}
       </div>
 
+      ${drvDetailsHead(d,i)}
+      <div style="${drvDetailsOpen(d,i)?'':'display:none'}">
       <!-- Text details: passport in one frame, licence in another -->
       <div style="font-size:14px;font-weight:700;color:var(--g5);text-transform:uppercase;letter-spacing:.4px;margin:12px 0 8px;">② Check the details — correct anything read wrongly</div>
 
@@ -3375,6 +3377,7 @@ function coStep1(){
           </div>
         </div>
       </div>
+      </div>
       ${isPrimary?`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
         <div class="fi" style="flex:2 1 220px;min-width:180px;"><label>📧 Email address</label>
           <input type="email" value="${co.clientEmail||''}" placeholder="client@email.com" oninput="co.clientEmail=this.value"
@@ -3391,6 +3394,8 @@ function coStep1(){
       <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
         ${placePicker('pickupArrangement','📍 Collection — where the client picks the vehicle up','e.g. Hosea Kutako Airport · arrivals · 09:30')}
         ${placePicker('dropoffArrangement','📍 Return — where the client brings it back','e.g. Hosea Kutako Airport · departures · 16:00')}
+        ${(co.remoteLocation||co.clientNotes||co._moreOpen)?'':'<button onclick="co._moreOpen=1;drawCO()" style="align-self:flex-start;padding:8px 14px;border-radius:8px;border:1px dashed var(--g4);background:transparent;color:var(--g5);font-size:14px;font-weight:800;cursor:pointer;">＋ Remote location / notes</button>'}
+        <div style="display:flex;flex-direction:column;gap:8px;${(co.remoteLocation||co.clientNotes||co._moreOpen)?'':'display:none;'}">
         <div class="fi">
           <label>📍 Remote location pickup/dropoff</label>
           <input value="${co.remoteLocation||''}" placeholder="e.g. Sossusvlei campsite · GPS: -24.7, 15.3 · no cell signal"
@@ -3402,20 +3407,9 @@ function coStep1(){
           <textarea oninput="co.clientNotes=this.value" placeholder="Special requests, baby seat, extra equipment, anything to note..."
             style="width:100%;min-height:70px;padding:10px 12px;border-radius:var(--rs);border:2px solid ${co.clientNotes?'var(--gb)':'var(--g3)'};background:var(--g0);color:var(--tx);font-size:15px;resize:vertical;font-family:inherit;">${co.clientNotes||''}</textarea>
         </div>
+        </div>
       </div>`:''}
 
-      <!-- Status -->
-      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:10px;">
-        <span class="${d.name?'':'insp-flash'}" style="font-size:13px;padding:3px 9px;border-radius:10px;font-weight:800;${d.name?'background:var(--sg);color:var(--se)':'background:var(--rg);color:var(--rl);border:1px solid var(--re)'}">
-          ${d.name?'✓ '+d.name:'⚠ Name missing'}
-        </span>
-        <span class="${d.passportImg?'':'insp-flash'}" style="font-size:13px;padding:3px 9px;border-radius:10px;font-weight:800;${d.passportImg?'background:var(--sg);color:var(--se)':'background:var(--rg);color:var(--rl);border:1px solid var(--re)'}">
-          ${d.passportImg?'✓ Passport'+(d.passport?' · '+d.passport:''):'⚠ No passport'}
-        </span>
-        <span class="${d.licFront?'':'insp-flash'}" style="font-size:13px;padding:3px 9px;border-radius:10px;font-weight:800;${d.licFront?'background:var(--sg);color:var(--se)':'background:var(--rg);color:var(--rl);border:1px solid var(--re)'}">
-          ${d.licFront?'✓ Licence'+(d.licNo?' · '+d.licNo:'')+(d.licExpiry?' exp '+d.licExpiry:''):'⚠ No licence'}
-        </span>
-      </div>
     </div>`;
   };
 
@@ -3426,7 +3420,7 @@ function coStep1(){
     <div class="step-ico">📷</div>
     <div>
       <div class="step-title">Step 5 — Client &amp; Driver Details</div>
-      <div class="step-sub">Office staff: verify full legal names against passports, fill in all details and photograph documents for ALL drivers before handover</div>
+      <div class="step-sub">Photograph the passport and licence of every driver · check the name · then fill in the contract below</div>
     </div>
   </div>
   ${coContractWho()}
@@ -3443,11 +3437,33 @@ function coStep1(){
 
   ${co.drivers.map((d,i)=>driverCard(d,i)).join('')}
 
-  <div class="al info" style="font-size:14px;line-height:1.6;">
-    📋 Use the passport spelling. The booking often shows only a surname, so check every name against the passport and correct it here. These names go onto the rental contract, and the client types their name when they sign — small differences are fine.
-  </div>`;
+`;
 }
 
+// Details read from the passport/licence photos are shown as one summary; the fields only open
+// when something is missing, when reading failed, or when somebody taps "Check / correct".
+function drvDetailsOpen(d,i){
+  if(co._drvOpen&&co._drvOpen[i])return true;
+  if(!d.passportImg)return false;              // photo first — details fill in by themselves
+  return !d.name;                              // photo taken but no name read → type it
+}
+function drvDetailsHead(d,i){
+  var open=drvDetailsOpen(d,i);
+  var btn=function(t){return '<button onclick="co._drvOpen=co._drvOpen||{};co._drvOpen['+i+']='+(open?'false':'true')+';drawCO()" style="padding:8px 14px;border-radius:8px;border:2px solid var(--g3);background:var(--g0);color:var(--tx);font-size:14px;font-weight:800;cursor:pointer;white-space:nowrap;">'+t+'</button>';};
+  if(!d.passportImg&&!open)
+    return '<div style="display:flex;align-items:center;gap:10px;margin:10px 0;padding:10px 12px;border-radius:10px;background:var(--g2);font-size:14px;font-weight:700;color:var(--g6);">'
+      +'👆 Take the passport photo first — the details fill in by themselves<span style="margin-left:auto;"></span>'+btn('or type by hand')+'</div>';
+  if(!open){
+    var line=function(k,v){return v?'<div style="font-size:13px;color:var(--g5);"><b style="color:var(--tx);">'+k+'</b> '+_bx(v)+'</div>':'';};
+    return '<div style="display:flex;align-items:flex-start;gap:10px;margin:10px 0;padding:12px 14px;border-radius:10px;border:2px solid var(--gb);background:var(--sg);">'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:900;color:var(--tx);">✓ '+_bx(d.name||'')+'</div>'
+      +line('Passport',[d.passport,d.nationality,d.dob?'born '+d.dob:''].filter(Boolean).join(' · '))
+      +line('Licence',[d.licNo,d.licExpiry?'exp '+d.licExpiry:''].filter(Boolean).join(' · '))
+      +'<div style="font-size:12px;color:var(--al);margin-top:4px;">Compare the name with the passport'+(i===0&&co.v&&co.v.cl?' (booking says '+_bx(co.v.cl)+')':'')+'</div></div>'
+      +btn('✏️ Check / correct')+'</div>';
+  }
+  return d.name&&d.passportImg?'<div style="text-align:right;margin:8px 0;">'+btn('▲ Done checking')+'</div>':'';
+}
 // Read an already-captured photo again, without asking the client for their passport back.
 function rereadDoc(di,field){
   try{
@@ -3462,13 +3478,13 @@ function driverDocSlot(di,field,ico,lbl,val){
   const inputId=`fi-drv-${di}-${field}`;
   // each slot carries the tint of the section its details end up in: passport blue, licence purple
   const tint=field==='passportImg'?'background:#eaf1f8;border-color:#8fa3b8;':'background:#f6edfb;border-color:#a693c2;';
-  return `<div class="doc-slot ${val?'captured':''}" onclick="document.getElementById('${inputId}').click()" style="aspect-ratio:1.3;${val?'':tint}">
+  return `<div class="doc-slot ${val?'captured':''}" onclick="document.getElementById('${inputId}').click()" style="aspect-ratio:1.9;${val?'':tint}">
     ${val
       ? `<img src="${val}"><div class="doc-slot-overlay"><div class="doc-slot-lbl" style="font-size:13px;">✅ ${lbl}</div><div class="doc-slot-sub" style="font-size:12px;">Tap to retake</div></div>`
         + ((field==='passportImg'||field==='licFront')
             ? `<button onclick="event.stopPropagation();rereadDoc(${di},'${field}')" style="position:absolute;bottom:6px;right:6px;padding:7px 11px;border-radius:8px;border:2px solid #fff;background:#145c30;color:#fff;font-size:12px;font-weight:900;cursor:pointer;box-shadow:0 1px 5px rgba(0,0,0,.35);">&#128260; Read again</button>`
             : '')
-      : `<div class="doc-slot-ico" style="font-size:22px;">${ico}</div><div class="doc-slot-lbl" style="font-size:13px;">${lbl}</div>`}
+      : `<div class="doc-slot-ico" style="font-size:30px;">📷</div><div class="doc-slot-lbl" style="font-size:16px;font-weight:900;color:#0f172a;opacity:1;">${ico} ${lbl}</div><div style="font-size:12px;font-weight:700;color:#334155;">Tap to take photo</div>`}
     <input type="file" id="${inputId}" accept="image/*" capture="environment"
       onchange="captureDriverDoc(event,${di},'${field}')">
   </div>`;
@@ -8993,3 +9009,125 @@ function closeResumePanel() {
   setInterval(check,5*60000);
   document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')check();});
 })();
+
+// ══ NEXT-STEP GUIDE ══════════════════════════════════════════════════════════
+// A bar at the bottom of check-out / check-in that always says, in plain words, the ONE
+// thing to do next, with "Show me" (scrolls to it and highlights it). When the step is
+// finished it becomes one big "Next step →" button. Worked out from what is saved, not guessed.
+function gFind(root,sel,test){var l=root?root.querySelectorAll(sel):[];for(var i=0;i<l.length;i++){if(!test||test(l[i]))return l[i];}return null;}
+function gTxt(el,t){return el&&(el.textContent||'').indexOf(t)>=0;}
+function gAllGood(root){return gFind(root,'button',function(b){return /✓ All good \(\d+\)/.test(b.textContent)&&b.offsetParent;});}
+var CO_NAMES={0:'Cleaning',2:'Equipment',3:'Mechanical',4:'Inspection',5:'Contract',6:'Handover & release'};
+function guideCO(){
+  var R=document.getElementById('cos');if(!R||!co||!co.v)return null;
+  var t=function(text,el){return {text:text,el:el};};
+  var st=coStep,b;
+  if(st===0){
+    b=gAllGood(R);if(b)return t('Check the cleaning, then tap the green ✓ All good. Tap an item only if it is wrong.',b);
+  }else if(st===2){
+    b=gAllGood(R);if(b)return t('Check each box of equipment, then tap its green ✓ All good.',b);
+    if(!co.equipSig){b=gFind(R,'button',function(x){return gTxt(x,'Confirm — Equipment Packed');});return t('Tap ✓ Confirm — Equipment Packed.',b);}
+  }else if(st===3){
+    b=gAllGood(R);if(b)return t('Check the mechanics, then tap the green ✓ All good. Tap Issue if something is wrong.',b);
+    if(!co.mechDone){b=gFind(R,'button',function(x){return gTxt(x,'Continue to Inspection');});return t('Mechanics done — tap Continue to Inspection.',b);}
+  }else if(st===4){
+    if(!(co.docItems&&co.docItems.veh)){b=gFind(R,'div',function(x){return x.classList.contains('insp-flash')&&gTxt(x,'Vehicle docs');});return t('Check the licence disc and insurance papers are in the vehicle, then tap OK.',b);}
+    if(co.v.xb&&!co.docItems.xb){b=gFind(R,'div',function(x){return x.classList.contains('insp-flash')&&gTxt(x,'Cross-border');});return t('Check the cross-border papers, then tap OK.',b);}
+    b=gFind(R,'.insp-flash',function(x){return gTxt(x,'OK')||x.querySelector('select');});
+    if(b){var nm=(b.querySelector('div div:nth-child(2)')||{}).textContent||'';return t('Not ticked yet: '+nm+' — check it and tap OK (or Issue).',b);}
+  }else if(st===5){
+    var ds=co.drivers||[];
+    for(var i=0;i<ds.length;i++){var d=ds[i],who=i===0?'the main driver':'driver '+(i+1);
+      if(!d.passportImg)return t('Take a photo of the PASSPORT of '+who+'.',document.getElementById('fi-drv-'+i+'-passportImg')&&document.getElementById('fi-drv-'+i+'-passportImg').parentNode);
+      if(!d.licFront)return t('Take a photo of the front of the DRIVER’S LICENCE of '+who+'.',document.getElementById('fi-drv-'+i+'-licFront')&&document.getElementById('fi-drv-'+i+'-licFront').parentNode);
+      if(!d.name)return t('Type the name of '+who+' exactly as on the passport.',gFind(R,'input',function(x){return /as on passport/.test(x.placeholder||'')&&!x.value;}));
+    }
+    if(!co.contractSigned){
+      var c=co.contract||{};
+      if(!c.insurance_option){b=gFind(R,'select',function(x){return /select insurance/.test(x.textContent)&&!x.value;});return t('Choose the insurance the client takes.',b);}
+      if(c.addon_windscreen!==true&&c.addon_windscreen!==false)return t('Ask the client: Windscreen & Tyre cover? Tap Taken or Declined.',document.getElementById('ct-aws'));
+      if(co.v.camping&&c.addon_equipment!==true&&c.addon_equipment!==false&&document.getElementById('ct-aeq'))return t('Ask the client: Camping Equipment cover? Tap Taken or Declined.',document.getElementById('ct-aeq'));
+      if(!c.fuel_deposit_received){b=gFind(R,'label,div',function(x){return /Fuel & Admin deposit/.test(x.textContent)&&x.querySelector('input[type=checkbox]')&&x.textContent.length<200;});return t('Take the Fuel & Admin deposit, then tick it.',b);}
+      if(co.v.xb&&!c.cross_border_deposit){b=gFind(R,'label,div',function(x){return /Cross-border\/Damage deposit/.test(x.textContent)&&x.querySelector('input[type=checkbox]')&&x.textContent.length<200;});return t('Take the Cross-border deposit, then tick it.',b);}
+      b=gFind(R,'select',function(x){return /how the deposit was paid/.test(x.textContent)&&!x.value;});if(b)return t('Choose how the deposit was paid.',b);
+      b=gFind(R,'button',function(x){return gTxt(x,'Preview Full Contract');});
+      return t('Tap 📋 Preview Full Contract & Sign — the client reads it and signs.',b);
+    }
+  }else if(st===6){
+    var dd=co.docItems||{};
+    if(!dd.wifi){b=gFind(R,'div.insp-flash',function(x){return /^📶 WiFi device/.test((x.textContent||'').trim());});return t('Give the client the WiFi device, then tap Handed over.',b);}
+    if(co.v.xb&&!dd.xb){b=gFind(R,'div.insp-flash',function(x){return /^🌍 Cross-border docs/.test((x.textContent||'').trim());});return t('Give the client the cross-border papers, then tap Handed over.',b);}
+    if(!co.returnTime){b=gFind(R,'div',function(x){return /^📅 Return:/.test((x.textContent||'').trim());});return t('Ask the client what time they will bring it back, and set the time.',b);}
+    var secs=window._HO_SECTIONS||[],hc=co.handoverChecks||{};
+    for(var k=0;k<secs.length;k++){var sec=secs[k];
+      if(!sec.items.every(function(it){return hc[it.k]==='ok'||(it.k==='xb'&&!co.v.xb);})){
+        b=gFind(R,'div[onclick]',function(x){return (x.getAttribute('onclick')||'').indexOf("tapHOSection('"+sec.key+"')")>=0;});
+        return t('Explain “'+sec.title+'” to the client, then tap it.',b);}}
+    if(!handoverClosed())return t('Give the tablet to the client to sign, then tap Client Signs.',document.getElementById('co-c-sig'));
+    b=gFind(R,'button',function(x){return (x.getAttribute('onclick')||'')==='coRelease()';});
+    if(b)return t('All done — tap ✅ Release vehicle.',b);
+    return t('A manager must release the vehicle.',null);
+  }
+  // this step is finished
+  if(st<6){
+    var n=st+1;if(n===1)n=2;
+    if(!canDoStep(n))return {done:true,text:'✅ Your part is finished — the office does the rest.'};
+    return {done:true,text:'✅ '+(CO_NAMES[st]||'This step')+' is finished',next:'Next: '+CO_NAMES[n]+' →',go:function(){coGoStep(n);window.scrollTo(0,0);var s=document.getElementById('co-body');if(s)s.scrollTop=0;}};
+  }
+  return null;
+}
+function guideCI(){
+  var R=document.getElementById('ci-step-body');if(!R||!ci||!ci.v)return null;
+  var t=function(text,el){return {text:text,el:el};};
+  var g=ciGroup(ciStep),b;
+  if(g===0){
+    if(!ci.receivedBy)return t('Choose your name: who is receiving the vehicle?',gFind(R,'.who-box'));
+    if(!retSt['WiFi device']){b=gFind(R,'div',function(x){return /^📶 WIFI DEVICE/.test((x.textContent||'').trim());});return t('Is the WiFi device back? Tap Returned or NOT returned.',b);}
+    if(!ci.odoIn)return t('Type the kilometres from the dashboard.',document.getElementById('ci-odo'));
+    if(!ci.fuelIn)return t('Look at the fuel gauge and choose the level.',document.getElementById('ci-fuel'));
+    var items=L_CI.filter(function(x,i){return x[0]!=='__SECTION__'&&x[0]!=='__OPTIONAL__'&&ciShow(x,i)&&ciStep1Item(i);});
+    for(var j=0;j<items.length;j++){var l=items[j][1],x=ci.retItems[l];if(!(x&&(x.st!==undefined?x.st:x))){
+      b=gFind(R,'.chk-list *',function(e){return e.children.length<6&&(e.textContent||'').trim().indexOf(l)===0&&e.getAttribute('onclick');})||gFind(R,'.chk-list div',function(e){return (e.textContent||'').indexOf(l)>=0;});
+      return t('Check: '+l+' — tap once if OK, twice if there is a problem.',b);}}
+    if(!ci.retSig)return t('Sign to confirm the vehicle check, then tap Sign & Confirm.',document.getElementById('ci-ret-sig'));
+    return {done:true,text:'✅ Vehicle checked. Mark any NEW damage on the pictures (if there is none, just go on).',next:'Next: Equipment →',go:function(){ciStep=2;drawCI();window.scrollTo(0,0);}};
+  }
+  if(g===2){
+    b=gFind(R,'.rbtn',function(x){return /All returned/.test(x.textContent)&&!x.classList.contains('ok-on');});
+    if(b)return t('Check each box: tap ✓ All returned, or ✗ Missing on anything that is not back.',b);
+    return {done:true,text:'✅ Equipment checked',next:'Next: Sign & finish →',go:function(){ciStep=3;drawCI();window.scrollTo(0,0);}};
+  }
+  if(!ci.custSig)return t('Give the tablet to the client to read and sign.',document.getElementById('ci-c-sig'));
+  var x2=ciIssues();
+  if(x2.fuelShort&&!(ci.fuelPhotos&&ci.fuelPhotos.length))return t('Fuel is short: take a photo of the fuel receipt.',gFind(R,'div',function(e){return /Fuel receipt/.test(e.textContent)&&e.querySelector('input[type=file]')&&e.textContent.length<400;}));
+  b=gFind(R,'button',function(e){return (e.getAttribute('onclick')||'')==='ciFinish()';});
+  return t('All done — tap ✅ Finish return.',b);
+}
+function guideNow(){
+  var pg=(document.querySelector('.page.on')||{}).id;
+  if(document.querySelector('#ask-box,#contract-modal,#co-missing,#qty-pick,#ho-who-modal,#ct-who-modal,#pin-cancel'))return null;
+  if(pg==='page-co'&&co&&co.v&&!co._done)return guideCO();
+  if(pg==='page-ci'&&ci&&ci.v&&!ci._done)return guideCI();
+  return null;
+}
+var _gCur=null;
+function guideUpdate(){
+  var bar=document.getElementById('guide');
+  if(!bar){bar=document.createElement('div');bar.id='guide';document.body.appendChild(bar);}
+  var g=null;try{g=guideNow();}catch(e){g=null;}
+  _gCur=g;
+  document.body.classList.toggle('guide-on',!!g);
+  if(!g){bar.style.display='none';return;}
+  bar.style.display='flex';
+  var html='<div class="g-txt">'+(g.done?'':'👉 ')+_bx(g.text)+'</div>'
+    +(g.done?(g.next?'<button class="g-next" onclick="_gCur&&_gCur.go&&_gCur.go()">'+_bx(g.next)+'</button>':'')
+            :(g.el?'<button class="g-show" onclick="guideShow()">Show me ↓</button>':''));
+  if(bar._h!==html){bar._h=html;bar.innerHTML=html;bar.className=g.done?'g-done':'';}
+}
+function guideShow(){
+  var g=_gCur;if(!g||!g.el)return;
+  try{g.el.scrollIntoView({behavior:'smooth',block:'center'});}catch(e){}
+  g.el.classList.remove('guide-hl');void g.el.offsetWidth;g.el.classList.add('guide-hl');
+  setTimeout(function(){try{g.el.classList.remove('guide-hl');}catch(e){}},2600);
+}
+setInterval(guideUpdate,700);
