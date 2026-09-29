@@ -6528,7 +6528,10 @@ var DEP_PENDING=[];
 async function refreshDeposits(){
   try{var r=await SB.from('checkins').select('id,booking_id,fleet_no,client,deposit_due').eq('deposit_status','pending');if(!r.error){DEP_PENDING=r.data||[];showDepositBanner();}}catch(e){}
 }
+// Deposits tab only flashes while a decision is actually waiting
+function depTabLabel(){return DEP_PENDING.length?WARN_TRI+' Deposits ('+DEP_PENDING.length+')':'✅ Deposits';}
 function showDepositBanner(){
+  try{var t=document.getElementById('tab-dep');if(t)t.innerHTML=depTabLabel();}catch(e){}
   var ov=document.getElementById('ov-body');if(!ov)return;
   var old=document.getElementById('dep-banner');if(old)old.remove();
   if(!DEP_PENDING.length||typeof canViewReports!=='function'||!canViewReports())return;
@@ -6549,6 +6552,7 @@ async function loadDeposits(){
   if(r.error){el.innerHTML='<div class="al warn">Could not load: '+_bx(r.error.message)+'</div>';return;}
   DEP_PENDING=r.data||[];
   var today=new Date().toISOString().split('T')[0];
+  showDepositBanner();
   if(!DEP_PENDING.length){el.innerHTML='<div class="al ok" style="text-align:center;">✅ No deposit decisions waiting</div>';return;}
   el.innerHTML=DEP_PENDING.map(function(c){
     var late=c.deposit_due&&c.deposit_due<=today;
@@ -7519,7 +7523,7 @@ async function renderReports(){
   const body=document.getElementById('rp-body');
   body.innerHTML=`<input class="search-bar" placeholder="🔍 Search vehicle or client..." id="rp-q" oninput="searchReports(this.value)">
     <div class="tab-row">
-      <button class="tab-btn" id="tab-dep" onclick="rpTab(this,'rp-deposits');loadDeposits()">${WARN_TRI} Deposits${DEP_PENDING.length?' ('+DEP_PENDING.length+')':''}</button>
+      <button class="tab-btn" id="tab-dep" onclick="rpTab(this,'rp-deposits');loadDeposits()">${depTabLabel()}</button>
       <button class="tab-btn on" onclick="rpTab(this,'rp-vehicles')">🚗 Fleet</button>
       <button class="tab-btn" onclick="rpTab(this,'rp-history');loadHistory()">📋 Activity Log</button>
       <button class="tab-btn" onclick="rpTab(this,'rp-alerts');loadAlerts()">⚠️ Alerts</button>
