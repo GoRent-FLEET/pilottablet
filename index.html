@@ -384,100 +384,55 @@ input[type=file]{display:none;}
 #upload-banner{display:none;position:fixed;top:64px;left:50%;transform:translateX(-50%);background:#15532f;border:1px solid var(--se);border-radius:20px;padding:8px 18px;font-size:12px;font-weight:700;color:var(--se);z-index:998;white-space:nowrap;}
 </style>
 <!-- ═══ WELCOME THEME (visual only, no logic) — remove this block to go back to the old look ═══ -->
+<!-- Light version (29 Sep): no shadows on cards, no [style*=] rules, greeting painted once per Dashboard redraw -->
 <style id="welcome-theme">
-:root{
-  --bg:#f5efe4;          /* warm sand instead of cold grey */
-  --g2:#ebe2d2;--g3:#dccfb9;
-  --wt-green:#14532d;--wt-green2:#1c6b3c;--wt-leaf:#12803c;
-  --wt-sun:#f5b93a;--wt-card:#ffffff;--wt-line:#ece3d3;
-  --wt-shadow:0 1px 2px rgba(92,64,20,.06),0 6px 18px rgba(92,64,20,.07);
-  --r:16px;--rs:10px;
-}
+:root{--bg:#f5efe4;--g2:#ebe2d2;--g3:#dccfb9;--r:14px;}
 html,body{background:var(--bg);}
-.scroll{background:transparent;}
-
-/* ── Menu bar: deep bush green, white text, friendly pills ── */
-.nav{background:linear-gradient(100deg,#123f24 0%,#14532d 45%,#1c6b3c 100%)!important;border-bottom:0!important;
-  box-shadow:0 2px 10px rgba(20,50,30,.25);height:62px;gap:5px;}
+.nav{background:#14532d!important;border-bottom:0!important;height:62px;gap:5px;}
 .logo{color:#ffffff!important;font-size:17px;display:flex;align-items:center;gap:8px;}
 .logo::before{content:"";width:30px;height:30px;border-radius:9px;flex-shrink:0;
-  background:#f5b93a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='21' cy='11' r='5' fill='%23fff7df'/%3E%3Cpath d='M0 25 L9 15 L15 21 L20 16 L32 26 V32 H0Z' fill='%2314532d'/%3E%3C/svg%3E") center/100% no-repeat;
-  box-shadow:inset 0 0 0 2px rgba(255,255,255,.35);}
+  background:#f5b93a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='21' cy='11' r='5' fill='%23fff7df'/%3E%3Cpath d='M0 25 L9 15 L15 21 L20 16 L32 26 V32 H0Z' fill='%2314532d'/%3E%3C/svg%3E") center/100% no-repeat;}
 .logo span{color:#fcd779!important;}
 .nb{color:#e7f3ea!important;font-size:11.5px;border-radius:999px!important;padding:9px 13px;letter-spacing:.4px;}
-.nb:not(.on):active{background:rgba(255,255,255,.14)!important;}
-.nb.on{background:#ffffff!important;color:#14532d!important;border:0!important;box-shadow:0 2px 8px rgba(0,0,0,.18);}
-#nb-back{background:rgba(255,255,255,.12)!important;color:#ffffff!important;border:1.5px solid rgba(255,255,255,.55)!important;}
+.nb.on{background:#ffffff!important;color:#14532d!important;border:0!important;}
+#nb-back{background:transparent!important;color:#ffffff!important;border:1.5px solid rgba(255,255,255,.55)!important;}
 #nav-user{color:#d9f0de!important;}
-#nav-logout{background:rgba(255,255,255,.95)!important;border:0!important;border-radius:12px!important;box-shadow:0 2px 8px rgba(0,0,0,.18);}
+#nav-logout{background:#ffffff!important;border:0!important;border-radius:12px!important;}
 #nav-user-name{color:#14532d!important;}
 @media (max-width:1120px){.nav{height:auto;}}
-
-/* ── Cards everywhere: softer corners, gentle lift instead of hard grey lines ── */
-.vc,.ov-stat,
-[style*="border:1px solid #e8e8e8"],
-[style*="border:2px solid var(--g2)"],
-[style*="border:1px solid var(--g2)"]{
-  border-color:var(--wt-line)!important;border-radius:16px!important;box-shadow:var(--wt-shadow);background-color:#fff;}
-.vc{border-width:1.5px;}
-[style*="background:#f5f5f7"]{background:var(--bg)!important;}
-[style*="border-right:1px solid #e0e0e0"]{border-right:1px solid var(--wt-line)!important;}
-[style*="border-bottom:1px solid #e0e0e0"]{border-bottom:1px solid var(--wt-line)!important;}
-/* dashed "nothing here" boxes read calmer */
-[style*="dashed"][style*="text-align:center"]{border-color:#e3d6bf!important;background:rgba(255,255,255,.45)!important;border-radius:14px!important;color:#a08c6a!important;}
-/* status icon tiles: rounder */
-[style*="width:36px;height:36px;border-radius:10px"],[style*="width:44px;height:44px;border-radius:10px"]{border-radius:14px!important;}
-/* search boxes */
-input[type=search],#ci-find{border-radius:14px!important;border:1.5px solid var(--g3)!important;background:#fff!important;box-shadow:var(--wt-shadow);}
-/* step tabs */
-.stg{border-radius:10px;}
-.fhdr{border-radius:16px;box-shadow:var(--wt-shadow);}
-
-/* ── Welcome strip on the Dashboard ── */
+.vc,.ov-stat{border-color:var(--g2);border-radius:14px;}
 .wt-hello{display:flex;align-items:center;gap:14px;}
-.wt-hello-sun{width:42px;height:42px;border-radius:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:24px;
-  background:linear-gradient(145deg,#fff3d1,#fde3a3);box-shadow:inset 0 0 0 1px rgba(214,150,30,.25);}
-.wt-hello-t{font-size:21px;font-weight:800;color:#1f2b22;letter-spacing:-.3px;line-height:1.1;}
+.wt-hello-sun{width:42px;height:42px;border-radius:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:24px;background:#fde9b5;}
+.wt-hello-t{font-size:21px;font-weight:800;color:#1f2b22;line-height:1.1;}
 .wt-hello-s{font-size:12.5px;font-weight:600;color:#7a6a4f;margin-top:3px;}
-.wt-top{background:linear-gradient(180deg,#fffdf8,#fbf6ec)!important;padding:12px 16px!important;}
-
-/* ── Sign-in, "Who are you?" and PIN screens: warm welcome instead of blank white ── */
-#login-screen,#device-login{
-  background:radial-gradient(1200px 500px at 50% -10%,#fff6de 0%,rgba(255,246,222,0) 60%),
-             linear-gradient(180deg,#f7f0e3 0%,#efe4cf 100%)!important;}
-#login-screen::after,#device-login::after{content:"";position:fixed;left:0;right:0;bottom:0;height:120px;pointer-events:none;z-index:-1;
-  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 120' preserveAspectRatio='none'%3E%3Cpath d='M0 80 Q150 30 300 70 T600 60 T900 75 T1200 55 V120 H0Z' fill='%23e6d5b3'/%3E%3Cpath d='M0 100 Q200 60 420 95 T820 90 T1200 85 V120 H0Z' fill='%23dcc59a'/%3E%3C/svg%3E") bottom/100% 100% no-repeat;}
-#ls-names button,#login-screen button[onclick^="lsPin"]{border-radius:16px!important;border:1.5px solid #e2d5bd!important;background:#fff!important;box-shadow:var(--wt-shadow);}
-#ls-names button:active,#login-screen button[onclick^="lsPin"]:active{background:#e9f6ec!important;border-color:#12803c!important;transform:scale(.97);}
-#device-login input,#login-screen input{border-radius:14px!important;}
+#login-screen,#device-login{background:#f3ead9!important;}
+#ls-names button{border-radius:16px!important;border:1.5px solid #e2d5bd!important;}
 </style>
 <script id="welcome-theme-js">
 (function(){
-  // Adds "Good morning, Peter" above the date on the Dashboard. Visual only.
-  function hello(){
-    var h=new Date().getHours();
-    var part=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
-    var icon=h<6||h>=19?'🌙':h<17?'☀️':'🌅';
-    var n='';try{n=(typeof APP_USER!=='undefined'&&APP_USER&&APP_USER.name)||'';}catch(e){}
-    return {t:part+(n?', '+n:'')+'!',icon:icon};
-  }
+  // "Good morning, Peter" above the date on the Dashboard. Runs only when the Dashboard is redrawn
+  // (not on every clock tick).
   function paint(){
     var clock=document.getElementById('ov-clock');
-    if(!clock||document.querySelector('.wt-hello'))return;
-    var row=clock.parentNode, dateEl=row.firstElementChild, bar=row.parentNode;
+    if(!clock)return;
+    var row=clock.parentNode;
+    if(row.querySelector('.wt-hello'))return;
+    var dateEl=row.firstElementChild;
     if(!dateEl||dateEl===clock)return;
-    var g=hello();
+    var h=new Date().getHours();
+    var n='';try{n=(typeof APP_USER!=='undefined'&&APP_USER&&APP_USER.name)||'';}catch(e){}
     var wrap=document.createElement('div');wrap.className='wt-hello';
-    wrap.innerHTML='<div class="wt-hello-sun">'+g.icon+'</div><div><div class="wt-hello-t"></div><div class="wt-hello-s"></div></div>';
-    wrap.querySelector('.wt-hello-t').textContent=g.t;
+    wrap.innerHTML='<div class="wt-hello-sun">'+(h<6||h>=19?'🌙':h<17?'☀️':'🌅')+'</div><div><div class="wt-hello-t"></div><div class="wt-hello-s"></div></div>';
+    wrap.querySelector('.wt-hello-t').textContent=(h<12?'Good morning':h<17?'Good afternoon':'Good evening')+(n?', '+n:'')+'!';
     wrap.querySelector('.wt-hello-s').textContent=(dateEl.textContent||'').toLowerCase().replace(/(^|\s)\S/g,function(c){return c.toUpperCase();});
     dateEl.style.display='none';
     row.insertBefore(wrap,row.firstChild);
-    if(bar)bar.classList.add('wt-top');
   }
   function start(){
     var ov=document.getElementById('page-ov');if(!ov)return;
-    new MutationObserver(paint).observe(ov,{childList:true,subtree:true});
+    // direct children only: the Dashboard redraw replaces them; the clock ticking deeper down is ignored
+    new MutationObserver(paint).observe(ov,{childList:true});
+    var inner=ov.firstElementChild; if(inner)new MutationObserver(paint).observe(inner,{childList:true});
     paint();
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
