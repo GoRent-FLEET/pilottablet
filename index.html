@@ -74,6 +74,8 @@ html,body{height:100%;overflow:hidden;max-width:100%;background:var(--bg);color:
 .fh-grid>*{box-sizing:border-box!important;height:36px!important;min-width:0!important;max-width:none!important;margin:0!important;padding:0 6px!important;display:flex!important;align-items:center;justify-content:flex-start;gap:4px;font-size:14px!important;font-weight:800!important;line-height:1!important;border-radius:7px!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis;background:#ffffff;color:#000000;border:1px solid rgba(11,58,34,.32);box-shadow:none!important;cursor:default;}
 .fh-grid>button,.fh-grid>a,.fh-grid>[onclick]{cursor:pointer;}
 .fh-grid .fh-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.fh-grid:not(.fh-open)>.fh-extra{display:none!important;}
+.fh-grid>.fh-more{justify-content:center!important;color:#0a5c2a!important;background:#e8f5e4!important;border:1px dashed #12803c!important;cursor:pointer!important;}
 .fh-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:6px;padding-top:6px;border-top:1px solid rgba(11,58,34,.15);}
 .fh-fuel{display:flex;align-items:center;gap:4px;margin-left:auto;}
 .fh-fuel button{min-width:46px;padding:6px 8px;border-radius:7px;font-size:13px;font-weight:900;cursor:pointer;touch-action:manipulation;}
@@ -6436,6 +6438,30 @@ function ciChecklistSummary(){
 // What must be done before the manager can close the return
 // Peter (management) may close a check-in even when some checks were not done.
 // He confirms which ones are missing and types why; both are stored on the check-in.
+// ── Vehicle header: show only dates, camping and warnings; the rest behind "ⓘ More" ──
+var FH_MORE=false;
+function fhKeep(el){
+  var t=el.textContent||'',st=(el.getAttribute('style')||'')+' '+el.innerHTML.slice(0,300);
+  if(/📅|🏕|🏨/.test(t))return true;
+  if(/⚠|EXPIRED|DUE|REMOTE|🚩|No disc/.test(t))return true;
+  if(el.classList.contains('disc-flash')||el.classList.contains('insp-flash')||el.querySelector('.disc-flash,.insp-flash'))return true;
+  if(/var\(--rl\)|var\(--al\)|#b91c1c/.test(el.getAttribute('style')||''))return true;
+  return false;
+}
+function fhCompact(){
+  document.querySelectorAll('.fh-grid:not([data-c])').forEach(function(g){
+    g.setAttribute('data-c','1');
+    var hide=[].slice.call(g.children).filter(function(c){return !fhKeep(c);});
+    if(hide.length<2)return;
+    hide.forEach(function(c){c.classList.add('fh-extra');});
+    var b=document.createElement('button');b.className='fh-more';b.type='button';
+    b.onclick=function(e){e.stopPropagation();FH_MORE=!FH_MORE;document.querySelectorAll('.fh-grid').forEach(function(x){x.classList.toggle('fh-open',FH_MORE);var m=x.querySelector('.fh-more');if(m)m.textContent=FH_MORE?'▲ Less':'ⓘ More ('+x.querySelectorAll('.fh-extra').length+')';});};
+    b.textContent=FH_MORE?'▲ Less':'ⓘ More ('+hide.length+')';
+    g.classList.toggle('fh-open',FH_MORE);
+    g.appendChild(b);
+  });
+}
+(function(){var q=false;new MutationObserver(function(){if(q)return;q=true;requestAnimationFrame(function(){q=false;try{fhCompact();}catch(e){}});}).observe(document.documentElement,{childList:true,subtree:true});})();
 function isPeter(){ return !!(APP_USER && APP_USER.name==='Peter'); }
 function ciPeterOverride(open){
   if(!isPeter()){toast('Not complete yet: '+open[0].lbl+' — only Peter can close it with checks missing','err');return false;}
