@@ -75,6 +75,7 @@ html,body{height:100%;overflow:hidden;max-width:100%;background:var(--bg);color:
 /* STEP TABS — 5 */
 .stg-bar{display:grid;gap:3px;margin-bottom:14px;}
 .stg-bar.s5{grid-template-columns:repeat(5,1fr);}
+.stg-bar.s6{grid-template-columns:repeat(6,1fr);}
 .stg-bar.s8{grid-template-columns:repeat(8,1fr);}
 .stg-bar.s7{grid-template-columns:repeat(7,1fr);}
 .stg-bar.s2{grid-template-columns:1fr 1fr;}

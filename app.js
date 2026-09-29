@@ -2525,6 +2525,7 @@ function coWhatsLeft(){
   try{
     if(!co||!co.v)return '';
     if(co._done)return '<div style="margin:-10px 0 8px;padding:9px 14px;border-radius:9px;background:var(--gr);border:2px solid var(--gb);font-size:13px;font-weight:900;color:var(--gb);">\u2705 CHECK-OUT COMPLETE \u2014 '+_bx(co.fn)+' has gone out</div>';
+    return '';   // what is still needed is shown on the Handover step, next to the Release button
     var left=[];
     if(!handoverClosed())left.push('the client\u2019s signature on the handover');
     if(!co.mgmtSig)left.push('the manager\u2019s sign-off to release the vehicle');
@@ -2538,6 +2539,7 @@ function coWhatsLeft(){
   }catch(e){return '';}
 }
 function drawCO(){
+  try{coAutoWho();}catch(e){}
   sigScope('co:'+((co&&co.fn)||''));   // ink belongs to this vehicle's check-out only
   // Safety guard
   if(!co||!co.v){
@@ -2547,11 +2549,11 @@ function drawCO(){
   }
   if(typeof coStep==='undefined') coStep=0;
   // Step progress bar
-  const bar=CO_STEPS.filter(function(s){return s.n!==1;}).map(s=>{
+  const bar=CO_STEPS.filter(function(s){return s.n!==1&&s.n!==7;}).map(s=>{
     const done=(s.n===0&&coCleanDone())||(s.n===1&&!!co.bonnetDone)||
                (s.n===2&&!!co.equipSig)||(s.n===3&&!!co.mechDone)||
                (s.n===4&&coInspDone())||(s.n===5&&co.contractSigned)||
-               (s.n===6&&handoverClosed())||(s.n===7&&!!co.mgmtSig);
+               (s.n===6&&handoverClosed()&&!!(co.mgmtSig||co.mgmtCleared))||(s.n===7&&!!co.mgmtSig);
     // Who completed this step — or who closed it without the usual proof
     const ovr=stepOverride(s.n);
     const stepBy=ovr?('closed by '+ovr.by):((s.n===0?co.prepBy:s.n===1?co.bonnetBy:s.n===2?co.equipBy:
@@ -2564,7 +2566,7 @@ function drawCO(){
       ${done?`<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;">
         <span style="font-size:42px;line-height:1;color:#3ddc84;font-weight:900;opacity:.9;text-shadow:0 2px 6px rgba(0,0,0,.9);">✓</span></div>`:''}
       <div style="font-size:13px;line-height:1.2;position:relative;z-index:1;${done?'opacity:.25;':''}">${s.ico}</div>
-      <div style="font-size:8px;font-weight:800;margin-top:1px;line-height:1.1;position:relative;z-index:1;${done?'opacity:.6;':''}">${s.lbl}</div>
+      <div style="font-size:12px;font-weight:800;margin-top:2px;line-height:1.15;position:relative;z-index:1;${done?'opacity:.6;':''}">${s.n===6?'Handover & release':s.lbl}</div>
     </div>`;
   }).join('');
 
@@ -2578,8 +2580,7 @@ function drawCO(){
     else if(coStep===3){_stepLine=5; body=coStepMech();}    // Mechanical
     else if(coStep===4){_stepLine=6; body=coStep4_dmg();}   // Vehicle inspection
     else if(coStep===5){_stepLine=7; body=coStep1()+'<div style="height:14px"></div>'+coStep2();} // Client ID + the contract itself
-    else if(coStep===6){_stepLine=8; body=coStep5_client();} // Handover
-    else{_stepLine=9; body=coStep6_mgmt();}                 // Management
+    else{_stepLine=8; if(coStep>6)coStep=6; body=coStep5_client();} // Handover & release (Management is part of it now)
     _stepLine=9;
     if(!body||body.length<10) body='<div style="padding:20px;color:orange;">Step '+coStep+' returned empty</div>';
   }catch(stepErr){
@@ -2605,8 +2606,7 @@ function drawCO(){
   var _backBtn=coStep>0?'<button class="btn s" style="flex:1" onclick="coGoStep(coStep-1)">← Back</button>':'';
   // The Handover page used to have only "← Back", so staff could not find the way on to
   // Management, where the Complete Check-Out button lives.
-  var _nextBtn=coStep<6?'<button class="btn g" style="flex:2" onclick="coGoStep(coStep+1)">Next →</button>'
-    :coStep===6?'<button class="btn g" style="flex:2" onclick="coGoStep(7)">'+(co.mgmtSig?'Next → Management to finish ✅':'Next → Management')+'</button>':'';
+  var _nextBtn=coStep<6?'<button class="btn g" style="flex:2" onclick="coGoStep(coStep+1)">Next →</button>':'';
   document.getElementById('co-body').innerHTML=
     '<div class="chg-veh-bar">'
       +'<button onclick="coChangeVehicle()" style="padding:10px 18px;border-radius:22px;border:2px solid var(--gb);background:var(--g1);color:var(--tx);font-size:15px;font-weight:900;cursor:pointer;">← Choose another vehicle</button>'
@@ -2665,7 +2665,7 @@ function drawCO(){
       })()+
       (co._discEdit?'<div style="padding-top:8px;"><div id="lic-banner-out">'+licDiscBanner(_cov,'out')+'</div></div>':'')+
     '</div>'+
-    '<div class="stg-bar s7">'+bar+'</div>'+
+    '<div class="stg-bar s6">'+bar+'</div>'+
     coWhatsLeft()+
     (function(){
       var by=[['🧹',co.prepBy],['📦',co.equipBy||co.prepBy],['🔩',co.mechCheckBy],['🔍',co.inspBy],['📋',co.contractBy],['🤝',co.mechBy],['👔',co.mgmtBy]]
@@ -2679,7 +2679,7 @@ function drawCO(){
     '<div class="btn-row">'+_backBtn+_nextBtn+'</div>';
   setTimeout(()=>['co-p-sig','co-c-sig','co-m-sig'].forEach(initSig),80);
   if(coStep===5&&!co.contractBy)setTimeout(ctWhoModal,250);
-  if(coStep===6&&!co.mechBy)setTimeout(hoWhoModal,250);
+  if(coStep===6&&!co.mechBy)setTimeout(hoWhoModal,250);   // only when the signed-in person is not a handover person
   // damage marking grid: build it whenever the diagram is on screen (handover step)
   setTimeout(()=>{if(document.getElementById('ins-g-lhs')){VIEWS.forEach(v=>buildIG(v));renderIS();}},100);
 }
@@ -2694,7 +2694,7 @@ function coGoStep(t){
     if(!isNav||n<0||n>7){toast('🔒 This step is not available for '+(APP_USER?APP_USER.name:'you'),'err');return;}
     t=n;
   }
-  coStep=Math.max(0,Math.min(7,t));drawCO();
+  coStep=Math.max(0,Math.min(6,t));drawCO();
 }
 
 // ── STEP 0: Prep & Pack ──────────────────────────────────────────
@@ -2934,12 +2934,27 @@ function secBtn(which,idx){
     +'">'+(all?'✓ All good':'✓ All good ('+(labels.length-done)+')')+'</button>';
 }
 function faultsOnlyNote(what){
+  return '';
   var who=(APP_USER&&APP_USER.name)||'you';
   return '<div style="display:flex;gap:9px;align-items:flex-start;background:var(--sg);border-left:4px solid var(--se);border-radius:8px;padding:8px 12px;margin-bottom:10px;">'
     +'<span style="font-size:17px;line-height:1.2;">\uD83D\uDC49</span>'
     +'<div style="font-size:13px;font-weight:700;color:var(--tx);line-height:1.45;">'
     +'Tap <span style="color:var(--se);">\u2713 All good</span> on a heading to confirm that whole section at once. Tap a single item only when it is wrong.'
     +'<div style="font-weight:600;color:var(--g5);margin-top:2px;">'+_bx(what)+' \u2014 every item you confirm is recorded against <b>'+_bx(who)+'</b>.</div></div></div>';
+}
+// The signed-in person is who does the step. The name picker only opens on "change".
+var CO_WHO_EDIT={};
+function coAutoWho(){
+  if(!co||!co.v||!APP_USER)return;var me=APP_USER.name;
+  if(coStep===3&&!co.mechCheckBy&&canDoStep(3))co.mechCheckBy=me;
+  if(coStep===4&&!co.inspBy&&canDoStep(4)){co.inspBy=me;if(!co.mechBy&&HANDOVER_STAFF.indexOf(me)>=0)co.mechBy=me;}
+  if(coStep===5&&!co.contractBy&&CONTRACT_STAFF.indexOf(me)>=0)co.contractBy=me;
+  if(coStep===6&&!co.mechBy&&HANDOVER_STAFF.indexOf(me)>=0)co.mechBy=me;
+}
+function whoMini(key,name,label,full){
+  if(!name||CO_WHO_EDIT[key])return full;
+  return '<div style="display:flex;align-items:center;gap:8px;margin:0 0 10px;font-size:14px;font-weight:800;color:var(--g6);">👤 '+_bx(label)+': <span style="color:var(--tx);">'+_bx(name)+'</span>'
+    +'<button onclick="CO_WHO_EDIT[\''+key+'\']=1;drawCO()" style="padding:3px 10px;border-radius:7px;border:1px solid var(--g3);background:var(--g0);color:var(--g5);font-size:12px;font-weight:800;cursor:pointer;">change</button></div>';
 }
 function coPst(l){var v=co&&co.prepItems&&co.prepItems[l];return (v&&v.st!==undefined?v.st:v)||'';}
 function coCleanDone(){var it=coCleanItems();return it.length>0&&it.every(function(l){return !!coPst(l);});}
@@ -3061,6 +3076,7 @@ function coStepMech(){
   var who='<div class="who-box"><div class="who-lbl">👤 Who is checking the mechanics?</div>'
     +'<select id="co-mech-nm" onchange="co.mechCheckBy=this.value;saveCOProgress();drawCO()" style="color-scheme:light;width:100%;padding:12px 14px;font-size:16px;font-weight:800;background:var(--g0);border:2px solid '+(co.mechCheckBy?'var(--gb)':'var(--am)')+';border-radius:var(--rs);color:var(--tx);">'
     +'<option value="">— Select your name —</option>'+names.map(function(n){return '<option'+(n===co.mechCheckBy?' selected':'')+'>'+n+'</option>';}).join('')+'</select></div>';
+  who=whoMini('mech',co.mechCheckBy,'Mechanics checked by',who);
   var rows='';
   for(var i=0;i<L_MECH.length;i++){
     var item=L_MECH[i];
@@ -3268,9 +3284,9 @@ function ctWhoClose(){var m=document.getElementById('ct-who-modal');if(m)m.remov
 function ctWhoPick(n){(co.contract=co.contract||{});co.contractBy=n;saveCOProgress();ctWhoClose();drawCO();toast('Contract by '+n,'ok');}
 function coContractWho(){
   if(!co.contractBy&&APP_USER&&CONTRACT_STAFF.indexOf(APP_USER.name)>=0)co.contractBy=APP_USER.name;
-  return '<div class="who-box"><div class="who-lbl">👤 Who is doing the contract?</div>'
+  return whoMini('ct',co.contractBy,'Contract by','<div class="who-box"><div class="who-lbl">👤 Who is doing the contract?</div>'
     +'<select id="co-ct-nm" onchange="co.contractBy=this.value;this.style.borderColor=this.value?\'var(--gb)\':\'var(--am)\';saveCOProgress()" style="color-scheme:light;width:100%;padding:12px 14px;font-size:16px;font-weight:800;background:var(--g0);border:2px solid '+(co.contractBy?'var(--gb)':'var(--am)')+';border-radius:var(--rs);color:var(--tx);">'
-    +'<option value="">— Select your name —</option>'+CONTRACT_STAFF.map(function(n){return '<option'+(n===co.contractBy?' selected':'')+'>'+n+'</option>';}).join('')+'</select></div>';
+    +'<option value="">— Select your name —</option>'+CONTRACT_STAFF.map(function(n){return '<option'+(n===co.contractBy?' selected':'')+'>'+n+'</option>';}).join('')+'</select></div>');
 }
 function coStep1(){
   // the booking already says an airport transfer was arranged: start on 'somewhere else'
@@ -4573,6 +4589,7 @@ function coStep4_dmg(){
   var who='<div class="who-box"><div class="who-lbl">👤 Who is doing the inspection / handover?</div>'
     +'<select id="co-insp-nm" onchange="co.inspBy=this.value;if(this.value&&!co.mechBy)co.mechBy=this.value;saveCOProgress();drawCO()" style="color-scheme:light;width:100%;padding:12px 14px;font-size:16px;font-weight:800;background:var(--g0);border:2px solid '+(co.inspBy?'var(--gb)':'var(--am)')+';border-radius:var(--rs);color:var(--tx);">'
     +'<option value="">— Select your name —</option>'+names.map(function(n){return '<option'+(n===co.inspBy?' selected':'')+'>'+n+'</option>';}).join('')+'</select></div>';
+  who=whoMini('insp',co.inspBy,'Inspection by',who);
   var DOCS=[['veh','Vehicle docs','Licence disc valid, insurance papers present']];
   if(co.v.xb) DOCS.push(['xb','Cross-border docs','Letter & papers for '+co.v.xb]);
   var base='padding:8px 12px;border-radius:8px;font-size:13px;font-weight:900;cursor:pointer;touch-action:manipulation;min-width:64px;';
@@ -4792,8 +4809,8 @@ async function overrideClientSig(){
   try{uploadPhotos(co.dmgPhotos,co.fn,co.clientName||co.v.cl,'damage-out');}catch(e){}
   try{saveCOProgress();}catch(e){}
   toast('⚠ Closed without a signature — recorded against '+co.sigOverride.by,'err');
-  if(canDoStep(7))coStep=7;
   drawCO();
+  setTimeout(function(){var r=document.querySelector('#cos .btn.g[onclick="coRelease()"]');if(r&&r.scrollIntoView)r.scrollIntoView({behavior:'smooth',block:'center'});},200);
 }
 // the handover counts as done when the client signed OR Peter overrode it
 function handoverClosed(){ return !!(co&&(co.custSig||co.sigOverride)); }
@@ -4807,8 +4824,9 @@ function signHandover(){
   co.mechBy=(function(){var _e=document.getElementById('co-h-nm');return _e?_e.value:undefined;})()||co.mechBy;
   uploadPhotos(co.dmgPhotos,co.fn,co.clientName||co.v.cl,'damage-out');
   // Handover signed: go on to Management sign-off
-  if(canDoStep(7)){toast('Handover signed ✅','ok');coStep=7;}else{toast('Handover signed ✅ — management sign-off next','ok');}
+  toast('Handover signed ✅ — now Release vehicle','ok');
   drawCO();
+  setTimeout(function(){var r=document.querySelector('#cos .btn.g[onclick="coRelease()"]');if(r&&r.scrollIntoView)r.scrollIntoView({behavior:'smooth',block:'center'});},200);
 }
 
 // ── STEP 4: Management clearance ─────────────────────────────────
@@ -4908,12 +4926,13 @@ function coStep5_client(){
 
   return `
   ${hoTopRow()}
-  ${qcUncheckedHTML('Still not checked from the earlier steps')}
+  ${whoMini('ho',co.mechBy,'Handover by','')}
+  ${coUncheckedLine()}
   ${dmgSectionHTML}
   <div class="step-intro">
     <div class="step-ico">🤝</div>
     <div>
-      <div class="step-title">Step 6 — Client Handover</div>
+      <div class="step-title">Step 6 — Handover &amp; release</div>
       <div class="step-sub">${v.cl} · ${co.fn} · ${v.reg} — go through each section with the client</div>
     </div>
   </div>
@@ -4962,32 +4981,6 @@ function coStep5_client(){
     </div>`;
   }).join('')}
 
-  <!-- Fuel + vehicle condition summary -->
-  <div style="background:var(--g1);border:2px solid var(--gb);border-radius:var(--rs);padding:12px 14px;margin-bottom:12px;">
-    <div style="font-size:14px;font-weight:800;color:var(--se);margin-bottom:8px;">⛽ Fuel & Condition at Departure</div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
-      <div style="background:var(--g0);border-radius:7px;padding:8px;text-align:center;">
-        <div style="font-size:13px;color:var(--g5);text-transform:uppercase;margin-bottom:3px;">Fuel level</div>
-        <select onchange="co.fuelOut=this.value;saveCOProgress();drawCO()" style="color-scheme:light;width:100%;padding:6px;font-size:15px;font-weight:800;text-align:center;border-radius:6px;border:2px solid var(--gb);background:var(--g1);color:var(--se);">
-          ${['Empty','1/4','1/2','3/4','Full'].map(f=>`<option${(co.fuelOut||'Full')===f?' selected':''}>${f}</option>`).join('')}
-        </select>
-        <div style="font-size:13px;color:var(--g5);margin-top:3px;">must return same</div>
-      </div>
-      <div style="background:var(--g0);border-radius:7px;padding:8px;text-align:center;">
-        <div style="font-size:13px;color:var(--g5);text-transform:uppercase;margin-bottom:3px;">ODO out</div>
-        <input type="number" inputmode="numeric" pattern="[0-9]*" value="${co.odometerOut||v.odo||''}" placeholder="km on the dashboard"
-          onchange="co.odometerOut=+this.value||0;saveCOProgress();drawCO()"
-          style="width:100%;padding:6px;font-size:15px;font-weight:800;text-align:center;border-radius:6px;border:2px solid ${(co.odometerOut||v.odo)?'var(--g3)':'var(--am)'};background:var(--g1);color:var(--tx);">
-        <div style="font-size:13px;color:var(--g5);margin-top:3px;">km — tap to correct</div>
-      </div>
-      <div style="background:var(--g0);border-radius:7px;padding:8px;text-align:center;">
-        <div style="font-size:13px;color:var(--g5);text-transform:uppercase;margin-bottom:3px;">Equipment</div>
-        <div style="font-size:16px;font-weight:800;color:var(--se);">${equipSummary.filter(e=>e.st==='ok').length}</div>
-        <div style="font-size:13px;color:var(--g5);">items issued</div>
-      </div>
-    </div>
-  </div>
-
   <!-- Equipment issued tags -->
   ${equipSummary.length?`
   <div style="background:var(--g1);border:1px solid var(--g2);border-radius:var(--rs);padding:10px 14px;margin-bottom:12px;">
@@ -5021,7 +5014,32 @@ function coStep5_client(){
         </button>
         ${overrideSigBtn()}`}
     </div>
-  </div>`;
+  </div>
+  ${coReleaseBox()}`;
+}
+function coUncheckedLine(){
+  var n=coInspIssues().filter(function(i){return i.status==='unchecked';}).length;
+  if(!n)return '';
+  return '<div style="display:flex;align-items:center;gap:10px;background:var(--rg);border:2px solid var(--re);border-radius:var(--rs);padding:10px 14px;margin-bottom:12px;font-size:14px;font-weight:900;color:var(--rl);">'
+    +'🔴 '+n+' item'+(n===1?'':'s')+' from the earlier steps not ticked yet'
+    +'<button onclick="coGoStep(4)" style="margin-left:auto;padding:6px 12px;border-radius:8px;border:2px solid var(--re);background:#fff;color:var(--rl);font-size:13px;font-weight:900;cursor:pointer;">Tick them →</button></div>';
+}
+// Management sign-off is part of the handover now: the manager doing it taps Release.
+function coReleaseBox(){
+  if(co._done)return '';
+  var ready=handoverClosed();
+  var me=(APP_USER&&APP_USER.name)||'';
+  if(!ready)return '<div style="text-align:center;font-size:13px;color:var(--g5);margin:6px 0 10px;">When the client has signed, <b>Release vehicle</b> appears here.</div>';
+  if(!canViewReports())return '<div class="al warn" style="text-align:center;">👔 A manager releases the vehicle — ask Joe, Simon or Peter</div>';
+  return '<div style="background:var(--g1);border:3px solid var(--gb);border-radius:var(--r);padding:14px;margin-bottom:10px;">'
+    +'<button class="btn g" style="font-size:18px;padding:18px;" onclick="coRelease()">✅ Release vehicle</button>'
+    +'<div style="font-size:12px;color:var(--g5);margin-top:6px;text-align:center;">Released by '+_bx(me)+' · anything still open is shown before it goes</div></div>';
+}
+function coRelease(){
+  if(!handoverClosed()){toast('The client must sign the handover first','err');return;}
+  co.mgmtBy=(APP_USER&&APP_USER.name)||co.mgmtBy||'';co.mgmtAt=now();co.mgmtCleared=true;
+  try{saveCOProgress();}catch(e){}
+  coFinishCheck();
 }
 
 // Management ticks a whole section at once; the items can still be opened one by one
@@ -5234,7 +5252,7 @@ function coReopen(step){
   co._done=false;
   if(!canDoStep(step)){toast('You do not have access to that step','err');return;}
   coStep=step;goPage('co');drawCO();
-  toast('Correct what is needed, then finish again at Step 7 — Management','ok');
+  toast('Correct what is needed, then tap Release vehicle on the Handover step','ok');
 }
 // Everything still outstanding, checked before the check-out is finalised
 function coMissing(){
@@ -5318,7 +5336,7 @@ async function completeCO(){
     customer_signed_at:(co.custSig||co.sigOverride)?new Date().toISOString():null,
     signature_override:co.sigOverride?(co.sigOverride.by+' · '+co.sigOverride.at+' · '+co.sigOverride.reason):null,
     contract_override:co._ctOverride?(co._ctOverride.by+' · '+co._ctOverride.at+' · waived: '+co._ctOverride.items.join('; ')+' · reason: '+co._ctOverride.reason):null,
-    manager_name:co.mgmtBy, manager_signed_at:co.mgmtSig?new Date().toISOString():null,
+    manager_name:co.mgmtBy, manager_signed_at:(co.mgmtSig||co.mgmtCleared)?new Date().toISOString():null,
     odo_out:co.odometerOut||co.v.odo, unchecked_prep:uncPrep, unchecked_mech:uncMech,
     damage_panels:co.dmgd, prep_checklist:co.prepItems||{}, mech_checklist:co.mechItems||{}, mech_by:co.mechCheckBy||null, mech_who:co.mechWho||{}, return_time:co.returnTime||null,
     return_place:(co.contract&&co.contract.return_location)||null, return_address:(co.contract&&co.contract.return_address)||null, return_place_time:(co.contract&&co.contract.return_place_time)||null, doc_checks:co.docItems||{},
