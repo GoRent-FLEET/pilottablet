@@ -1294,14 +1294,11 @@ async function forceCompleteCO(fn,ev){
   var v=pickVeh(fn,'out');
   if(!v){toast('Vehicle '+fn+' not found','err');return;}
   if(coIsDone(v)){toast(fn+' is already completed','ok');return;}
-  if(!confirm('CLOSE OFF '+fn+' — '+(v.cl||'')+'\n\n'
-    +'This marks the check-out finished WITHOUT the tablet process.\n'
-    +'There will be no signed contract, no vehicle checks and no handover document on file for it.\n\n'
-    +'Only do this for a vehicle that has already gone out and will never be captured properly.'))return;
-  var why=prompt('Why is '+fn+' being closed off? (this is recorded against it)','Vehicle already collected — not captured on the tablet');
-  if(why===null)return;
-  why=String(why||'').trim();
-  if(!why){toast('A reason is needed','err');return;}
+  var _a=await askBox({title:'Close off '+fn+' — '+(v.cl||''),danger:true,ok:'Close off',
+    text:'This marks the check-out finished WITHOUT the tablet process. There will be no signed contract, no vehicle checks and no handover document on file.\n\nOnly for a vehicle that has already gone out and will never be captured properly.',
+    reason:'Why? (recorded against it)',reasonDefault:'Vehicle already collected — not captured on the tablet'});
+  if(!_a.ok)return;
+  var why=_a.reason;
   var now=new Date().toISOString();
   try{
     var res=await SB.from('checkouts').insert({
@@ -1330,11 +1327,11 @@ async function forceCompleteCI(fn,bid,ev){
   var v=(FLEET||[]).find(function(x){return x.fn===fn&&(!bid||String(x.bid||'')===String(bid));})||pickVeh(fn,'in');
   if(!v){toast('Vehicle '+fn+' not found','err');return;}
   if(ciIsDone(v)){toast(fn+' is already checked in','ok');return;}
-  if(!confirm('CLOSE OFF CHECK-IN '+fn+' — '+(v.cl||'')+'\n\nThis marks the return finished WITHOUT completing the tablet check-in.\nAnything not captured (km, fuel, damage, equipment, signatures) will be missing from the record.'))return;
-  var why=prompt('Why is the check-in of '+fn+' being closed off? (this is recorded against it)','');
-  if(why===null)return;
-  why=String(why||'').trim();
-  if(!why){toast('A reason is needed','err');return;}
+  var _a=await askBox({title:'Close off check-in '+fn+' — '+(v.cl||''),danger:true,ok:'Close off',
+    text:'This marks the return finished WITHOUT completing the tablet check-in. Anything not captured (km, fuel, damage, equipment, signatures) will be missing from the record.',
+    reason:'Why? (recorded against it)'});
+  if(!_a.ok)return;
+  var why=_a.reason;
   var who=(APP_USER&&APP_USER.name)||'Peter',now=new Date().toISOString();
   try{
     var res=await SB.from('checkins').insert({booking_id:bkKey(v),fleet_no:v.fn,client:v.cl||'',manager_name:who,
@@ -1363,8 +1360,9 @@ function wipeTabletBtn(){
 }
 async function wipeThisTablet(){
   if(!canDelete('this tablet’s saved work'))return;
-  if(!confirm('CLEAR THIS TABLET\n\nEverything this tablet is holding is thrown away:\n • every check-out and check-in in progress\n • ticks, photos, signatures and damage marks not yet sent\n • the signed-in staff member\n\nBookings and vehicles are NOT touched — they come from the Fleet Manager.\n\nThis cannot be undone. Clear it now?'))return;
-  if(!confirm('Last check.\n\nAnything on this tablet that has not reached the server yet will be lost.\n\nClear this tablet?'))return;
+  var _a=await askBox({title:'Clear this tablet',danger:true,ok:'Clear this tablet',
+    text:'Everything this tablet is holding is thrown away:\n • every check-out and check-in in progress\n • ticks, photos, signatures and damage marks not yet sent\n • the signed-in staff member\n\nBookings and vehicles are NOT touched. Anything not yet sent to the server is lost. This cannot be undone.'});
+  if(!_a.ok)return;
   banner('Clearing this tablet…');
   try{if(_autoTimer)clearInterval(_autoTimer);}catch(e){}
   try{_drStarted=true;}catch(e){}            // stop the sync sending anything else up
@@ -1381,8 +1379,8 @@ async function wipeThisTablet(){
   try{sessionStorage.clear();}catch(e){}
   try{ if(_drDB){var db=await _drDB;db.close();} indexedDB.deleteDatabase('gorent_work'); }catch(e){}
   hideBanner();
-  alert('This tablet is clear.\n\nIt will reload now and ask for a PIN.');
-  location.reload();
+  toast('This tablet is clear — reloading','ok');
+  setTimeout(function(){location.reload();},1200);
 }
 function canDelete(what){
   if(isAdmin())return true;
@@ -5314,15 +5312,15 @@ function anyOverride(){
 // Peter finalising a contract that is not complete. Same rules as the handover
 // override: only Peter, a reason is required, nothing is invented, and what was
 // waived is written onto the contract and into the office record.
-function overrideContractMissing(){
+async function overrideContractMissing(){
   if(!isAdmin()){toast('\uD83D\uDD12 Only Peter can finalise an incomplete contract','err');return;}
   var miss=ctMissing(co.contract)||[];
   if(!miss.length){toast('Nothing outstanding','ok');return;}
-  var why=prompt('FINALISE WITHOUT THESE '+miss.length+' ITEM(S)\n\n \u2022 '+miss.join('\n \u2022 ')
-    +'\n\nThis is recorded against your name, on the contract and in the office record.\n\nWhy are these being waived?');
-  if(why===null)return;
-  why=String(why||'').trim();
-  if(why.length<4){toast('Give a short reason \u2014 it goes on the record','err');return;}
+  var _a=await askBox({title:'Finalise without these '+miss.length+' item(s)',danger:true,ok:'Finalise',
+    text:' \u2022 '+miss.join('\n \u2022 ')+'\n\nRecorded against your name, on the contract and in the office record.',
+    reason:'Why are these being waived?',minReason:4});
+  if(!_a.ok)return;
+  var why=_a.reason;
   co._ctOverride={by:(APP_USER&&APP_USER.name)||'Peter',at:now(),reason:why,items:miss.slice(),n:miss.length};
   co.contract=co.contract||{};
   co.contract.override_by=co._ctOverride.by;
@@ -5338,13 +5336,14 @@ function overrideSigBtn(){
   return '<button onclick="overrideClientSig()" style="margin-top:10px;width:100%;padding:13px;border-radius:10px;font-size:14px;font-weight:900;cursor:pointer;'
     +'border:2px dashed var(--am);background:var(--ag);color:var(--al);">🔓 Peter only — close without the client signature</button>';
 }
-function overrideClientSig(){
+async function overrideClientSig(){
   if(!isAdmin()){toast('🔒 Only Peter can close a handover without a signature','err');return;}
   if(co.custSig){toast('The client has already signed','ok');return;}
-  var why=prompt('CLOSE WITHOUT A CLIENT SIGNATURE\n\nThis is recorded against your name and appears on the handover document and in the office record.\n\nWhy is the client not signing?');
-  if(why===null)return;
-  why=String(why||'').trim();
-  if(why.length<4){toast('Give a short reason — it goes on the record','err');return;}
+  var _a=await askBox({title:'Close without a client signature',danger:true,ok:'Close without signature',
+    text:'Recorded against your name, on the handover document and in the office record.',
+    reason:'Why is the client not signing?',minReason:4});
+  if(!_a.ok)return;
+  var why=_a.reason;
   co.sigOverride={by:(APP_USER&&APP_USER.name)||'Peter',at:now(),reason:why};
   co.overrides=co.overrides||{}; co.overrides[6]=co.sigOverride;
   co.custAt=co.sigOverride.at;
@@ -5845,7 +5844,7 @@ function coFinishCheck(refresh){
   document.body.appendChild(box);
 }
 async function completeCO(){
-  if(!drOnline()){alert('📶 No internet\n\nEverything captured is kept safe on this device and is sent to the office automatically once connected.\n\nFinish the check-out when the internet is back.');return;}
+  if(!drOnline()){askBox({title:'📶 No internet',cancel:false,ok:'OK',text:'Everything captured is kept safe on this device and sent to the office automatically once connected.\n\nFinish the check-out when the internet is back.'});return;}
   var _stBefore=co.v.st;
   co._done=true;
   try{localStorage.removeItem(ipKey(co.fn));}catch(e){}
@@ -6476,18 +6475,44 @@ function fhCompact(){
 }
 setInterval(function(){try{flashNext();}catch(e){}},1500); // also after scrolling/tab switches
 (function(){var q=false;new MutationObserver(function(){if(q)return;q=true;requestAnimationFrame(function(){q=false;try{fhCompact();}catch(e){}try{flashNext();}catch(e){}});}).observe(document.documentElement,{childList:true,subtree:true});})();
+// ── One tablet-sized box instead of the browser's confirm()/prompt()/alert() ──
+// askBox({title,text,ok,cancel,reason:'label',reasonDefault,minReason,danger}) → Promise<{ok,reason}>
+function askBox(o){
+  o=o||{};
+  return new Promise(function(done){
+    var old=document.getElementById('ask-box');if(old)old.remove();
+    var w=document.createElement('div');w.id='ask-box';
+    w.setAttribute('style','position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;');
+    var col=o.danger?'#b91c1c':'#12803c';
+    w.innerHTML='<div style="background:#fff;color:#111;border-radius:16px;max-width:520px;width:100%;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.4);border-top:6px solid '+col+';">'
+      +'<div style="font-size:19px;font-weight:900;margin-bottom:8px;color:'+col+';">'+_bx(o.title||'')+'</div>'
+      +'<div style="font-size:15px;line-height:1.45;white-space:pre-line;color:#333;">'+_bx(o.text||'')+'</div>'
+      +(o.reason?'<label style="display:block;font-size:13px;font-weight:800;margin:14px 0 4px;color:#555;">'+_bx(o.reason)+'</label><textarea id="ask-why" style="width:100%;box-sizing:border-box;min-height:70px;font-size:16px;padding:10px;border-radius:10px;border:2px solid #cbd5e1;">'+_bx(o.reasonDefault||'')+'</textarea><div id="ask-err" style="color:#b91c1c;font-size:13px;font-weight:800;min-height:18px;"></div>':'')
+      +'<div style="display:flex;gap:10px;margin-top:14px;">'
+        +(o.cancel===false?'':'<button id="ask-no" style="flex:1;padding:16px;border-radius:12px;border:2px solid #cbd5e1;background:#f8fafc;font-size:16px;font-weight:800;cursor:pointer;">'+_bx(o.cancel||'Cancel')+'</button>')
+        +'<button id="ask-yes" style="flex:1.4;padding:16px;border-radius:12px;border:none;background:'+col+';color:#fff;font-size:16px;font-weight:900;cursor:pointer;">'+_bx(o.ok||'OK')+'</button>'
+      +'</div></div>';
+    document.body.appendChild(w);
+    var t=w.querySelector('#ask-why');if(t)setTimeout(function(){try{t.focus();}catch(e){}},50);
+    var no=w.querySelector('#ask-no');if(no)no.onclick=function(){w.remove();done({ok:false,reason:''});};
+    w.querySelector('#ask-yes').onclick=function(){
+      var r=t?String(t.value||'').trim():'';
+      if(t&&r.length<(o.minReason||1)){w.querySelector('#ask-err').textContent='A reason is needed — it goes on the record';return;}
+      w.remove();done({ok:true,reason:r});
+    };
+  });
+}
 function isPeter(){ return !!(APP_USER && APP_USER.name==='Peter'); }
-function ciPeterOverride(open){
+async function ciPeterOverride(open){
   if(!isPeter()){toast('Not complete yet: '+open[0].lbl+' — only Peter can close it with checks missing','err');return false;}
   if(ci.forceClosedBy)return true;
   var who=(APP_USER&&APP_USER.name)||'Peter';
-  if(!confirm('CLOSE WITH CHECKS MISSING\n\nNot done yet:\n • '+open.map(function(x){return x.lbl;}).join('\n • ')+'\n\nClose this check-in anyway? It is recorded as closed off by '+who+'.'))return false;
-  var why=prompt('Why is it closed with checks missing? (recorded on the check-in)','');
-  if(why===null)return false;
-  why=String(why||'').trim();
-  if(!why){toast('A reason is needed','err');return false;}
+  var _a=await askBox({title:'Close with checks missing',danger:true,ok:'Close check-in',
+    text:'Not done yet:\n • '+open.map(function(x){return x.lbl;}).join('\n • ')+'\n\nIt is recorded as closed off by '+who+'.',
+    reason:'Why is it closed with checks missing?'});
+  if(!_a.ok)return false;
   ci.forceClosedBy=who;ci.forceClosedAt=new Date().toISOString();
-  ci.forceClosedReason=why+' — not done: '+open.map(function(x){return x.lbl;}).join('; ');
+  ci.forceClosedReason=_a.reason+' — not done: '+open.map(function(x){return x.lbl;}).join('; ');
   return true;
 }
 // ⚡ OVERRIDE (header, next to Peter's sign-in): Peter closes the open check-in from any step.
@@ -6512,7 +6537,7 @@ async function peterOverrideCI(){
   if(!retSt['WiFi device'])open.unshift({lbl:'WiFi device returned? (Step 1)'});
   if(!open.length)open=[{lbl:'Management sign-off (Step 5)'}];
   ci.forceClosedBy=null;           // always ask Peter to confirm + give a reason for this override
-  if(!ciPeterOverride(open))return;
+  if(!(await ciPeterOverride(open)))return;
   if(!ci.receivedBy)ci.receivedBy=APP_USER.name;
   ci.depositPending=true;ci.depositDue=nextWorkingDay();ci.deposit='Pending — management decision';
   ci.mgmtNotes=((ci.mgmtNotes||'')+(ci.mgmtNotes?'\n':'')+'OVERRIDE by '+ci.forceClosedBy+': '+ci.forceClosedReason).trim();
@@ -6602,7 +6627,7 @@ function ciFinishBox(hasIssues){
 }
 async function ciFinish(){
   var open=ciCompletion().filter(function(x){return !x.ok;});
-  if(open.length&&!ciPeterOverride(open))return;
+  if(open.length&&!(await ciPeterOverride(open)))return;
   if(!ci.forceClosedBy&&!!ci.fuelIn&&ci.fuelIn!==ci.v.fuelOut&&!(ci.fuelPhotos&&ci.fuelPhotos.length)){toast('Fuel is short — take a photo of the fuel receipt first','err');return;}
   var el=document.getElementById('ci-dep');var dec=el?el.value:(ci.finishDep||'');
   var n=document.getElementById('ci-hnotes');if(n)ci.mgmtNotes=n.value;
@@ -7473,7 +7498,7 @@ function ciReportHTML(){
     +'</div></div>';
 }
 async function completeCI(){
-  if(!drOnline()){alert('📶 No internet\n\nEverything captured is kept safe on this device and is sent to the office automatically once connected.\n\nComplete the return when the internet is back.');return;}
+  if(!drOnline()){askBox({title:'📶 No internet',cancel:false,ok:'OK',text:'Everything captured is kept safe on this device and sent to the office automatically once connected.\n\nFinish the return when the internet is back.'});return;}
   ci._done=true;
   try{localStorage.removeItem(ipKey(ci.fn));}catch(e){}
   try{await uploadCISigs();}catch(e){}
