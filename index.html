@@ -210,6 +210,12 @@ textarea{resize:vertical;min-height:60px;}
 @keyframes wtriFlash{0%,100%{opacity:1}50%{opacity:.15}}
 .wtri{display:inline-block;width:1.15em;height:1.15em;vertical-align:-0.2em;animation:wtriFlash 1s ease-in-out infinite;}
 @media (prefers-reduced-motion:reduce){.wtri{animation:none;}}
+/* Only ONE thing flashes: the first open item on screen (.flash-now). Everything else stays red, still. */
+.disc-flash:not(.flash-now){animation:none!important;background:#e25555!important;}
+.disc-flash-lt:not(.flash-now){animation:none!important;}
+.insp-flash:not(.flash-now){animation:none!important;background-color:#fdeaea;}
+.need-flash:not(.flash-now){animation:none!important;border-color:var(--re)!important;}
+.wtri:not(.flash-now){animation:none!important;}
 .ret-grp-name{font-size:16px;font-weight:900;margin-bottom:3px;color:#1f2d24;}
 .ret-grp.first{border:3px solid #d97706;background:#fff7e6;}
 .ret-grp.first .ret-grp-name{color:#b45309;}
@@ -6448,6 +6454,14 @@ function fhKeep(el){
   if(/var\(--rl\)|var\(--al\)|#b91c1c/.test(el.getAttribute('style')||''))return true;
   return false;
 }
+var FLASH_SEL='.disc-flash,.disc-flash-lt,.insp-flash,.need-flash,.wtri';
+function flashNext(){
+  var first=null;
+  document.querySelectorAll(FLASH_SEL).forEach(function(e){
+    var vis=!!(e.offsetParent||e.getClientRects().length);
+    if(!first&&vis){first=e;e.classList.add('flash-now');}else e.classList.remove('flash-now');
+  });
+}
 function fhCompact(){
   document.querySelectorAll('.fh-grid:not([data-c])').forEach(function(g){
     g.setAttribute('data-c','1');
@@ -6461,7 +6475,8 @@ function fhCompact(){
     g.appendChild(b);
   });
 }
-(function(){var q=false;new MutationObserver(function(){if(q)return;q=true;requestAnimationFrame(function(){q=false;try{fhCompact();}catch(e){}});}).observe(document.documentElement,{childList:true,subtree:true});})();
+setInterval(function(){try{flashNext();}catch(e){}},1500); // also after scrolling/tab switches
+(function(){var q=false;new MutationObserver(function(){if(q)return;q=true;requestAnimationFrame(function(){q=false;try{fhCompact();}catch(e){}try{flashNext();}catch(e){}});}).observe(document.documentElement,{childList:true,subtree:true});})();
 function isPeter(){ return !!(APP_USER && APP_USER.name==='Peter'); }
 function ciPeterOverride(open){
   if(!isPeter()){toast('Not complete yet: '+open[0].lbl+' — only Peter can close it with checks missing','err');return false;}
@@ -7733,7 +7748,7 @@ function rpFleet(){
     const tyrKmDone=v.tyres?v.odo-v.tyres.lastKm:null;
     const crit=(svcLeft!==null&&svcLeft<=0)||(licDays!==null&&licDays<=30)||(tyrLeft!==null&&tyrLeft<=0);
     const warn=(svcLeft!==null&&svcLeft<=1500)||(licDays!==null&&licDays<=90)||(tyrLeft!==null&&tyrLeft<=3000);
-    return `<div class="rpt-card" style="border-color:${crit?'var(--re)':warn?'var(--am)':'var(--g2)'};${crit?'animation:pulse 1.5s infinite':''}">
+    return `<div class="rpt-card" style="border-color:${crit?'var(--re)':warn?'var(--am)':'var(--g2)'};">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
           <div class="rpt-fn">${v.fn} <span style="font-size:14px;font-weight:400;color:var(--g5)">${v.reg}</span></div>
