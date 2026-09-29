@@ -1411,7 +1411,7 @@ function appBack(){
   for(var i=0;i<ids.length;i++){var m=document.getElementById(ids[i]);if(m){if(ids[i]==='contract-modal'&&window.ctBack)ctBack();else m.remove();return;}}
   var cur=(document.querySelector('.page.on')||{}).id||'';
   if(cur==='page-co'&&co&&co.v&&!co._done){var fa=firstAllowedStep();if(coStep>fa){try{coGoStep(coStep-1);}catch(e){coStep--;drawCO();}}else coChangeVehicle();return;}
-  if(cur==='page-ci'&&ci&&ci.v&&!ci._done){if(ciStep>0){ciStep--;drawCI();}else ciChangeVehicle();return;}
+  if(cur==='page-ci'&&ci&&ci.v&&!ci._done){if(ciGroup(ciStep)>0){ciStep=ciPrevGroup(ciStep);drawCI();}else ciChangeVehicle();return;}
   var prev=NAV_HIST.pop();
   goPage(prev||'ov',true);
 }
@@ -6209,26 +6209,24 @@ function drawCI(){
   const hasIssues=newDmg.length||fuelShort||missing.length||damaged.length;
   const km=r.odoIn-(ci.odometerOut||v.odo);
 
+  // 3 steps on screen; saved work still uses the old 0–4 numbers (0–1 → 1, 2 → 2, 3–4 → 3)
   const CI_STEPS=[
-    {n:0,ico:'🧹',lbl:'Vehicle Check',sub:'Checklist & fuel'},
-    {n:1,ico:'🔍',lbl:'Damage',sub:'Inspect body'},
-    {n:2,ico:'🏕',lbl:'Equipment',sub:'All items back'},
-    {n:3,ico:'✍️',lbl:'Customer',sub:'Client signs'},
-    {n:4,ico:'👔',lbl:'Management',sub:'Close rental'},
+    {n:0,ico:'🧹',lbl:'1 · Vehicle & damage'},
+    {n:2,ico:'🏕',lbl:'2 · Equipment'},
+    {n:3,ico:'✍️',lbl:'3 · Sign & finish'},
   ];
-
+  const grp=ciGroup(ciStep);
   const bar=CI_STEPS.map(s=>{
-    const done=(s.n===0&&!!r.retSig)||(s.n===1&&!!(r.dmgPhotos&&r.dmgPhotos.length))||(s.n===2&&allItems.every(i=>retSt[i]&&retSt[i]!==''))||(s.n===3&&!!r.custSig)||(s.n===4&&!!r.mgmtSig);
-    const active=s.n===ciStep;
-    return `<div class="stg ${active?'active':done?'done':''}" onclick="ciStep=${s.n};drawCI()" style="position:relative;overflow:hidden;">
-      ${done?`<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;">
-        <span style="font-size:56px;line-height:1;color:#3ddc84;font-weight:900;opacity:.9;text-shadow:0 2px 6px rgba(0,0,0,.9);">✓</span></div>`:''}
-      <div style="font-size:16px;position:relative;z-index:1;${done?'opacity:.25;':''}">${s.ico}</div>
-      <div style="font-size:13px;margin-top:2px;position:relative;z-index:1;${done?'opacity:.6;':''}">${s.lbl}</div>
+    const done=(s.n===0&&!!r.retSig)||(s.n===2&&allItems.every(i=>retSt[i]&&retSt[i]!==''))||(s.n===3&&!!r.custSig);
+    const active=s.n===grp;
+    return `<div class="stg ${active?'active':done?'done':''}" onclick="ciStep=${s.n};drawCI();window.scrollTo(0,0)" style="position:relative;overflow:hidden;">
+      ${done&&!active?`<div style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:26px;color:#1d8a4a;font-weight:900;pointer-events:none;">✓</div>`:''}
+      <div style="font-size:16px;">${s.ico}</div>
+      <div style="font-size:14px;margin-top:2px;font-weight:800;">${s.lbl}</div>
     </div>`;
   }).join('');
 
-  const bodyHTML=ciStep===0?ciStep0_CI():ciStep===1?ciStep1_CI():ciStep===2?ciStep2_CI():ciStep===3?ciStep3_CI():ciStep4_CI();
+  const bodyHTML=grp===0?ciStep0_CI()+'<div id="ci-dmg-sec" style="margin-top:18px;"></div>'+ciStep1_CI():grp===2?ciStep2_CI():ciStep3_CI()+(r.custSig?ciCloseSection():'');
 
   document.getElementById('ci-body').innerHTML=`
     <div class="chg-veh-bar">
@@ -6266,16 +6264,17 @@ function drawCI(){
         })()}
       </div>
     </div>
-    <div class="stg-bar s5">${bar}</div>
+    <div class="stg-bar s3">${bar}</div>
     <div id="ci-step-body">${bodyHTML}</div>
     <div class="btn-row">
-      ${ciStep>0?`<button class="btn s" style="flex:1" onclick="ciStep=Math.max(0,ciStep-1);drawCI()">← Back</button>`:''}
-      ${ciStep<4?`<button class="btn g" style="flex:2" onclick="ciStep=Math.min(4,ciStep+1);drawCI()">Next →</button>`:''}
+      ${grp>0?`<button class="btn s" style="flex:1" onclick="ciStep=ciPrevGroup(ciStep);drawCI();window.scrollTo(0,0)">← Back</button>`:''}
+      ${grp<3?`<button class="btn g" style="flex:2" onclick="ciStep=ciNextGroup(ciStep);drawCI();window.scrollTo(0,0)">Next →</button>`:''}
     </div>`;
 
   setTimeout(()=>{
     VIEWS.forEach(v=>buildIG(v));renderIS();
     ['ci-ret-sig','ci-c-sig','ci-m-sig'].forEach(initSig);
+    if(ci._scrollDmg){ci._scrollDmg=false;var d=document.getElementById('ci-dmg-sec');if(d&&d.scrollIntoView)d.scrollIntoView({behavior:'smooth',block:'start'});}
   },100);
 }
 
@@ -6296,7 +6295,7 @@ function ciStep0_CI(){
   <div class="step-intro">
     <div class="step-ico">🧹</div>
     <div><div class="step-title">Step 1 — Vehicle Return Check</div>
-    <div class="step-sub">Vehicle only: fuel, km, glass, wheels, undercarriage and tent · once = ✅ OK · twice = ⚠ Problem · equipment is checked in Step 3</div></div>
+    <div class="step-sub">Vehicle only: fuel, km, glass, wheels, undercarriage and tent · once = ✅ OK · twice = ⚠ Problem · equipment is checked in Step 2</div></div>
   </div>
   <div class="who-box">
     <div class="who-lbl">👤 Who is receiving this vehicle?</div>
@@ -6527,8 +6526,8 @@ function ciCompletion(){
   var unmarked=all.filter(function(i){return !retSt[i];}).length;
   return [
     {lbl:'Vehicle check signed (Step 1)',ok:!!ci.retSig},
-    {lbl:'Equipment all marked returned / not returned (Step 3)'+(unmarked?' — '+unmarked+' left':''),ok:!unmarked},
-    {lbl:'Customer signed (Step 4)',ok:!!ci.custSig}
+    {lbl:'Equipment all marked returned / not returned (Step 2)'+(unmarked?' — '+unmarked+' left':''),ok:!unmarked},
+    {lbl:'Customer signed (Step 3)',ok:!!ci.custSig}
   ];
 }
 
@@ -6571,6 +6570,19 @@ function ciReportHeader(){
       +(x.any?'⚠ ISSUES FOUND — management decides the deposit (by '+fmtDay(nextWorkingDay())+')'
              :'✅ ALL CLEAR — full deposit can be released')
     +'</div></div>';
+}
+function ciGroup(n){return n<=1?0:n===2?2:3;}
+function ciNextGroup(n){var g=ciGroup(n);return g===0?2:3;}
+function ciPrevGroup(n){var g=ciGroup(n);return g===3?2:0;}
+// Shown under the client's signature: what is still missing, the fuel receipt if needed, then Finish
+function ciCloseSection(){
+  var r=ci,v=r.v,x=ciIssues();
+  var open=ciCompletion().filter(function(c){return !c.ok;});
+  return '<div style="margin-top:14px;">'
+    +(open.length?ciCompletionBox():'')
+    +(x.fuelShort?'<div style="background:var(--rg);border:2px solid var(--re);border-radius:var(--r);padding:12px;margin-bottom:10px">'+photoHTML('ci.fuelPhotos','🧾 Fuel receipt — required','Photograph the filling-station receipt for the refill. Needed before the return can be finished.',3)+'</div>':'')
+    +ciFinishBox(x.any)
+    +'</div>';
 }
 // ONE way to close a check-in: "Finish return".
 // Clean return → full deposit released now. Issues → decide the deposit now, or leave it for the
@@ -6789,7 +6801,7 @@ function signRetCheck(){
     const raw=localStorage.getItem(ipKey(ci.fn));
     if(raw){const rec=JSON.parse(raw);rec.staff=ci.receivedBy;rec.staffLocked=true;localStorage.setItem(ipKey(ci.fn),JSON.stringify(rec));}
   }catch(e){}
-  toast('Step 1 signed ✅','ok');ciStep=1;drawCI();
+  toast('Vehicle check signed ✅ — now mark any new damage','ok');ciStep=1;ci._scrollDmg=true;drawCI();
 }
 
 function ciStep1_CI(){
@@ -6800,7 +6812,7 @@ function ciStep1_CI(){
   return `
   <div class="step-intro">
     <div class="step-ico">🔍</div>
-    <div><div class="step-title">Step 2 — Damage Inspection</div>
+    <div><div class="step-title">Damage — mark NEW damage only</div>
     <div class="step-sub">Mark NEW damage only — blue = new scratch · red = new dent · yellow = existing damage from check-out</div></div>
   </div>
   ${ex.length?
@@ -6814,7 +6826,7 @@ function ciStep2_CI(){
   return `
   <div class="step-intro">
     <div class="step-ico">🏕</div>
-    <div><div class="step-title">Step 3 — Equipment Return</div>
+    <div><div class="step-title">Step 2 — Equipment Return</div>
     <div class="step-sub">Tap an item when it is back · tap <b style="color:var(--rl)">✗ Missing</b> if it is not · missing items go on the client report and to management</div></div>
   </div>
   <div id="ret-grps">${renderRetGroups()}</div>
@@ -6837,7 +6849,7 @@ function ciStep3_CI(){
   return `${r.custSig?ciReportHeader():''}
   <div class="step-intro">
     <div class="step-ico">✍️</div>
-    <div><div class="step-title">Step 4 — Client Sign-Off</div>
+    <div><div class="step-title">Step 3 — Client signs, then Finish return</div>
     <div class="step-sub">Client checks the return summary and signs · the signed checklist is then sent to the client on WhatsApp</div></div>
   </div>
 
@@ -6886,48 +6898,6 @@ function ciStep3_CI(){
         </button>`}
     </div>
   </div>`;
-}
-
-function ciStep4_CI(){
-  const r=ci,v=r.v;
-  const allItems=RET_GROUPS.flatMap(g=>g.items);
-  const missing=allItems.filter(i=>retSt[i]==='missing').map(ciQtyLabel);
-  const damaged=allItems.filter(i=>retSt[i]==='dmg');
-  const newDmg=r.dmgd.filter(function(d){return d.types&&d.types.some(function(t){return t!=='pr';});});
-  const fuelShort=(!!r.fuelIn&&r.fuelIn!==v.fuelOut);
-  const hasIssues=newDmg.length||fuelShort||missing.length||damaged.length;
-  const km=r.odoIn-(ci.odometerOut||v.odo);
-
-  return `
-  <div class="step-intro">
-    <div class="step-ico">👔</div>
-    <div><div class="step-title">Step 5 — Management Sign-Off</div>
-    <div class="step-sub">Check everything is complete, decide on the deposit, sign to close the return</div></div>
-  </div>
-  ${ciCompletionBox()}
-
-  <div class="sum-box" style="margin-bottom:10px">
-    <div class="sum-title">${r.fn} · ${v.cl} · Return Summary</div>
-    <div class="sum-row"><span class="sum-lbl">KM driven</span><span class="sum-val ok">${km.toLocaleString()} km</span></div>
-    <div class="sum-row"><span class="sum-lbl">ODO out / in</span><span class="sum-val ok">${(ci.odometerOut||v.odo).toLocaleString()} → ${r.odoIn.toLocaleString()} km</span></div>
-    <div class="sum-row"><span class="sum-lbl">Fuel</span><span class="sum-val ${fuelShort?'warn':'ok'}">${v.fuelOut||'Full'} → ${r.fuelIn} ${fuelShort?'⚠ SHORT':'✓'}</span></div>
-    <div class="sum-row"><span class="sum-lbl">New damage</span><span class="sum-val ${newDmg.length?'warn':'ok'}">${newDmg.length?`⚠ ${newDmg.map(d=>d.view_name).join(', ')}`:'✓ None'}</span></div>
-    <div class="sum-row"><span class="sum-lbl">Missing items</span><span class="sum-val ${missing.length?'warn':'ok'}">${missing.length?'⚠ '+missing.slice(0,3).join(', '):'✓ All returned'}</span></div>
-    <div class="sum-row"><span class="sum-lbl">Vehicle check</span><span class="sum-val ${r.retSig?'ok':'warn'}">${r.retSig?'✅ Signed by '+r.receivedBy:'⚠ Not signed'}</span></div>
-    <div class="sum-row"><span class="sum-lbl">Client signed</span><span class="sum-val ${r.custSig?'ok':'warn'}">${r.custSig?'✅ '+r.custAt:'⚠ Not yet'}</span></div>
-    <div class="sum-row"><span class="sum-lbl">Received by</span><span class="sum-val ok">${r.receivedBy||'—'}</span></div>
-  </div>
-
-  ${hasIssues?`<div style="background:var(--rg);border:2px solid var(--re);border-radius:var(--r);padding:12px;margin-bottom:10px">
-    <div style="font-size:15px;font-weight:800;color:var(--rl);margin-bottom:6px">${WARN_TRI} Action Required</div>
-    ${newDmg.length?`<div style="font-size:14px;color:var(--rl);margin-bottom:4px">🔴 Get repair quote for ${newDmg.map(d=>d.view_name).join(', ')} — charge to ${v.cl}</div>`:''}
-    ${fuelShort?`<div style="font-size:14px;color:var(--al);margin-bottom:4px">⛽ Charge refill: ${v.fuelOut||'Full'} → ${r.fuelIn}</div>`:''}
-    ${fuelShort?photoHTML('ci.fuelPhotos','🧾 Fuel receipt — required','Photograph the filling-station receipt for the refill. Needed before the rental can be closed.',3):''}
-    ${missing.length?`<div style="font-size:14px;color:var(--rl)">❌ Charge replacement: ${missing.join(', ')}</div>`:''}
-    <div style="font-size:13px;color:var(--am);margin-top:8px">📷 ${(r.dmgPhotos&&r.dmgPhotos.length)||0} photos on file as evidence</div>
-  </div>`:''}
-
-  ${ciFinishBox(hasIssues)}`;
 }
 
 function ciReturnView(v,r,newDmg,fuelShort,missing,damaged){
