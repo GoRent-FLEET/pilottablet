@@ -383,63 +383,6 @@ input[type=file]{display:none;}
 .toast.err{border-color:var(--re);color:var(--rl);}
 #upload-banner{display:none;position:fixed;top:64px;left:50%;transform:translateX(-50%);background:#15532f;border:1px solid var(--se);border-radius:20px;padding:8px 18px;font-size:12px;font-weight:700;color:var(--se);z-index:998;white-space:nowrap;}
 </style>
-<!-- ═══ WELCOME THEME (visual only, no logic) — remove this block to go back to the old look ═══ -->
-<!-- Light version (29 Sep): no shadows on cards, no [style*=] rules, greeting painted once per Dashboard redraw -->
-<style id="welcome-theme">
-:root{--bg:#f5efe4;--g2:#ebe2d2;--g3:#dccfb9;--r:14px;}
-html,body{background:var(--bg);}
-.nav{background:#14532d!important;border-bottom:0!important;height:62px;gap:5px;}
-.logo{color:#ffffff!important;font-size:17px;display:flex;align-items:center;gap:8px;}
-.logo::before{content:"";width:30px;height:30px;border-radius:9px;flex-shrink:0;
-  background:#f5b93a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='21' cy='11' r='5' fill='%23fff7df'/%3E%3Cpath d='M0 25 L9 15 L15 21 L20 16 L32 26 V32 H0Z' fill='%2314532d'/%3E%3C/svg%3E") center/100% no-repeat;}
-.logo span{color:#fcd779!important;}
-.nb{color:#e7f3ea!important;font-size:11.5px;border-radius:999px!important;padding:9px 13px;letter-spacing:.4px;}
-.nb.on{background:#ffffff!important;color:#14532d!important;border:0!important;}
-#nb-back{background:transparent!important;color:#ffffff!important;border:1.5px solid rgba(255,255,255,.55)!important;}
-#nav-user{color:#d9f0de!important;}
-#nav-logout{background:#ffffff!important;border:0!important;border-radius:12px!important;}
-#nav-user-name{color:#14532d!important;}
-@media (max-width:1120px){.nav{height:auto;}}
-.vc,.ov-stat{border-color:var(--g2);border-radius:14px;}
-.wt-hello{display:flex;align-items:center;gap:14px;}
-.wt-hello-sun{width:42px;height:42px;border-radius:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:24px;background:#fde9b5;}
-.wt-hello-t{font-size:21px;font-weight:800;color:#1f2b22;line-height:1.1;}
-.wt-hello-s{font-size:12.5px;font-weight:600;color:#7a6a4f;margin-top:3px;}
-#login-screen,#device-login{background:#f3ead9!important;}
-#ls-names button{border-radius:16px!important;border:1.5px solid #e2d5bd!important;}
-</style>
-<script id="welcome-theme-js">
-(function(){
-  // "Good morning, Peter" above the date on the Dashboard. Runs only when the Dashboard is redrawn
-  // (not on every clock tick).
-  function paint(){
-    var clock=document.getElementById('ov-clock');
-    if(!clock)return;
-    var row=clock.parentNode;
-    if(row.querySelector('.wt-hello'))return;
-    var dateEl=row.firstElementChild;
-    if(!dateEl||dateEl===clock)return;
-    var h=new Date().getHours();
-    var n='';try{n=(typeof APP_USER!=='undefined'&&APP_USER&&APP_USER.name)||'';}catch(e){}
-    var wrap=document.createElement('div');wrap.className='wt-hello';
-    wrap.innerHTML='<div class="wt-hello-sun">'+(h<6||h>=19?'🌙':h<17?'☀️':'🌅')+'</div><div><div class="wt-hello-t"></div><div class="wt-hello-s"></div></div>';
-    wrap.querySelector('.wt-hello-t').textContent=(h<12?'Good morning':h<17?'Good afternoon':'Good evening')+(n?', '+n:'')+'!';
-    wrap.querySelector('.wt-hello-s').textContent=(dateEl.textContent||'').toLowerCase().replace(/(^|\s)\S/g,function(c){return c.toUpperCase();});
-    dateEl.style.display='none';
-    row.insertBefore(wrap,row.firstChild);
-  }
-  function start(){
-    var ov=document.getElementById('page-ov');if(!ov)return;
-    // direct children only: the Dashboard redraw replaces them; the clock ticking deeper down is ignored
-    new MutationObserver(paint).observe(ov,{childList:true});
-    var inner=ov.firstElementChild; if(inner)new MutationObserver(paint).observe(inner,{childList:true});
-    paint();
-  }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
-})();
-</script>
-<!-- ═══ END WELCOME THEME ═══ -->
-
 </head>
 <body>
 
