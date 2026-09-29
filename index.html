@@ -34,6 +34,11 @@ html,body{height:100%;overflow:hidden;max-width:100%;background:var(--bg);color:
 .logo span{color:#12803c;}
 .nb{padding:8px 10px;border-radius:8px;font-size:11px;font-weight:800;color:#1a1a1a;cursor:pointer;border:none;background:transparent;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}
 .nb.on{background:#12803c;color:#ffffff;border:1px solid #0a5c2a;}
+/* Office menu: On Rental, Calendar, Documentation, Reports in one place (managers only) */
+#office-menu{display:none;position:fixed;z-index:9000;background:#ffffff;border:2px solid #0a5c2a;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:6px;flex-direction:column;gap:4px;min-width:240px;}
+#office-menu.open{display:flex;}
+#office-menu .nb{font-size:14px;padding:14px 16px;text-align:left;border-radius:8px;}
+#office-menu .nb:hover{background:#e8f5e4;}
 
 /* PAGES */
 .page{display:none;flex-direction:column;height:calc(100vh - var(--navh,56px));height:calc(100dvh - var(--navh,56px));overflow:hidden;}
@@ -449,10 +454,13 @@ input[type=file]{display:none;}
     <button class="nb on" id="nb-ov" onclick="goPage('ov')">📊 Dashboard</button>
     <button class="nb" id="nb-co" onclick="goPage('co')"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;background:#4a6fa5;color:#fff;font-size:13px;font-weight:900;margin-right:5px;vertical-align:-4px;">↗</span>Check-Out</button>
     <button class="nb" id="nb-ci" onclick="goPage('ci')"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;background:#2a9d5c;color:#fff;font-size:13px;font-weight:900;margin-right:5px;vertical-align:-4px;">↙</span>Check-In</button>
-    <button class="nb" id="nb-out" onclick="goPage('out')"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;background:#d13636;color:#fff;font-size:14px;font-weight:900;margin-right:5px;vertical-align:-3px;">&#8593;&#xFE0E;</span>On Rental</button>
-    <button class="nb" id="nb-cal" onclick="openCalendar()">📅 Calendar</button>
-    <button class="nb" id="nb-doc" onclick="goPage('doc')">📁 Documentation</button>
-    <button class="nb" id="nb-rp" onclick="goPage('rp')">🔧 Vehicle Reports</button>
+    <button class="nb" id="nb-office" onclick="toggleOffice(event)">🏢 Office ▾</button>
+    <div id="office-menu" onclick="event.stopPropagation()">
+    <button class="nb" id="nb-out" onclick="closeOffice();goPage('out')"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;background:#d13636;color:#fff;font-size:14px;font-weight:900;margin-right:5px;vertical-align:-3px;">&#8593;&#xFE0E;</span>On Rental</button>
+    <button class="nb" id="nb-cal" onclick="closeOffice();openCalendar()">📅 Calendar</button>
+    <button class="nb" id="nb-doc" onclick="closeOffice();goPage('doc')">📁 Documentation</button>
+    <button class="nb" id="nb-rp" onclick="closeOffice();goPage('rp')">🔧 Vehicle Reports</button>
+    </div>
     <div style="margin-left:auto;display:flex;align-items:center;gap:6px;padding-right:6px;">
       <button id="nav-override" onclick="peterOverrideCI()" title="Peter only: close this check-in now, even with steps not done" style="display:none;font-size:12px;font-weight:900;padding:7px 14px;border-radius:8px;border:2px solid #7c2d12;background:#ea580c;color:#ffffff;cursor:pointer;white-space:nowrap;line-height:1.3;text-align:center;">
   <span style="display:block;font-size:13px;">⚡ OVERRIDE</span>
@@ -753,6 +761,15 @@ const STAFF_ROSTER=[
   {name:'Christina',role:'prep'},
   {name:'Abia',     role:'prep'},
 ];
+// ── WHO MAY DO WHAT: the one place to change it ──────────────────
+//  staff   = check-out steps 1–4 (prep, mechanical, camping, inspection) — no contracts, check-ins, office pages
+//  manager = everything except deleting / resetting / override
+//  peter   = everything, incl. delete, reset and ⚡ Override
+// Handing the vehicle to the client (check-out step 7) is a manager job too, except Christina.
+const ROLE={Bonga:'staff',Dixon:'staff',Vince:'staff',Abia:'staff',Joe:'manager',Simon:'manager',Christina:'manager',Peter:'peter'};
+const NO_HANDOVER=['Christina'];
+function roleOf(n){return ROLE[n]||'staff';}
+function namesWithRole(){var r=[].slice.call(arguments);return STAFF_ROSTER.map(function(x){return x.name;}).filter(function(n){return r.indexOf(roleOf(n))>=0;});}
 // Check a staff PIN on the server. Returns {ok, name, role} or {ok:false, reason, wait_minutes}
 async function checkStaffPin(name,pin){
   var res;
@@ -798,7 +815,17 @@ function loginUser(code){
   try{localStorage.setItem('gorent_user',JSON.stringify(staff));}catch(e){}
   return true;
 }
-function logoutUser(){ showLoginScreen(); }
+function logoutUser(){ closeOffice(); showLoginScreen(); }
+function toggleOffice(ev){
+  if(ev)ev.stopPropagation();
+  var m=document.getElementById('office-menu'),b=document.getElementById('nb-office');if(!m||!b)return;
+  if(m.classList.contains('open')){closeOffice();return;}
+  var r=b.getBoundingClientRect();
+  m.style.top=(r.bottom+6)+'px';m.style.left=Math.max(8,Math.min(r.left,window.innerWidth-260))+'px';
+  m.classList.add('open');
+}
+function closeOffice(){var m=document.getElementById('office-menu');if(m)m.classList.remove('open');}
+document.addEventListener('click',closeOffice);
 // A second, older sign-in screen lives inside #app, which the real one hides — so this used to
 // land on a blank page, and its staff list had gone stale (no Abia). Anything that needs a
 // sign-in now goes to the sign-in screen people actually use.
@@ -1022,8 +1049,8 @@ function initIM(){VIEWS.forEach(v=>{imarks[v]={S:{},M:{},L:{}};});}
 initIM();
 
 // ── NAV ──────────────────────────────────────────────────────────
-const REPORTS_ALLOWED=['Simon','Peter','Joe','Christina'];  // may see On Rental, Calendar, Documentation and Reports
-const NO_OVERVIEW=['Bonga','Dixon','Vince','Abia'];  // check-outs / check-ins only
+const REPORTS_ALLOWED=namesWithRole('manager','peter');  // may see On Rental, Calendar, Documentation and Reports
+const NO_OVERVIEW=namesWithRole('staff');  // check-outs only
 // ── Auto refresh: keep the bookings fresh without disturbing anyone mid-job ──
 var AUTO_MS=180000, _autoTimer=null, LAST_SYNC=null;
 function busyNow(){
@@ -1213,16 +1240,16 @@ function canViewReports(){ return APP_USER && canSeeOverview() && (REPORTS_ALLOW
 // Show or hide On Rental, Calendar, Documentation and Vehicle Reports for this user
 function applyTabAccess(){
   var show=canSeeOverview();
-  ['nb-out','nb-cal','nb-doc','nb-rp'].forEach(function(id){
+  ['nb-office','nb-out','nb-cal','nb-doc','nb-rp'].forEach(function(id){
     var el=document.getElementById(id);
     if(el)el.style.display=show?'':'none';
   });
   // hide Check-In for staff who are not allowed to do check-ins
   var ciTab=document.getElementById('nb-ci');if(ciTab)ciTab.style.display=canCheckIn()?'':'none';
 }
-const MANAGEMENT=['Peter','Simon','Joe','Christina'];
+const MANAGEMENT=namesWithRole('manager','peter');
 function isManagement(){ return !!(APP_USER && MANAGEMENT.includes(APP_USER.name)); }
-function isAdmin(){ return !!(APP_USER && (APP_USER.name==='Peter' || APP_USER.role==='admin')); }
+function isAdmin(){ return !!(APP_USER && roleOf(APP_USER.name)==='peter'); }
 // Deleting anything (photos, damage marks, records) is for the admin only
 // Admin only: throw away a started check-out or check-in on this tablet and begin again
 function resetProcess(fn,ev){
@@ -1354,14 +1381,12 @@ function canDelete(what){
   toast('🔒 Only Peter can delete '+(what||'data'),'err');
   return false;
 }
-const PREP_ONLY=['Bonga','Dixon','Vince','Abia']; // prep staff — steps 1–4 only, no contracts, handover, documents or reports
+const PREP_ONLY=namesWithRole('staff'); // prep staff — steps 1–4 only, no contracts, handover, documents or reports
 function isPrepOnly(){ return !!(APP_USER && PREP_ONLY.includes(APP_USER.name)); }
 // Which check-out steps each person may do (anyone not listed can do every step)
 // Steps: 0 Prep · 2 Mechanical · 3 Camping · 4 Inspection · 5 Contract · 6 Handover · 7 Management
-var STEP_ACCESS={
-  // prep staff: Cleaning, Equipment, Mechanical, Pre-handover inspection
-  'Bonga':[0,2,3,4],'Dixon':[0,2,3,4],'Vince':[0,2,3,4],'Abia':[0,2,3,4]
-};
+var STEP_ACCESS={};  // staff: Cleaning, Equipment, Mechanical, Pre-handover inspection
+namesWithRole('staff').forEach(function(n){STEP_ACCESS[n]=[0,2,3,4];});
 function allowedSteps(){return (APP_USER&&STEP_ACCESS[APP_USER.name])||null;}
 function canDoStep(n){var a=allowedSteps();return !a||a.indexOf(n)>=0;}
 function firstAllowedStep(){var a=allowedSteps();return a?a[0]:0;}
@@ -1397,6 +1422,7 @@ function goPage(p,_fromBack){
   document.querySelectorAll('.nb').forEach(e=>e.classList.remove('on'));
   (function(){var _e=document.getElementById('page-'+p);if(_e)_e.classList.add('on');})();
   (function(){var _e=document.getElementById('nb-'+p);if(_e)_e.classList.add('on');})();
+  (function(){var _o=document.getElementById('nb-office');if(_o)_o.classList.toggle('on',['out','cal','doc','rp'].indexOf(p)>=0);})();
   if(p==='ov')renderOV();
   else if(p==='rp')renderReports();
   else if(p==='co')renderCOPicker();
@@ -3778,7 +3804,7 @@ function signEquip(){
 // ── STEP 1: Client ID Documents ──────────────────────────────────
 
 // Contract step: who is doing it (mainly Christina; Simon and Joe can also do it)
-var CONTRACT_STAFF=['Christina','Simon','Joe','Peter'];
+var CONTRACT_STAFF=namesWithRole('manager','peter');
 // Ask who is doing the contract as soon as Step 5 opens — before any photos are taken
 function ctWhoModal(){
   if(document.getElementById('ct-who-modal'))return;
@@ -5555,7 +5581,7 @@ function coStep5_client(){
 var HO_OPEN={};
 function toggleHOItems(key){HO_OPEN[key]=!HO_OPEN[key];drawCO();}
 // Ask who is doing the handover as soon as the step opens
-var HANDOVER_STAFF=['Joe','Peter','Simon'];
+var HANDOVER_STAFF=namesWithRole('manager','peter').filter(function(n){return NO_HANDOVER.indexOf(n)<0;});
 function hoWhoModal(){
   if(document.getElementById('ho-who-modal'))return;
   var m=document.createElement('div');m.id='ho-who-modal';
