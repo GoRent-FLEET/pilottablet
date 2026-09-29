@@ -2467,7 +2467,7 @@ function _renderOV(){
 // ═══════════════════════════════════════════════════════════════
 var DR_DEV=(function(){try{var d=localStorage.getItem('gorent_dev');if(!d){d='d'+Math.random().toString(36).slice(2,10);localStorage.setItem('gorent_dev',d);}return d;}catch(e){return 'd'+Math.random().toString(36).slice(2,10);}})();
 var DR_SRV={};          // id -> server row (without data), from the last pull
-var DR_LAST={};         // id -> {json, im} last snapshot taken on this device
+var DR_LAST={};         // id -> {sig, im} fingerprint of the last snapshot taken on this device
 var DR_IMG={};          // content hash -> 'draftimg:<path>' (already uploaded)
 var DR_IMGD={};         // path -> dataURL (already downloaded)
 var _drPushing=false,_drPulling=false,_drStarted=false,_drAsk={};
@@ -2497,6 +2497,11 @@ function drOnline(){return navigator.onLine!==false;}
 function drHash(s){var h1=5381,h2=52711,i;for(i=0;i<s.length;i++){var c=s.charCodeAt(i);h1=(h1*33)^c;h2=(h2*33)^c;}return (h1>>>0).toString(36)+(h2>>>0).toString(36)+s.length.toString(36);}
 
 // ── take a snapshot of what is open on this device ──
+// Cheap fingerprint of a draft: big photo/signature strings count only by length + tail, so the
+// 2-second change check no longer copies every photo (that ran iPads out of memory, 29 Sep).
+function drSig(st){
+  try{return JSON.stringify(st,function(k,v){return (typeof v==='string'&&v.length>2000)?('\u00a7'+v.length+':'+v.slice(-48)):v;});}catch(e){return '';}
+}
 function drSnapshots(){
   var out=[];
   function add(kind,obj,step,extra){
@@ -2504,9 +2509,12 @@ function drSnapshots(){
     var id=drId(kind,obj);
     var onPage=drPageOn(kind==='checkout'?'co':'ci');
     var im=onPage?imarks:(DR_LAST[id]&&DR_LAST[id].im)||null;
+    var st={o:obj,s:step,im:im,isz:onPage?isize:undefined,ret:extra};
+    var sig=drSig(st);
+    if(sig&&DR_LAST[id]&&DR_LAST[id].sig===sig)return;   // nothing changed: skip the full copy
     var json;
-    try{json=JSON.stringify({o:obj,s:step,im:im,isz:onPage?isize:undefined,ret:extra});}catch(e){return;}
-    out.push({id:id,kind:kind,obj:obj,json:json,im:im?JSON.parse(JSON.stringify(im)):null});
+    try{json=JSON.stringify(st);}catch(e){return;}
+    out.push({id:id,kind:kind,obj:obj,json:json,sig:sig,im:im?JSON.parse(JSON.stringify(im)):null});
   }
   try{add('checkout',co,coStep,null);}catch(e){}
   try{add('checkin',ci,ciStep,retSt);}catch(e){}
@@ -2531,9 +2539,8 @@ async function drTick(){
   try{
   for(var i=0;i<snaps.length;i++){
     var s=snaps[i];
-    if(DR_LAST[s.id]&&DR_LAST[s.id].json===s.json)continue;
     var prev=await drGet(s.id);
-    DR_LAST[s.id]={json:s.json,im:s.im};
+    DR_LAST[s.id]={sig:s.sig,im:s.im};
     await drPut(s.id,{id:s.id,kind:s.kind,fn:s.obj.fn,cl:s.obj.clientName||(s.obj.v&&s.obj.v.cl)||'',
       staff:drStaffOf(s.kind,s.obj),sum:drSummary(s.kind,s.obj),step:(s.kind==='checkout'?coStep:ciStep),
       json:s.json,at:new Date().toISOString(),pushed:false,base:(prev&&!prev.deleted&&prev.base)||null,by:APP_USER.name});
@@ -2691,7 +2698,7 @@ function drRestore(kind,st,row){
   if(st.im){initIM();for(var vw in st.im)imarks[vw]=st.im[vw];}
   if(st.isz)isize=st.isz;
   var json;try{json=JSON.stringify({o:kind==='checkout'?co:ci,s:kind==='checkout'?coStep:ciStep,im:st.im||null,isz:st.isz,ret:kind==='checkin'?retSt:null});}catch(e){}
-  DR_LAST[id]={json:json,im:st.im||null};
+  DR_LAST[id]={sig:json?drSig(JSON.parse(json)):'',im:st.im||null};
   if(row)drPut(id,{id:id,kind:kind,fn:row.fleet_no,cl:row.client,staff:row.staff,step:row.step,json:json,at:row.updated_at,pushed:true,base:row.updated_at,by:row.updated_by});
 }
 // Called when a vehicle is tapped: newest of (this device, server) wins
@@ -2702,13 +2709,13 @@ async function drLoadFor(kind,key){
   var row=null;
   if(drOnline()){try{var q=await SB.from('work_drafts').select('*').eq('id',id).maybeSingle();if(!q.error)row=q.data;}catch(e){}}
   if(row&&!(row.data&&row.data.o))row=null;   // older format
-  if(loc&&!loc.pushed){try{var st0=JSON.parse(loc.json);drRestore(kind,st0,null);DR_LAST[id]={json:loc.json,im:st0.im||null};return {src:'here',by:loc.by};}catch(e){}}
+  if(loc&&!loc.pushed){try{var st0=JSON.parse(loc.json);drRestore(kind,st0,null);DR_LAST[id]={sig:drSig(st0),im:st0.im||null};return {src:'here',by:loc.by};}catch(e){}}
   if(row){
     banner('Loading work from '+(row.updated_by||'another device'));
     try{var st=await drUnpack(row.data);hideBanner();drRestore(kind,st,row);return {src:'server',by:row.updated_by,device:row.device};}
     catch(e){hideBanner();}
   }
-  if(loc){try{var st1=JSON.parse(loc.json);drRestore(kind,st1,null);DR_LAST[id]={json:loc.json,im:st1.im||null};return {src:'here',by:loc.by};}catch(e){}}
+  if(loc){try{var st1=JSON.parse(loc.json);drRestore(kind,st1,null);DR_LAST[id]={sig:drSig(st1),im:st1.im||null};return {src:'here',by:loc.by};}catch(e){}}
   return null;
 }
 // Finished / reset: remove everywhere (queued if there is no internet)
