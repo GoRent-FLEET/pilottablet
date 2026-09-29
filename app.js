@@ -4554,13 +4554,13 @@ function qcUncheckedHTML(title){
     if(i.qty){
       var mx=qcMaxQty(i.label),o='<option value="">Count…</option>';
       for(var q=0;q<=mx;q++)o+='<option value="'+q+'">'+q+(q===0?' — none':'')+'</option>';
-      ctl='<select onchange="if(this.value!==\'\')inspSetIdx('+n+',this.value)" style="color-scheme:light;'+base+'color:var(--tx);">'+o+'</select>';
+      ctl='<select onchange="if(this.value!==\'\')inspSetIdx('+n+',this.value)" style="color-scheme:light;'+base+'color:var(--tx);width:auto;flex:0 0 auto;max-width:45%;">'+o+'</select>';
     }else{
       ctl='<button style="'+base+'color:var(--se);" onclick="inspSetIdx('+n+',\'ok\')">✓ OK</button>'
          +'<button style="'+base+'color:var(--rl);" onclick="inspSetIdx('+n+',\'issue\')">⚠ Issue</button>';
     }
     return '<div class="insp-flash" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;margin-bottom:6px;border:2px solid var(--re);">'
-      +'<div style="flex:1;min-width:0;"><div style="font-size:11px;font-weight:800;opacity:.8;">'+i.step+'</div><div style="font-size:14px;font-weight:900;">'+_bx(i.label)+'</div></div>'+ctl+'</div>';
+      +'<div style="flex:1;min-width:0;overflow-wrap:anywhere;"><div style="font-size:11px;font-weight:800;opacity:.8;">'+i.step+'</div><div style="font-size:14px;font-weight:900;">'+_bx(i.label)+'</div></div>'+ctl+'</div>';
   }).join('');
   return '<div style="background:var(--g1);border:2px solid var(--re);border-radius:var(--rs);padding:12px 14px;margin-bottom:12px;">'
     +'<div style="font-size:14px;font-weight:900;color:var(--rl);margin-bottom:2px;">🔴 '+(title||'Not checked yet')+' ('+unchecked.length+')</div>'
