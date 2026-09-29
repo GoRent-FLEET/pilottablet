@@ -5053,13 +5053,43 @@ function coInspIssues(){
 }
 function coInspDone(){return !!(co&&co.inspBy)&&!coInspIssues().some(function(i){return i.status==='unchecked';})&&!!(co.docItems&&co.docItems.veh)&&(!co.v.xb||!!co.docItems.xb);}
 function inspSetItem(kind,lbl,v){
-  if(!co.inspBy){toast('Select who is doing the inspection first','err');return;}
+  // Whoever is logged in can tick a missed item straight from the list — no going back a step
+  var who=co.inspBy||(APP_USER&&APP_USER.name)||'';
+  if(!who){toast('Log in first','err');return;}
   var t=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-  if(kind==='prep'){co.prepItems[lbl]={st:v==='ok'?'ok':'prob',by:co.inspBy+' (inspection)',at:t};}
-  else{co.mechItems[lbl]=v==='ok'?'ok':'issue';if(!co.mechWho)co.mechWho={};co.mechWho[lbl]=co.inspBy+' (inspection) · '+t;}
+  if(!co.prepItems)co.prepItems={};if(!co.mechItems)co.mechItems={};
+  if(kind==='qty'){co.prepItems[lbl]=String(v);}
+  else if(kind==='prep'){co.prepItems[lbl]={st:v==='ok'?'ok':'prob',by:who+' (quick check)',at:t};}
+  else{co.mechItems[lbl]=v==='ok'?'ok':'issue';if(!co.mechWho)co.mechWho={};co.mechWho[lbl]=who+' (quick check) · '+t;}
   saveCOProgress();drawCO();
+  try{if(document.getElementById('co-missing'))coFinishCheck(true);}catch(e){}   // refresh the "still outstanding" popup
 }
-function inspSetIdx(n,v){var it=(window._inspItems||[])[n];if(it)inspSetItem(it.kind,it.label,v);}
+function inspSetIdx(n,v){var it=(window._inspItems||[])[n];if(it)inspSetItem(it.qty?'qty':it.kind,it.label,v);}
+// Max count for a quantity item (third column of its L_PREP row)
+function qcMaxQty(real){var r=L_PREP.filter(function(x){return x&&x[1]==='__QTY__'+real;})[0];return (r&&parseInt(r[2]))||5;}
+// The red "not checked yet" list, tappable wherever it is shown: OK / Issue, or a count for quantity items
+function qcUncheckedHTML(title){
+  var unchecked=coInspIssues().filter(function(i){return i.status==='unchecked';});
+  window._inspItems=unchecked;
+  if(!unchecked.length)return '';
+  var base='padding:10px 14px;border-radius:8px;font-size:14px;font-weight:900;cursor:pointer;touch-action:manipulation;min-width:70px;border:2px solid var(--g3);background:var(--g0);';
+  var rows=unchecked.map(function(i,n){
+    var ctl;
+    if(i.qty){
+      var mx=qcMaxQty(i.label),o='<option value="">Count…</option>';
+      for(var q=0;q<=mx;q++)o+='<option value="'+q+'">'+q+(q===0?' — none':'')+'</option>';
+      ctl='<select onchange="if(this.value!==\'\')inspSetIdx('+n+',this.value)" style="color-scheme:light;'+base+'color:var(--tx);">'+o+'</select>';
+    }else{
+      ctl='<button style="'+base+'color:var(--se);" onclick="inspSetIdx('+n+',\'ok\')">✓ OK</button>'
+         +'<button style="'+base+'color:var(--rl);" onclick="inspSetIdx('+n+',\'issue\')">⚠ Issue</button>';
+    }
+    return '<div class="insp-flash" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;margin-bottom:6px;border:2px solid var(--re);">'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:11px;font-weight:800;opacity:.8;">'+i.step+'</div><div style="font-size:14px;font-weight:900;">'+_bx(i.label)+'</div></div>'+ctl+'</div>';
+  }).join('');
+  return '<div style="background:var(--g1);border:2px solid var(--re);border-radius:var(--rs);padding:12px 14px;margin-bottom:12px;">'
+    +'<div style="font-size:14px;font-weight:900;color:var(--rl);margin-bottom:2px;">🔴 '+(title||'Not checked yet')+' ('+unchecked.length+')</div>'
+    +'<div style="font-size:12px;color:var(--g5);margin-bottom:8px;">Tap OK or Issue right here — no need to go back to the step</div>'+rows+'</div>';
+}
 function coStep4_dmg(){
   if(!co||!co.v){return '<div style="padding:20px;color:red;">Error: co.v undefined in coStep4</div>';}
   if(!co.docItems) co.docItems={};
@@ -5083,14 +5113,6 @@ function coStep4_dmg(){
   var issues=coInspIssues();
   var unchecked=issues.filter(function(i){return i.status==='unchecked';});
   var problems=issues.filter(function(i){return i.status==='problem';});
-  window._inspItems=unchecked;
-  var rows=unchecked.map(function(i,n){
-    return '<div class="insp-flash" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;margin-bottom:6px;border:2px solid var(--re);">'
-      +'<div style="flex:1;min-width:0;"><div style="font-size:11px;font-weight:800;opacity:.8;">'+i.step+'</div><div style="font-size:14px;font-weight:900;">'+_bx(i.label)+'</div></div>'
-      +(i.qty?'<button style="'+base+'border:2px solid var(--g3);background:var(--g0);color:var(--tx);" onclick="coGoStep(2)">Set qty in Step 2</button>'
-        :btns(false,false,"inspSetIdx("+n+",'ok')","inspSetIdx("+n+",'issue')"))
-      +'</div>';
-  }).join('');
   var probRows=problems.map(function(i){return '<div style="font-size:13px;color:var(--al);padding:3px 0;">⚠ '+i.step+': <b>'+_bx(i.label)+'</b></div>';}).join('');
   var done=coInspDone();
   return '<div class="step-intro"><div class="step-ico">🔍</div>'
@@ -5100,8 +5122,7 @@ function coStep4_dmg(){
     +'<div style="background:var(--g1);border:2px solid var(--g2);border-radius:var(--rs);padding:10px 14px;margin-bottom:12px;">'
     +'<div style="font-size:13px;font-weight:800;color:var(--tx);">📄 Documents</div>'+docsHtml+'</div>'
     +(unchecked.length
-      ?'<div style="background:var(--g1);border:2px solid var(--re);border-radius:var(--rs);padding:12px 14px;margin-bottom:12px;">'
-        +'<div style="font-size:14px;font-weight:900;color:var(--rl);margin-bottom:8px;">🔴 Not checked yet ('+unchecked.length+') — check these now</div>'+rows+'</div>'
+      ?qcUncheckedHTML('Not checked yet — check these now')
       :'<div style="background:var(--sg);border:2px solid var(--gb);border-radius:var(--rs);padding:12px;text-align:center;margin-bottom:12px;"><div style="font-size:15px;font-weight:900;color:var(--se);">✅ Everything from Steps 1–3 has been checked</div></div>')
     +(problems.length?'<div style="background:var(--ag);border:2px solid var(--am);border-radius:var(--rs);padding:10px 14px;margin-bottom:12px;"><div style="font-size:13px;font-weight:900;color:var(--al);margin-bottom:4px;">⚠ Problems reported ('+problems.length+')</div>'+probRows+'</div>':'')
     +(done?'<div class="al ok" style="text-align:center;">✅ Inspection complete — '+_bx(co.inspBy)+' · tap <strong>Next →</strong></div>'
@@ -5410,6 +5431,7 @@ function coStep5_client(){
 
   return `
   ${hoTopRow()}
+  ${qcUncheckedHTML('Still not checked from the earlier steps')}
   ${dmgSectionHTML}
   <div class="step-intro">
     <div class="step-ico">🤝</div>
@@ -5640,6 +5662,7 @@ function coStep6_mgmt(){
   <!-- Problems noted -->
   ${probPrep.length||probMech.length?`<div class="al warn" style="margin-bottom:10px;">⚠ Problems noted on departure — verify before clearing: ${[...probPrep,...probMech].join(' · ')}</div>`:''}
 
+  ${qcUncheckedHTML('Not checked — tick them here')}
   <!-- Missing items — management resolves inline -->
   ${missingBlock(uncPrep,'Prep items not checked','❌','prep')}
   ${missingBlock(uncMech,'Mechanical items not checked','❌','mech')}
@@ -5766,14 +5789,16 @@ function coMissing(){
   if(!handoverClosed())m.push('✍️ Client has not signed the handover');
   return m;
 }
-function coFinishCheck(){
+function coFinishCheck(refresh){
   var m=coMissing();
-  if(!m.length){completeCO();return;}
+  var old=document.getElementById('co-missing');if(old)old.remove();
+  if(!m.length){if(refresh){toast('✅ All outstanding items done — tap Complete Check-Out','ok');return;}completeCO();return;}
   var box=document.createElement('div');box.id='co-missing';
   box.setAttribute('style','position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:18px;');
   box.innerHTML='<div style="background:var(--g1);border:2px solid var(--re);border-radius:16px;max-width:520px;width:100%;padding:18px;max-height:88vh;overflow:auto;">'
     +'<div style="font-size:19px;font-weight:900;color:var(--rl);margin-bottom:4px;">⚠ '+m.length+' thing'+(m.length===1?'':'s')+' still outstanding</div>'
     +'<div style="font-size:13px;color:var(--g5);margin-bottom:12px;">Check these before the vehicle leaves. You can still finish, but it is recorded as it stands.</div>'
+    +qcUncheckedHTML('Tick these now')
     +'<ul style="margin:0 0 14px 18px;padding:0;font-size:15px;font-weight:700;color:var(--tx);line-height:1.9;">'+m.map(function(x){return '<li>'+_bx(x)+'</li>';}).join('')+'</ul>'
     +'<div style="display:flex;gap:8px;">'
     +'<button class="btn g" style="flex:2;" onclick="document.getElementById(\'co-missing\').remove()">← Go back and fix</button>'
