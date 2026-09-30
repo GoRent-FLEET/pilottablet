@@ -5553,12 +5553,14 @@ async function saveHandoverLink(html){
     return clientDocLink(signed);
   }catch(e){return '';}
 }
+// The guest information pack (info.html, next to the app) — sent with the handover document
+function guideLink(){try{if(location.protocol==='http:'||location.protocol==='https:')return location.origin+location.pathname.replace(/[^\/]*$/,'')+'info.html';}catch(e){}return 'https://gorent-fleet.github.io/tablet/info.html';}
 function sendHandoverWA(){
   const phone=((function(){var _e=document.getElementById('send-wa');return _e?_e.value:undefined;})()||'').trim();
   if(!phone){toast('Enter WhatsApp number','err');return;}
   if(!co._handoverLink){toast('The handover report is still being saved — try again in a moment','err');return;}
   var first=firstNameOf(mainRenter()||co.v.cl,(co.drivers||[])[0]);
-  const msg=encodeURIComponent('Hi '+first+',\n\nThank you for renting with Go Rent 4x4 Namibia!\n\nVehicle: '+co.fn+' ('+(co.v.reg||'')+')\nPickup: '+(coPickupDate()||'today')+' | Return: '+(co.v.rt||'-')+'\nFuel at departure: '+(co.fuelOut||'Full')+' - please return at the same level. DIESEL ONLY.\n\nYour handover document - handover checklist, vehicle condition and damage, photos, equipment issued and your full signed rental contract:\n'+co._handoverLink+'\n\nSafe travels! WhatsApp us anytime: +264 81 861 8085\n- Go Rent 4x4 Team');
+  const msg=encodeURIComponent('Hi '+first+',\n\nThank you for renting with Go Rent 4x4 Namibia!\n\nVehicle: '+co.fn+' ('+(co.v.reg||'')+')\nPickup: '+(coPickupDate()||'today')+' | Return: '+(co.v.rt||'-')+'\nFuel at departure: '+(co.fuelOut||'Full')+' - please return at the same level. DIESEL ONLY.\n\nYour handover document - handover checklist, vehicle condition and damage, photos, equipment issued and your full signed rental contract:\n'+co._handoverLink+'\n\nYour Namibia driving guide - our road rules, what to do after an accident or breakdown, emergency numbers (please keep it handy, many roads have no signal):\n'+guideLink()+'\n\nSafe travels! WhatsApp us anytime: +264 81 861 8085\n- Go Rent 4x4 Team');
   window.open('https://wa.me/'+waNumber(phone)+'?text='+msg,'_blank');
   if(!co._mgmtSent)toast('Now send the copy to Management (green button)','ok');
 }
