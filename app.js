@@ -5465,6 +5465,11 @@ async function completeCO(){
       <div style="background:var(--g1);border:2px solid var(--gb);border-radius:var(--rs);padding:14px 16px;margin:14px 0;">
         <div style="font-size:15px;font-weight:800;color:var(--se);margin-bottom:10px;">💬 Send Handover Document on WhatsApp</div>
         <div style="font-size:14px;color:var(--g5);margin-bottom:12px;">Includes: handover checklist · equipment · vehicle condition &amp; damage diagram · photos · client signature · full signed contract</div>
+        <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:12px;border-radius:10px;border:2px solid ${co.sendGuide===false?'var(--g3)':'var(--gb)'};background:${co.sendGuide===false?'var(--g0)':'var(--sg)'};cursor:pointer;">
+          <input type="checkbox" ${co.sendGuide===false?'':'checked'} onchange="co.sendGuide=this.checked;try{saveCOProgress();}catch(e){};var l=this.parentNode;l.style.borderColor=this.checked?'var(--gb)':'var(--g3)';l.style.background=this.checked?'var(--sg)':'var(--g0)';" style="width:24px;height:24px;flex-shrink:0;">
+          <span style="flex:1;font-size:14px;font-weight:800;color:var(--tx);">📘 Add the Namibia driving guide<span style="display:block;font-size:12px;font-weight:600;color:var(--g5);">Our road rules, accident &amp; breakdown steps, emergency numbers, tyre pressure, shopping</span></span>
+          <a href="${guideLink()}" target="_blank" onclick="event.stopPropagation()" style="font-size:13px;font-weight:800;color:var(--se);white-space:nowrap;">Preview</a>
+        </label>
 
         <!-- WhatsApp -->
         <div>
@@ -5478,6 +5483,7 @@ async function completeCO(){
             </button>
           </div>
           <div style="font-size:13px;color:var(--g5);margin-top:4px;">Opens WhatsApp with a pre-filled message and download link</div>
+          <button onclick="sendGuideWA()" style="margin-top:8px;padding:8px 14px;background:var(--g0);border:2px solid var(--gb);border-radius:var(--rs);color:var(--se);font-size:13px;font-weight:800;cursor:pointer;">📘 Send the driving guide only</button>
           ${mgmtBtn('btn-mgmt-co','sendHandoverMgmt()',false)}
         </div>
 
@@ -5555,12 +5561,19 @@ async function saveHandoverLink(html){
 }
 // The guest information pack (info.html, next to the app) — sent with the handover document
 function guideLink(){try{if(location.protocol==='http:'||location.protocol==='https:')return location.origin+location.pathname.replace(/[^\/]*$/,'')+'info.html';}catch(e){}return 'https://gorent-fleet.github.io/tablet/info.html';}
+function sendGuideWA(){
+  var phone=((document.getElementById('send-wa')||{}).value||'').trim();
+  if(!phone){toast('Enter WhatsApp number','err');return;}
+  var first=firstNameOf(mainRenter()||co.v.cl,(co.drivers||[])[0]);
+  var msg='Hi '+first+',\n\nHere is your Namibia driving guide from Go Rent 4x4 - our road rules, what to do after an accident or breakdown, emergency numbers, tyre pressure and where to shop. Please keep it handy, many roads have no signal:\n'+guideLink()+'\n\nSafe travels! WhatsApp us anytime: +264 81 861 8085\n- Go Rent 4x4 Team';
+  window.open('https://wa.me/'+waNumber(phone)+'?text='+encodeURIComponent(msg),'_blank');
+}
 function sendHandoverWA(){
   const phone=((function(){var _e=document.getElementById('send-wa');return _e?_e.value:undefined;})()||'').trim();
   if(!phone){toast('Enter WhatsApp number','err');return;}
   if(!co._handoverLink){toast('The handover report is still being saved — try again in a moment','err');return;}
   var first=firstNameOf(mainRenter()||co.v.cl,(co.drivers||[])[0]);
-  const msg=encodeURIComponent('Hi '+first+',\n\nThank you for renting with Go Rent 4x4 Namibia!\n\nVehicle: '+co.fn+' ('+(co.v.reg||'')+')\nPickup: '+(coPickupDate()||'today')+' | Return: '+(co.v.rt||'-')+'\nFuel at departure: '+(co.fuelOut||'Full')+' - please return at the same level. DIESEL ONLY.\n\nYour handover document - handover checklist, vehicle condition and damage, photos, equipment issued and your full signed rental contract:\n'+co._handoverLink+'\n\nYour Namibia driving guide - our road rules, what to do after an accident or breakdown, emergency numbers (please keep it handy, many roads have no signal):\n'+guideLink()+'\n\nSafe travels! WhatsApp us anytime: +264 81 861 8085\n- Go Rent 4x4 Team');
+  const msg=encodeURIComponent('Hi '+first+',\n\nThank you for renting with Go Rent 4x4 Namibia!\n\nVehicle: '+co.fn+' ('+(co.v.reg||'')+')\nPickup: '+(coPickupDate()||'today')+' | Return: '+(co.v.rt||'-')+'\nFuel at departure: '+(co.fuelOut||'Full')+' - please return at the same level. DIESEL ONLY.\n\nYour handover document - handover checklist, vehicle condition and damage, photos, equipment issued and your full signed rental contract:\n'+co._handoverLink+(co.sendGuide===false?'':'\n\nYour Namibia driving guide - our road rules, what to do after an accident or breakdown, emergency numbers (please keep it handy, many roads have no signal):\n'+guideLink())+'\n\nSafe travels! WhatsApp us anytime: +264 81 861 8085\n- Go Rent 4x4 Team');
   window.open('https://wa.me/'+waNumber(phone)+'?text='+msg,'_blank');
   if(!co._mgmtSent)toast('Now send the copy to Management (green button)','ok');
 }
