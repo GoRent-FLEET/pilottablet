@@ -8443,7 +8443,7 @@ async function openInsurancePack(contractId,clientName,fleetNo){
     <div><div style="font-size:14px;font-weight:700;text-transform:uppercase;color:#555;margin-bottom:8px">Company Stamp</div><div style="border-bottom:1px solid #000;min-height:50px;margin-bottom:4px"></div></div>
   </div>
   <div style="text-align:center;margin-top:20px;font-size:13px;color:#777;border-top:1px solid #ccc;padding-top:10px">
-    GO RENT 4×4 RENTALS AND TOURS CC · CC/2021/04371 · gorent4x4.com · WhatsApp: +264 81 858 1750<br>
+    GO RENT 4×4 RENTALS AND TOURS CC · CC/2021/04371 · gorent4x4.com · WhatsApp: +264 81 861 8085<br>
     Document: ${(clientName||'unknown').replace(/\s+/g,'_')}_${fleetNo}_${Date.now()}
   </div></body></html>`;
   openDoc(_packHTML,'Insurance pack \u2014 '+(fleetNo||''));
