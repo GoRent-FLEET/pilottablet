@@ -184,6 +184,12 @@ const FLEET_DEMO=[
    st:'available',odo:52100,dmgd:[],blocked:'Spare tyre flat — repair before departure',
    svc:{lastKm:47000,intKm:10000,date:'2026-03-22'},lic:{expiry:'2027-01-31'},tyres:{lastKm:35000,intKm:22000}},
 ];
+// A finger lifted at the end of a scroll is not a tap. Rows that act on touchend (vehicle
+// picker, bonnet buttons, …) fired when someone scrolled the list and lifted their finger on a
+// card — opening a check-out and its messages. Only a touch that stayed put counts.
+var _tapX=0,_tapY=0,_tapT=0;
+document.addEventListener('touchstart',function(e){try{var t=e.touches[0];_tapX=t.clientX;_tapY=t.clientY;_tapT=Date.now();}catch(_){}} ,{passive:true,capture:true});
+function tapOK(e){try{var t=e.changedTouches[0];return Math.abs(t.clientX-_tapX)<12&&Math.abs(t.clientY-_tapY)<12&&(Date.now()-_tapT)<800;}catch(_){return true;}}
 const FLEET=[]; // filled from the real bookings table after sign-in
 var OVERRIDES={};  // client names corrected on the tablet, by booking
 var REMOTE_RETURNS=[];  // vehicles that must be collected somewhere other than the office
@@ -934,7 +940,7 @@ function renderCOPicker(){
       :'<span style="background:var(--se);color:#fff;font-size:11px;font-weight:900;padding:3px 10px;border-radius:8px;">\u2705 COMPLETED</span>';
     if(late&&!fin)dt='⚠ Was due '+dt+' — '+lateTxt;
     var col=fin?'var(--gb)':late?'var(--re)':ip?'var(--am)':isToday?'#4a6fa5':'var(--g3)';
-    rows+='<div data-fn="'+v.fn+'" class="picker-row" ontouchend="event.preventDefault();startCO(this.dataset.fn);" style="background:'+(fin?'var(--gr)':late?'var(--rg)':ip?'var(--ag)':'var(--g1)')+';border:2px solid '+col+';border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;">'
+    rows+='<div data-fn="'+v.fn+'" class="picker-row" ontouchend="if(!tapOK(event))return;event.preventDefault();startCO(this.dataset.fn);" style="background:'+(fin?'var(--gr)':late?'var(--rg)':ip?'var(--ag)':'var(--g1)')+';border:2px solid '+col+';border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;">'
       +'<div><div style="font-size:16px;font-weight:900;color:var(--se);">'+v.fn+'</div>'
       +'<div style="font-size:13px;font-weight:700;color:var(--tx);margin-top:2px;">'+_bx(renterName(v))+'</div>'
@@ -1845,8 +1851,8 @@ function _renderOV(){
     +'<div id="ov-clock" style="font-size:15px;font-weight:900;color:#2a9d5c;font-variant-numeric:tabular-nums;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:8px;padding:3px 9px;">'+timeStr+'</div>'
     +'</div>'
     +'<div style="display:flex;align-items:center;gap:8px;">'
-    +'<button ontouchend="event.preventDefault();ovSetView(\'week\')" onclick="ovSetView(\'week\')" style="padding:6px 14px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:2px solid '+(view==='week'?'#f6ad55':'#e0e0e0')+';background:'+(view==='week'?'#fffbf0':'#fff')+';color:'+(view==='week'?'#c07a00':'#888')+';">📅 Next 14 Days</button>'
-    +'<button ontouchend="event.preventDefault();ovSetView(\'past\')" onclick="ovSetView(\'past\')" style="padding:6px 14px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:2px solid '+(view==='past'?'#68d391':'#e0e0e0')+';background:'+(view==='past'?'#f0fff4':'#fff')+';color:'+(view==='past'?'#276749':'#888')+';">📋 Past 14 Days</button>'
+    +'<button ontouchend="if(!tapOK(event))return;event.preventDefault();ovSetView(\'week\')" onclick="ovSetView(\'week\')" style="padding:6px 14px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:2px solid '+(view==='week'?'#f6ad55':'#e0e0e0')+';background:'+(view==='week'?'#fffbf0':'#fff')+';color:'+(view==='week'?'#c07a00':'#888')+';">📅 Next 14 Days</button>'
+    +'<button ontouchend="if(!tapOK(event))return;event.preventDefault();ovSetView(\'past\')" onclick="ovSetView(\'past\')" style="padding:6px 14px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:2px solid '+(view==='past'?'#68d391':'#e0e0e0')+';background:'+(view==='past'?'#f0fff4':'#fff')+';color:'+(view==='past'?'#276749':'#888')+';">📋 Past 14 Days</button>'
     +'</div>'
     +'</div>'
     // Licence discs and Staff Active share one line
@@ -3071,8 +3077,8 @@ function coStepBonnet(){
       +'<div style="flex:1;"><div style="font-size:14px;font-weight:800;color:var(--tx);">'+item[0]+'</div>'
       +'<div style="font-size:11px;color:var(--g5);">'+item[1]+'</div></div>'
       +'<div style="display:flex;gap:6px;">'
-      +'<button style="'+okStyle+'" data-k="'+key+'" data-v="ok" onclick="setBonnetItem(this.dataset.k,this.dataset.v)" ontouchend="event.preventDefault();setBonnetItem(this.dataset.k,this.dataset.v)">✅ OK</button>'
-      +'<button style="'+issueStyle+'" data-k="'+key+'" data-v="issue" onclick="setBonnetItem(this.dataset.k,this.dataset.v)" ontouchend="event.preventDefault();setBonnetItem(this.dataset.k,this.dataset.v)">⚠</button>'
+      +'<button style="'+okStyle+'" data-k="'+key+'" data-v="ok" onclick="setBonnetItem(this.dataset.k,this.dataset.v)" ontouchend="if(!tapOK(event))return;event.preventDefault();setBonnetItem(this.dataset.k,this.dataset.v)">✅ OK</button>'
+      +'<button style="'+issueStyle+'" data-k="'+key+'" data-v="issue" onclick="setBonnetItem(this.dataset.k,this.dataset.v)" ontouchend="if(!tapOK(event))return;event.preventDefault();setBonnetItem(this.dataset.k,this.dataset.v)">⚠</button>'
       +'</div></div>';
   });
   var allDone=ITEMS.every(function(item,i){return co.bonnetItems['bon'+i];});
@@ -3085,7 +3091,7 @@ function coStepBonnet(){
     +'<textarea placeholder="Any observations..." style="width:100%;padding:10px;background:var(--g0);border:2px solid var(--g3);border-radius:var(--rs);color:var(--tx);font-size:13px;font-family:var(--font);resize:none;height:65px;box-sizing:border-box;" oninput="co.bonnetNotes=this.value">'+(co.bonnetNotes||'')+'</textarea>'
     +'</div>'
     +(allDone
-      ?'<button data-action="bonnet-done" onclick="co.bonnetDone=true;co.bonnetBy=APP_USER?APP_USER.name:\'\';saveCOProgress();coGoStep(2);" ontouchend="event.preventDefault();co.bonnetDone=true;co.bonnetBy=APP_USER?APP_USER.name:\'\';saveCOProgress();coGoStep(2);" style="width:100%;margin-top:12px;padding:14px;background:var(--se);border:none;border-radius:var(--rs);color:#0a1a10;font-size:15px;font-weight:900;cursor:pointer;touch-action:manipulation;">✅ Bonnet Check Complete — Next</button>'
+      ?'<button data-action="bonnet-done" onclick="co.bonnetDone=true;co.bonnetBy=APP_USER?APP_USER.name:\'\';saveCOProgress();coGoStep(2);" ontouchend="if(!tapOK(event))return;event.preventDefault();co.bonnetDone=true;co.bonnetBy=APP_USER?APP_USER.name:\'\';saveCOProgress();coGoStep(2);" style="width:100%;margin-top:12px;padding:14px;background:var(--se);border:none;border-radius:var(--rs);color:#0a1a10;font-size:15px;font-weight:900;cursor:pointer;touch-action:manipulation;">✅ Bonnet Check Complete — Next</button>'
       :'<div style="margin-top:12px;padding:12px;background:var(--g1);border-radius:var(--rs);text-align:center;color:var(--g5);font-size:13px;">Check all items above to continue</div>');
 }
 function setBonnetItem(k,v){
@@ -7805,7 +7811,7 @@ function selStaff(id, list, val) {
       + '<div style="width:36px;height:36px;border-radius:50%;background:var(--am);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#000;">' + val.slice(0,2).toUpperCase() + '</div>'
       + '<div><div style="font-size:15px;font-weight:800;color:var(--al);">' + val + '</div>'
       + '<div style="font-size:13px;color:var(--g5);">🔒 Locked — started this process</div></div></div>'
-      + '<button ontouchend="event.preventDefault();unlockStaff(\'' + id + '\',\'' + fn + '\')" onclick="unlockStaff(\'' + id + '\',\'' + fn + '\')" style="background:var(--g2);border:1px solid var(--g3);border-radius:6px;color:var(--g5);font-size:13px;font-weight:700;padding:5px 10px;cursor:pointer;">🔓 Change</button>'
+      + '<button ontouchend="if(!tapOK(event))return;event.preventDefault();unlockStaff(\'' + id + '\',\'' + fn + '\')" onclick="unlockStaff(\'' + id + '\',\'' + fn + '\')" style="background:var(--g2);border:1px solid var(--g3);border-radius:6px;color:var(--g5);font-size:13px;font-weight:700;padding:5px 10px;cursor:pointer;">🔓 Change</button>'
       + '</div>';
   }
 
