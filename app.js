@@ -2696,8 +2696,11 @@ function coGoStep(t){
   }
   t=Math.max(0,Math.min(6,t));
   // Going forward: first list whatever is still open in the step(s) being left behind
-  if(t>coStep&&!co._done&&!window._coLeftSkip){
-    var from=[];for(var k=coStep;k<t;k++)if(k!==1&&canDoStep(k))from.push(k);
+  // Only on Next (the step straight after): the office can jump to the Contract tab at any
+  // time to scan documents and set deposits while staff are still checking the vehicle.
+  var _nx=coStep+1;if(_nx===1)_nx=2;while(_nx<6&&!canDoStep(_nx))_nx++;
+  if(t===_nx&&canDoStep(coStep)&&!co._done&&!window._coLeftSkip){
+    var from=[coStep];
     if(coLeftCount(from)){
       var _t=t;
       coLeftBox(from,{
@@ -4119,8 +4122,8 @@ function coStep2(){
     ${ctDetailsForm()}
     <div class="fi"><label>Cross-border authorised</label><input id="ct-xb" value="${(co.contract&&co.contract.cross_border)||co.v.xb||''}" placeholder="e.g. Botswana" oninput="(co.contract=co.contract||{}).cross_border=this.value"></div>
       </div>
-  ${coLeftInline([0,2,3,4],'Before the client signs — still open')}
-  <button class="btn g" onclick="previewAndSignContract()">📋 Preview Full Contract &amp; Sign →</button>`;
+  ${coLeftInline(CO_BEFORE_CONTRACT,'🔒 Contract locked — staff must finish these checks first')}
+  <button class="btn ${coLeftCount(CO_BEFORE_CONTRACT)?'s':'g'}" onclick="previewAndSignContract()">${coLeftCount(CO_BEFORE_CONTRACT)?'🔒 Contract locked — '+coLeftCount(CO_BEFORE_CONTRACT)+' checks open':'📋 Preview Full Contract &amp; Sign →'}</button>`;
 }
 
 function calcDays(){
@@ -4190,12 +4193,12 @@ function ctMissing(c){
 }
 function previewAndSignContract(){
   // Before the client is handed the tablet: anything still open from Steps 1–4
-  if(!window._coLeftSkip&&coLeftCount([0,2,3,4])){
-    coLeftBox([0,2,3,4],{
-      title:'Before the client signs the contract',
-      sub:'Still open from the earlier steps. Sort them out first so the client does not wait later.',
-      goLbl:'Sign anyway →',
-      onGo:function(){window._coLeftSkip=true;try{previewAndSignContract();}finally{window._coLeftSkip=false;}}
+  // Hard stop: every check must be done by staff before the contract can be signed
+  if(!co.contractSigned&&coLeftCount(CO_BEFORE_CONTRACT)){
+    coLeftBox(CO_BEFORE_CONTRACT,{block:true,
+      title:'Contract cannot be signed yet',
+      sub:'Staff must finish every check first. Tick them here (OK or Issue). The contract opens by itself when the last one is done.',
+      onGo:function(){previewAndSignContract();}
     });
     return;
   }
@@ -4487,6 +4490,7 @@ async function submitContractSig(){
 }
 
 async function signContract(sigData){
+  if(coLeftCount(CO_BEFORE_CONTRACT)){var _m=document.getElementById('contract-modal');if(_m)_m.remove();coLeftBox(CO_BEFORE_CONTRACT,{block:true,title:'Contract cannot be signed yet',sub:'Staff must finish every check first.'});return;}
   if(!sigData){toast('No signature','err');return;}
   if(!co.contractBy){toast('Select who is doing the contract first','err');var _s=document.getElementById('co-ct-nm');if(_s)_s.scrollIntoView({block:'center'});return;}
   co.contract.client_signed_at=new Date().toISOString();
@@ -4862,6 +4866,7 @@ async function overrideClientSig(){
 // the handover counts as done when the client signed OR Peter overrode it
 function handoverClosed(){ return !!(co&&(co.custSig||co.sigOverride)); }
 function signHandover(){
+  if(coLeftCount(CO_BEFORE_HANDOVER)){coLeftBox(CO_BEFORE_HANDOVER,{block:true,title:'Handover cannot be signed yet',sub:'Staff must finish these first.'});return;}
   if(!(co.docItems&&co.docItems.wifi)){toast('Check the WiFi device first (top of this step)','err');return;}
   if(co.v.xb&&!(co.docItems&&co.docItems.xb)){toast('Check the cross-border documents first','err');return;}
   if(!co.returnTime){toast('Ask the client what time they will return and enter it (top of this step)','err');var _t=document.getElementById('ho-rtime');if(_t)_t.focus();return;}
@@ -4974,7 +4979,7 @@ function coStep5_client(){
   return `
   ${hoTopRow()}
   ${whoMini('ho',co.mechBy,'Handover by','')}
-  ${handoverClosed()?'':coLeftInline([0,2,3,4,5],'Before the client signs the handover — still open')}
+  ${handoverClosed()?'':coLeftInline(CO_BEFORE_HANDOVER,'🔒 Handover locked — staff must finish these first')}
   ${dmgSectionHTML}
   <div class="step-intro">
     <div class="step-ico">🤝</div>
@@ -5048,6 +5053,8 @@ function coStep5_client(){
         `<div class="signed" style="border-color:var(--am);background:var(--ag);">⚠️<div class="signed-name">Closed WITHOUT a client signature</div><div class="signed-time">Authorised by ${_bx(co.sigOverride.by)} · ${_bx(co.sigOverride.at)}<br>Reason: ${_bx(co.sigOverride.reason)}</div></div>`:
       co.custSig?
         `<div class="signed">✅<div class="signed-name">${v.cl} — Handover accepted</div><div class="signed-time">${co.custAt}</div></div>`:
+      coLeftCount(CO_BEFORE_HANDOVER)?
+        `<div style="padding:16px;border-radius:10px;background:var(--rg);border:2px solid var(--re);color:var(--rl);font-size:16px;font-weight:900;text-align:center;">🔒 The client cannot sign yet — ${coLeftCount(CO_BEFORE_HANDOVER)} check${coLeftCount(CO_BEFORE_HANDOVER)===1?'':'s'} still open (red list at the top of this step)</div>`:
         `<div style="font-size:14px;color:var(--g5);margin-bottom:10px;">⛽ DIESEL ONLY · ✅ All equipment received · I accept responsibility for the vehicle and contents</div>
         <div class="sig-area" style="border-color:var(--gb)">
           <div class="sig-hdr" style="background:#15532f;border-bottom-color:var(--gb)">
@@ -5306,6 +5313,8 @@ function coReopen(step){
 // Steps: 0 Cleaning · 2 Equipment · 3 Mechanical · 4 Inspection · 5 Contract · 6 Handover.
 // Ticklist items (cleaning / equipment / mechanical) are shown as tappable rows;
 // everything else as a plain line.
+// Everything staff must have done before the client signs (hard stop)
+var CO_BEFORE_CONTRACT=[0,2,3,4], CO_BEFORE_HANDOVER=[0,2,3,4,5];
 var CO_ITEM_STEP={0:'Step 1 — Cleaning',2:'Step 2 — Equipment',3:'Step 3 — Mechanical'};
 function coStepItems(n){
   var lbl=CO_ITEM_STEP[n];if(!lbl)return [];
@@ -5389,8 +5398,8 @@ function coLeftBox(steps,o){
     +'<div style="font-size:13px;color:var(--g5);margin-bottom:6px;">'+_bx(o.sub||'')+'</div>'
     +coLeftHTML(steps)
     +'<div style="display:flex;gap:8px;margin-top:12px;position:sticky;bottom:-18px;background:var(--g1);padding:10px 0 4px;">'
-    +'<button class="btn g" style="flex:2;" onclick="coLeftClose()">← Stay and fix</button>'
-    +'<button class="btn s" style="flex:1;" onclick="coLeftGo()">'+_bx(o.goLbl||'Go on anyway →')+'</button>'
+    +'<button class="btn g" style="flex:2;" onclick="coLeftClose()">'+(o.block?'← Close — fix these now':'← Stay and fix')+'</button>'
+    +(o.block?'':'<button class="btn s" style="flex:1;" onclick="coLeftGo()">'+_bx(o.goLbl||'Go on anyway →')+'</button>')
     +'</div></div>';
   document.body.appendChild(box);
 }
@@ -5400,7 +5409,7 @@ function coLeftGoto(n){coLeftClose();window._coLeftSkip=true;try{coGoStep(n);}fi
 // After a tick inside the popup: redraw it, and once everything is done carry on where they were going
 function coLeftRefresh(){
   var c=_coLeft;if(!c)return;
-  if(!coLeftCount(c.steps)){coLeftClose();toast('✅ All done','ok');if(c.o.onGo)c.o.onGo();return;}
+  if(!coLeftCount(c.steps)){coLeftClose();toast('✅ All checks done','ok');try{drawCO();}catch(e){}if(c.o.onGo)c.o.onGo();return;}
   coLeftBox(c.steps,c.o);
 }
 function coMissing(){
@@ -9197,10 +9206,12 @@ function guideCO(){
       if(!c.fuel_deposit_received){b=gFind(R,'label,div',function(x){return /Fuel & Admin deposit/.test(x.textContent)&&x.querySelector('input[type=checkbox]')&&x.textContent.length<200;});return t('Take the Fuel & Admin deposit, then tick it.',b);}
       if(co.v.xb&&!c.cross_border_deposit){b=gFind(R,'label,div',function(x){return /Cross-border\/Damage deposit/.test(x.textContent)&&x.querySelector('input[type=checkbox]')&&x.textContent.length<200;});return t('Take the Cross-border deposit, then tick it.',b);}
       b=gFind(R,'select',function(x){return /how the deposit was paid/.test(x.textContent)&&!x.value;});if(b)return t('Choose how the deposit was paid.',b);
+      if(coLeftCount(CO_BEFORE_CONTRACT)){var _l5=coLeftList(CO_BEFORE_CONTRACT);return t('Contract locked until staff finish: '+_l5[0]+(_l5.length>1?' (+'+(_l5.length-1)+' more)':''),gFind(R,'.left-box'));}
       b=gFind(R,'button',function(x){return gTxt(x,'Preview Full Contract');});
       return t('Tap 📋 Preview Full Contract & Sign — the client reads it and signs.',b);
     }
   }else if(st===6){
+    if(!handoverClosed()&&coLeftCount(CO_BEFORE_HANDOVER)){var _l6=coLeftList(CO_BEFORE_HANDOVER);return t('Handover locked: '+_l6[0]+(_l6.length>1?' (+'+(_l6.length-1)+' more)':''),gFind(R,'.left-box'));}
     var dd=co.docItems||{};
     if(!dd.wifi){b=gFind(R,'div.insp-flash',function(x){return /^📶 WiFi device/.test((x.textContent||'').trim());});return t('Give the client the WiFi device, then tap Handed over.',b);}
     if(co.v.xb&&!dd.xb){b=gFind(R,'div.insp-flash',function(x){return /^🌍 Cross-border docs/.test((x.textContent||'').trim());});return t('Give the client the cross-border papers, then tap Handed over.',b);}
