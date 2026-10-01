@@ -511,9 +511,11 @@ function busyNow(){
   return !!((typeof co==='object'&&co&&co.fn&&!co._done)||(typeof ci==='object'&&ci&&ci.fn&&!ci._done)
     ||document.getElementById('contract-modal')||document.getElementById('co-missing')||document.getElementById('rf-modal'));
 }
+var _arBusy=false;
 async function autoRefresh(force){
   if(!APP_USER)return;
   if(document.hidden&&!force)return;
+  if(_arBusy)return;_arBusy=true;
   try{
     // The booking list is ALWAYS refreshed, even while someone is working. A vehicle
     // swapped in the Fleet Manager has to reach the tablets, and reloading the list
@@ -530,6 +532,7 @@ async function autoRefresh(force){
     else if(pg==='page-ci'&&!(ci&&ci.fn))renderCIPicker();
     else if(pg==='page-co'&&!(co&&co.fn))renderCOPicker();
   }catch(e){}
+  finally{_arBusy=false;}
 }
 // The office moved this booking to a different vehicle. The client's paperwork belongs
 // to the BOOKING and follows it. Everything that describes a vehicle — the cleaning,
@@ -600,7 +603,11 @@ try{new ResizeObserver(setNavH).observe(document.querySelector('#app .nav'));}ca
 function startAutoRefresh(){
   if(_autoTimer)clearInterval(_autoTimer);
   _autoTimer=setInterval(function(){autoRefresh(false);checkAppUpdate(false);},AUTO_MS);
-  document.addEventListener('visibilitychange',function(){if(!document.hidden){autoRefresh(false);checkAppUpdate(true);}});
+  // Added ONCE. This ran at every PIN sign-in — and tablets ask for the PIN after every 10 s of
+  // sleep — so by the afternoon one wake-up fired dozens of full reloads of bookings, check-ins,
+  // check-outs and clients at the same time, and the tablets crawled until the app was restarted.
+  if(!window._autoVisHooked){window._autoVisHooked=true;
+    document.addEventListener('visibilitychange',function(){if(!document.hidden&&APP_USER){autoRefresh(false);checkAppUpdate(true);}});}
   setTimeout(function(){checkAppUpdate(false);},15000);
 }
 // ── App update: when a new version is published, load it (never in the middle of a job) ──
@@ -1965,7 +1972,8 @@ function drDB(){
 }
 function _drTx(mode,fn){return drDB().then(function(db){return new Promise(function(res,rej){var t=db.transaction('d',mode),s=t.objectStore('d'),out;var q=fn(s);if(q)q.onsuccess=function(){out=q.result;};t.oncomplete=function(){res(out);};t.onerror=function(){rej(t.error);};});});}
 function drGet(k){return _drTx('readonly',function(s){return s.get(k);}).catch(function(){return null;});}
-function drPut(k,v){return _drTx('readwrite',function(s){return s.put(v,k);}).catch(function(){});}
+var _drDirty=true;   // something on this device may not be on the server yet
+function drPut(k,v){_drDirty=true;return _drTx('readwrite',function(s){return s.put(v,k);}).catch(function(){});}
 function drDel(k){return _drTx('readwrite',function(s){return s.delete(k);}).catch(function(){});}
 function drAll(){return _drTx('readonly',function(s){return s.getAll();}).then(function(a){return a||[];}).catch(function(){return [];});}
 
@@ -2078,20 +2086,24 @@ async function drUnpack(val){
 // ── push everything not yet on the server (runs whenever there is internet) ──
 async function drPush(){
   if(_drPushing||!drOnline()||!APP_USER)return;
-  _drPushing=true;
+  // Every 8 s this read EVERY draft kept on the device, photos included, even when nothing had
+  // changed. Now it only looks when something was saved since the last successful send.
+  if(!_drDirty)return;
+  _drPushing=true;_drDirty=false;
+  var _ok=false;
   try{
     var all=await drAll();
     for(var i=0;i<all.length;i++){
       var r=all[i];
       if(r.deleted){
         var d=await SB.from('work_drafts').delete().eq('id',r.id);
-        if(!d.error)await drDel(r.id);
+        if(!d.error)await drDel(r.id);else _drDirty=true;
         continue;
       }
       if(r.pushed)continue;
       // Someone else changed it since this device last synced? Ask once.
       var chk=await SB.from('work_drafts').select('updated_at,updated_by,device,summary').eq('id',r.id).maybeSingle();
-      if(chk.error)break;
+      if(chk.error){_drDirty=true;break;}
       var row=chk.data;
       if(row&&row.device!==DR_DEV&&row.summary&&Object.keys(row.summary).length&&(!r.base||row.updated_at>r.base)){   // (older-format rows have no summary: just replace them)
         drOtherDeviceNote(r,row);   // someone else has it open too — never interrupt the person in front of the screen
@@ -2100,13 +2112,14 @@ async function drPush(){
       var data=await drPack(JSON.parse(r.json),r.id);
       var up=await SB.from('work_drafts').upsert({id:r.id,kind:r.kind,fleet_no:r.fn,client:r.cl,staff:r.staff,step:r.step,summary:r.sum||{},
         data:data,updated_by:r.by||(APP_USER&&APP_USER.name),device:DR_DEV},{onConflict:'id'}).select('updated_at,started_at').single();
-      if(up.error)break;
+      if(up.error){_drDirty=true;break;}
       var now=await drGet(r.id);
-      if(now&&!now.deleted){now.base=up.data.updated_at;if(now.json===r.json)now.pushed=true;await drPut(r.id,now);}
+      if(now&&!now.deleted){now.base=up.data.updated_at;if(now.json===r.json)now.pushed=true;else _drDirty=true;
+        await _drTx('readwrite',function(s){return s.put(now,r.id);}).catch(function(){_drDirty=true;});}
       DR_SRV[r.id]=Object.assign(DR_SRV[r.id]||{},{id:r.id,kind:r.kind,fleet_no:r.fn,client:r.cl,staff:r.staff,step:r.step,updated_at:up.data.updated_at,updated_by:r.by,device:DR_DEV,started_at:up.data.started_at});
       drMarkLocal(r.kind,r.fn,r.cl,r.staff,true);
     }
-  }catch(e){}
+  }catch(e){_drDirty=true;}
   _drPushing=false;
 }
 // Two devices have the same vehicle open.
@@ -2298,7 +2311,7 @@ function drStart(){
   setInterval(function(){drTick();},2000);
   setInterval(function(){drPull();drPush();},8000);
   window.addEventListener('offline',function(){toast('📶 No internet — work is kept on this device and sent automatically when back online','err');});
-  window.addEventListener('online',function(){drPush().then(drPull);toast('📶 Back online — sending saved work','ok');});
+  window.addEventListener('online',function(){_drDirty=true;drPush().then(drPull);toast('📶 Back online — sending saved work','ok');});
   document.addEventListener('visibilitychange',function(){if(!document.hidden){drPush();drPull();}else drTick();});
   window.addEventListener('pagehide',function(){try{drTick();}catch(e){}});
   drPush().then(drPull);
@@ -6097,10 +6110,11 @@ function fhKeep(el){
 }
 var FLASH_SEL='.disc-flash,.disc-flash-lt,.insp-flash,.need-flash,.wtri';
 function flashNext(){
+  if(document.hidden)return;
   var first=null;
   document.querySelectorAll(FLASH_SEL).forEach(function(e){
-    var vis=!!(e.offsetParent||e.getClientRects().length);
-    if(!first&&vis){first=e;e.classList.add('flash-now');}else e.classList.remove('flash-now');
+    if(!first&&(e.offsetParent||e.getClientRects().length)){first=e;if(!e.classList.contains('flash-now'))e.classList.add('flash-now');}
+    else if(e.classList.contains('flash-now'))e.classList.remove('flash-now');
   });
 }
 function fhCompact(){
@@ -6117,7 +6131,7 @@ function fhCompact(){
   });
 }
 setInterval(function(){try{flashNext();}catch(e){}},1500); // also after scrolling/tab switches
-(function(){var q=false;new MutationObserver(function(){if(q)return;q=true;requestAnimationFrame(function(){q=false;try{fhCompact();}catch(e){}try{flashNext();}catch(e){}});}).observe(document.documentElement,{childList:true,subtree:true});})();
+(function(){var q=false;new MutationObserver(function(){if(q||document.hidden)return;q=true;requestAnimationFrame(function(){q=false;try{fhCompact();}catch(e){}try{flashNext();}catch(e){}});}).observe(document.documentElement,{childList:true,subtree:true});})();
 // ── One tablet-sized box instead of the browser's confirm()/prompt()/alert() ──
 // askBox({title,text,ok,cancel,reason:'label',reasonDefault,minReason,danger}) → Promise<{ok,reason}>
 function askBox(o){
@@ -9289,6 +9303,7 @@ function guideNow(){
 }
 var _gCur=null;
 function guideUpdate(){
+  if(document.hidden)return;
   var bar=document.getElementById('guide');
   if(!bar){bar=document.createElement('div');bar.id='guide';document.body.appendChild(bar);}
   var g=null;try{g=guideNow();}catch(e){g=null;}
@@ -9307,4 +9322,10 @@ function guideShow(){
   g.el.classList.remove('guide-hl');void g.el.offsetWidth;g.el.classList.add('guide-hl');
   setTimeout(function(){try{g.el.classList.remove('guide-hl');}catch(e){}},2600);
 }
-setInterval(guideUpdate,700);
+// It scans the whole step (every box's text) to find the next thing to do. Doing that every
+// 0.7 s kept the iPads busy all the time on the long Contract and Handover steps. Now it runs
+// just after a tap / typing, and every 2.5 s as a safety net.
+var _gT=null;
+function guideSoon(){if(_gT)clearTimeout(_gT);_gT=setTimeout(function(){_gT=null;guideUpdate();},180);}
+['click','change','input','touchend'].forEach(function(ev){document.addEventListener(ev,guideSoon,{passive:true,capture:true});});
+setInterval(guideUpdate,2500);
