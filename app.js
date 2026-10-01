@@ -986,7 +986,7 @@ async function renderDoc(){
   var seen={};
   var rows=co_.filter(function(x){if(!x.booking_id||seen[x.booking_id])return false;seen[x.booking_id]=1;return true;})
     .map(function(x){
-      var v=FLEET.filter(function(f){return bkKey(f)===x.booking_id;})[0]||{};
+      var v=FLEET.filter(function(f){return bkNorm(bkKey(f))===bkNorm(x.booking_id);})[0]||{};
       return {bid:x.booking_id,fn:x.fleet_no,cl:x.client||x.customer_name||signed[x.booking_id]||v.cl||'',
               out:x.created_at,back:back[x.booking_id]||null,contract:!!signed[x.booking_id],
               pu:v.pu||'',rt:v.rt||'',by:x.handover_by||'',mgr:x.manager_name||'',also:[],
@@ -996,7 +996,7 @@ async function renderDoc(){
   var haveCO={};rows.forEach(function(r){haveCO[r.bid]=1;});
   Object.keys(ciRow).forEach(function(k){
     if(haveCO[k])return;var x=ciRow[k];
-    var v=FLEET.filter(function(f){return bkKey(f)===k;})[0]||{};
+    var v=FLEET.filter(function(f){return bkNorm(bkKey(f))===bkNorm(k);})[0]||{};
     rows.push({bid:k,fn:x.fleet_no||v.fn||String(k).split('_')[0],cl:x.client||v.cl||'',out:null,back:x.created_at||1,contract:!!signed[k],
       pu:v.pu||String(k).split('_')[1]||'',rt:v.rt||'',by:'',mgr:x.manager_name||'',also:[],bno:v.bid||v.quote||'',ci:x,noCO:true});
   });
@@ -2212,31 +2212,39 @@ async function drFinish(id){
 // A finished check-out must stop looking unfinished. The tablet's own checkouts / checkins
 // tables are the authority: once a row exists for that booking, the job is done — that also
 // heals markers already stranded on a tablet, without anyone clearing anything by hand.
+// 'H-008' and 'H-08' are the same vehicle. Check-outs saved before 29 Sep used three digits,
+// the bookings use two, so a finished check-out never matched its booking and kept showing as
+// not completed (Dora Arnold Forster on H-08, Fleur van der Linden on H-30, …). All the
+// done / forced / renter lookups compare on the normalised key.
+function fnNorm(fn){return String(fn||'').trim().replace(/^([A-Za-z]+-)0*(\d+)$/,function(m,p,d){d=String(parseInt(d,10));return p+(d.length<2?'0'+d:d);});}
+function bkNorm(k){k=String(k||'');var i=k.lastIndexOf('_');return i<0?fnNorm(k):fnNorm(k.slice(0,i))+k.slice(i);}
+// the other spelling of the same booking key (H-08_… ⇄ H-008_…), for records filed the old way
+function bkAltKey(k){k=bkNorm(k);var i=k.lastIndexOf('_');if(i<0)return '';var f=k.slice(0,i),m=f.match(/^([A-Za-z]+-)(\d{2})$/);return m?(m[1]+'0'+m[2]+k.slice(i)):'';}
 var DONE_CO={},DONE_CI={},FORCED_CO={},RENTER_CO={};
 async function loadDoneSets(){
   try{
     var a=await SB.from('checkouts').select('booking_id,force_closed_by,client,booked_by').order('created_at',{ascending:false}).limit(500);
-    var m={},f={},rn={};((a&&a.data)||[]).forEach(function(x){if(!x||!x.booking_id)return;m[x.booking_id]=true;if(x.force_closed_by&&f[x.booking_id]===undefined)f[x.booking_id]=true;if(!x.force_closed_by)f[x.booking_id]=false;if(x.client&&rn[x.booking_id]===undefined)rn[x.booking_id]={name:x.client,booked:x.booked_by||''};});
+    var m={},f={},rn={};((a&&a.data)||[]).forEach(function(x){if(!x||!x.booking_id)return;var k=bkNorm(x.booking_id);m[k]=true;if(x.force_closed_by&&f[k]===undefined)f[k]=true;if(!x.force_closed_by)f[k]=false;if(x.client&&rn[k]===undefined)rn[k]={name:x.client,booked:x.booked_by||''};});
     if(a&&!a.error){DONE_CO=m;FORCED_CO=f;RENTER_CO=rn;}
   }catch(e){}
   try{
     var b=await SB.from('checkins').select('booking_id').order('created_at',{ascending:false}).limit(500);
-    var m2={};((b&&b.data)||[]).forEach(function(x){if(x&&x.booking_id)m2[x.booking_id]=true;});
+    var m2={};((b&&b.data)||[]).forEach(function(x){if(x&&x.booking_id)m2[bkNorm(x.booking_id)]=true;});
     if(b&&!b.error)DONE_CI=m2;
   }catch(e){}
 }
-function coIsDone(v){try{return !!(v&&DONE_CO[bkKey(v)]);}catch(e){return false;}}
-function coWasForced(v){try{return !!(v&&FORCED_CO[bkKey(v)]);}catch(e){return false;}}
+function coIsDone(v){try{return !!(v&&DONE_CO[bkNorm(bkKey(v))]);}catch(e){return false;}}
+function coWasForced(v){try{return !!(v&&FORCED_CO[bkNorm(bkKey(v))]);}catch(e){return false;}}
 // Away from an open check-out, the renter's real name comes from the saved check-out.
 function renterName(v){
   try{
-    var r=v&&RENTER_CO[bkKey(v)];
+    var r=v&&RENTER_CO[bkNorm(bkKey(v))];
     if(!r||!r.name)return String((v&&v.cl)||'');
     var booked=r.booked||((v&&v.cl&&_nmKey(v.cl)!==_nmKey(r.name))?v.cl:'');
     return r.name+(booked?' ('+booked+')':'');
   }catch(e){return String((v&&v.cl)||'');}
 }
-function ciIsDone(v){try{return !!(v&&DONE_CI[bkKey(v)]);}catch(e){return false;}}
+function ciIsDone(v){try{return !!(v&&DONE_CI[bkNorm(bkKey(v))]);}catch(e){return false;}}
 async function drFinishFleet(fn){
   var ids=Object.keys(DR_SRV).filter(function(k){return DR_SRV[k].fleet_no===fn;});
   (await drAll()).forEach(function(r){if(r.fn===fn&&ids.indexOf(r.id)<0)ids.push(r.id);});
@@ -2401,9 +2409,8 @@ async function startCO(fn){
   // late collection Peter needs to finish, so it must not be a dead end.
   if(v.st==='rented'&&!coIsDone(v)){
     if(!isAdmin()){toast('Fleet Manager has '+fn+' as already out — ask Peter','err');return;}
-    if(!confirm(fn+' is marked OUT in the Fleet Manager, but no check-out was ever completed on this tablet.\n\n'
-      +'OK  =  do the check-out now and get the paperwork on file\n'
-      +'Cancel  =  go back'))return;
+    // A popup on every tap was disruptive — a short note is enough, the check-out just opens.
+    toast(fn+' is OUT in the Fleet Manager with no tablet check-out — doing it now','warn');
   }
   // Opening a finished check-out used to build a blank one and push that empty draft over the
   // saved work — the screen came up with nothing on it. The saved record is the real thing.
@@ -6737,9 +6744,10 @@ async function openRentalFile(key,fn,client,alsoKeys,part){
   document.body.appendChild(m);
   var body=document.getElementById('rf-body');
   try{
-    var rc=await SB.from('rental_contracts').select('*').eq('booking_id',key).order('created_at',{ascending:false}).limit(1);
-    var co_=await SB.from('checkouts').select('*').eq('booking_id',key).order('created_at',{ascending:false}).limit(1);
-    var ci_=await SB.from('checkins').select('*').eq('booking_id',key).order('created_at',{ascending:false}).limit(1);
+    var _bk=[key];var _alt=bkAltKey(key);if(_alt&&_alt!==key)_bk.push(_alt);var _nk=bkNorm(key);if(_bk.indexOf(_nk)<0)_bk.push(_nk);
+    var rc=await SB.from('rental_contracts').select('*').in('booking_id',_bk).order('created_at',{ascending:false}).limit(1);
+    var co_=await SB.from('checkouts').select('*').in('booking_id',_bk).order('created_at',{ascending:false}).limit(1);
+    var ci_=await SB.from('checkins').select('*').in('booking_id',_bk).order('created_at',{ascending:false}).limit(1);
     var contract=rc&&rc.data&&rc.data[0], cko=co_&&co_.data&&co_.data[0], cki=ci_&&ci_.data&&ci_.data[0];
     // older contracts were filed under a different key: fall back to fleet number + client name
     if(!contract){
@@ -6751,7 +6759,7 @@ async function openRentalFile(key,fn,client,alsoKeys,part){
         if(contract)contract._alt=true;
       }catch(e){}
     }
-    var _keys=[key].concat((alsoKeys||[]).filter(function(k){return k&&k!==key;}));
+    var _keys=_bk.concat((alsoKeys||[]).filter(function(k){return k&&_bk.indexOf(k)<0;}));
     var docs=[],_from={};
     for(var _i=0;_i<_keys.length;_i++){
       var _d=await rfList('client-docs','bookings/'+_keys[_i]);
