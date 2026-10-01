@@ -845,7 +845,7 @@ function canSeeClientInfo(){ return !!(APP_USER && !PREP_ONLY.includes(APP_USER.
 var NAV_HIST=[];
 function appBack(){
   var pc=document.getElementById('pin-cancel');if(pc){pc.click();return;}
-  var ids=['wp-modal','qty-pick','sc-view','contract-modal','co-missing','rf-pick','rf-modal','bk-modal','cal-modal'];
+  var ids=['wp-modal','qty-pick','sc-view','contract-modal','co-missing','co-step-left','rf-pick','rf-modal','bk-modal','cal-modal'];
   for(var i=0;i<ids.length;i++){var m=document.getElementById(ids[i]);if(m){if(ids[i]==='contract-modal'&&window.ctBack)ctBack();else m.remove();return;}}
   var cur=(document.querySelector('.page.on')||{}).id||'';
   if(cur==='page-co'&&co&&co.v&&!co._done){var fa=firstAllowedStep();if(coStep>fa){try{coGoStep(coStep-1);}catch(e){coStep--;drawCO();}}else coChangeVehicle();return;}
@@ -2694,7 +2694,22 @@ function coGoStep(t){
     if(!isNav||n<0||n>7){toast('🔒 This step is not available for '+(APP_USER?APP_USER.name:'you'),'err');return;}
     t=n;
   }
-  coStep=Math.max(0,Math.min(6,t));drawCO();
+  t=Math.max(0,Math.min(6,t));
+  // Going forward: first list whatever is still open in the step(s) being left behind
+  if(t>coStep&&!co._done&&!window._coLeftSkip){
+    var from=[];for(var k=coStep;k<t;k++)if(k!==1&&canDoStep(k))from.push(k);
+    if(coLeftCount(from)){
+      var _t=t;
+      coLeftBox(from,{
+        title:from.length===1?(CO_NAMES[from[0]]+' — not finished'):'Earlier steps — not finished',
+        sub:'Sort these out now, while the client is not waiting yet.',
+        goLbl:'Go on anyway →',
+        onGo:function(){window._coLeftSkip=true;try{coGoStep(_t);}finally{window._coLeftSkip=false;}}
+      });
+      return;
+    }
+  }
+  coStep=t;drawCO();
 }
 
 // ── STEP 0: Prep & Pack ──────────────────────────────────────────
@@ -4104,6 +4119,7 @@ function coStep2(){
     ${ctDetailsForm()}
     <div class="fi"><label>Cross-border authorised</label><input id="ct-xb" value="${(co.contract&&co.contract.cross_border)||co.v.xb||''}" placeholder="e.g. Botswana" oninput="(co.contract=co.contract||{}).cross_border=this.value"></div>
       </div>
+  ${coLeftInline([0,2,3,4],'Before the client signs — still open')}
   <button class="btn g" onclick="previewAndSignContract()">📋 Preview Full Contract &amp; Sign →</button>`;
 }
 
@@ -4173,6 +4189,16 @@ function ctMissing(c){
   return m;
 }
 function previewAndSignContract(){
+  // Before the client is handed the tablet: anything still open from Steps 1–4
+  if(!window._coLeftSkip&&coLeftCount([0,2,3,4])){
+    coLeftBox([0,2,3,4],{
+      title:'Before the client signs the contract',
+      sub:'Still open from the earlier steps. Sort them out first so the client does not wait later.',
+      goLbl:'Sign anyway →',
+      onGo:function(){window._coLeftSkip=true;try{previewAndSignContract();}finally{window._coLeftSkip=false;}}
+    });
+    return;
+  }
   // If anything in here throws, the button used to do nothing at all and there was no
   // way to tell why. Now it says so on screen and writes the detail to the console.
   try{ _previewAndSignContract(); }
@@ -4571,14 +4597,19 @@ function inspSetItem(kind,lbl,v){
   else{co.mechItems[lbl]=v==='ok'?'ok':'issue';if(!co.mechWho)co.mechWho={};co.mechWho[lbl]=who+' (quick check) · '+t;}
   saveCOProgress();drawCO();
   try{if(document.getElementById('co-missing'))coFinishCheck(true);}catch(e){}   // refresh the "still outstanding" popup
+  try{if(document.getElementById('co-step-left'))coLeftRefresh();}catch(e){}
 }
 function inspSetIdx(n,v){var it=(window._inspItems||[])[n];if(it)inspSetItem(it.qty?'qty':it.kind,it.label,v);}
 // Max count for a quantity item (third column of its L_PREP row)
 function qcMaxQty(real){var r=L_PREP.filter(function(x){return x&&x[1]==='__QTY__'+real;})[0];return (r&&parseInt(r[2]))||5;}
 // The red "not checked yet" list, tappable wherever it is shown: OK / Issue, or a count for quantity items
-function qcUncheckedHTML(title){
-  var unchecked=coInspIssues().filter(function(i){return i.status==='unchecked';});
-  window._inspItems=unchecked;
+function qcUncheckedHTML(title,only){
+  var unchecked=coInspIssues().filter(function(i){return i.status==='unchecked'&&(!only||only(i));});
+  // Append-only, so a list in a popup and a list on the page can both be tapped safely
+  if(!window._inspItems)window._inspItems=[];
+  if(window._inspItems.length>4000)window._inspItems=[];
+  var _base=window._inspItems.length;
+  unchecked.forEach(function(i){window._inspItems.push(i);});
   if(!unchecked.length)return '';
   var base='padding:10px 14px;border-radius:8px;font-size:14px;font-weight:900;cursor:pointer;touch-action:manipulation;min-width:70px;border:2px solid var(--g3);background:var(--g0);';
   var rows=unchecked.map(function(i,n){
@@ -4586,10 +4617,10 @@ function qcUncheckedHTML(title){
     if(i.qty){
       var mx=qcMaxQty(i.label),o='<option value="">Count…</option>';
       for(var q=0;q<=mx;q++)o+='<option value="'+q+'">'+q+(q===0?' — none':'')+'</option>';
-      ctl='<select onchange="if(this.value!==\'\')inspSetIdx('+n+',this.value)" style="color-scheme:light;'+base+'color:var(--tx);width:auto;flex:0 0 auto;max-width:45%;">'+o+'</select>';
+      ctl='<select onchange="if(this.value!==\'\')inspSetIdx('+(_base+n)+',this.value)" style="color-scheme:light;'+base+'color:var(--tx);width:auto;flex:0 0 auto;max-width:45%;">'+o+'</select>';
     }else{
-      ctl='<button style="'+base+'color:var(--se);" onclick="inspSetIdx('+n+',\'ok\')">✓ OK</button>'
-         +'<button style="'+base+'color:var(--rl);" onclick="inspSetIdx('+n+',\'issue\')">⚠ Issue</button>';
+      ctl='<button style="'+base+'color:var(--se);" onclick="inspSetIdx('+(_base+n)+',\'ok\')">✓ OK</button>'
+         +'<button style="'+base+'color:var(--rl);" onclick="inspSetIdx('+(_base+n)+',\'issue\')">⚠ Issue</button>';
     }
     return '<div class="insp-flash" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;margin-bottom:6px;border:2px solid var(--re);">'
       +'<div style="flex:1;min-width:0;overflow-wrap:anywhere;"><div style="font-size:11px;font-weight:800;opacity:.8;">'+i.step+'</div><div style="font-size:14px;font-weight:900;">'+_bx(i.label)+'</div></div>'+ctl+'</div>';
@@ -4943,7 +4974,7 @@ function coStep5_client(){
   return `
   ${hoTopRow()}
   ${whoMini('ho',co.mechBy,'Handover by','')}
-  ${coUncheckedLine()}
+  ${handoverClosed()?'':coLeftInline([0,2,3,4,5],'Before the client signs the handover — still open')}
   ${dmgSectionHTML}
   <div class="step-intro">
     <div class="step-ico">🤝</div>
@@ -5271,6 +5302,107 @@ function coReopen(step){
   toast('Correct what is needed, then tap Release vehicle on the Handover step','ok');
 }
 // Everything still outstanding, checked before the check-out is finalised
+// ── What is still open, step by step ─────────────────────────────
+// Steps: 0 Cleaning · 2 Equipment · 3 Mechanical · 4 Inspection · 5 Contract · 6 Handover.
+// Ticklist items (cleaning / equipment / mechanical) are shown as tappable rows;
+// everything else as a plain line.
+var CO_ITEM_STEP={0:'Step 1 — Cleaning',2:'Step 2 — Equipment',3:'Step 3 — Mechanical'};
+function coStepItems(n){
+  var lbl=CO_ITEM_STEP[n];if(!lbl)return [];
+  return coInspIssues().filter(function(i){return i.status==='unchecked'&&i.step===lbl;});
+}
+function coStepMissing(n){
+  var m=[],c=co.contract||{},d=co.docItems||{},v=co.v||{};
+  if(n===2){
+    if(!co.equipSig)m.push('✍️ Equipment not confirmed as packed (✓ Confirm — Equipment Packed)');
+  }else if(n===4){
+    if(!co.odometerOut&&!v.odo)m.push('🛣 Odo reading not filled in (top of the screen)');
+    if(!(v.lic&&v.lic.expiry)&&!v._licExpiry)m.push('🚗 Licence disc date missing (top of the screen)');
+    if(!d.veh)m.push('📄 Vehicle documents (disc, insurance papers) not checked');
+    if(v.xb&&!d.xb)m.push('🌍 Cross-border papers not checked');
+  }else if(n===5){
+    (co.drivers&&co.drivers.length?co.drivers:[{}]).forEach(function(dr,i){
+      var who=i===0?'Main driver':'Driver '+(i+1);
+      if(!dr.passportImg)m.push('🛂 '+who+': no passport photo');
+      if(!dr.licFront)m.push('🪪 '+who+': no licence photo');
+      if(!dr.name)m.push('👤 '+who+': name not filled in');
+    });
+    if(!co.contractSigned){
+      try{ctMissing(c).forEach(function(x){if(!v.camping&&/Camping Equipment cover/.test(x))return;m.push(x);});}catch(e){}
+      m.push('✍️ Rental contract not signed yet');
+    }
+  }else if(n===6){
+    if(d.wifi!=='ok')m.push('📶 WiFi device not handed over');
+    if(!co.returnTime)m.push('🕑 Expected return time not set');
+    var hc=co.handoverChecks||{};
+    (window._HO_SECTIONS||[]).forEach(function(sec){
+      if(!sec.items.every(function(it){return hc[it.k]==='ok'||(it.k==='xb'&&!v.xb);}))m.push('🤝 Not explained yet: '+sec.title);
+    });
+    if(!handoverClosed())m.push('✍️ Client has not signed the handover');
+  }
+  return m;
+}
+function coLeftList(steps){
+  var out=[];
+  steps.forEach(function(n){
+    coStepItems(n).forEach(function(i){out.push((CO_NAMES[n]||'')+': '+i.label);});
+    coStepMissing(n).forEach(function(x){out.push(x);});
+  });
+  return out;
+}
+function coLeftCount(steps){try{return coLeftList(steps).length;}catch(e){return 0;}}
+// The list itself: grouped per step, items tappable right here
+function coLeftHTML(steps){
+  var h='';
+  steps.forEach(function(n){
+    var items=coStepItems(n),other=coStepMissing(n);
+    if(!items.length&&!other.length)return;
+    var cnt=items.length+other.length;
+    h+='<div style="margin:10px 0 4px;font-size:13px;font-weight:900;color:var(--rl);text-transform:uppercase;letter-spacing:.3px;">'
+      +_bx(CO_NAMES[n]||('Step '+n))+' · '+cnt+' open'
+      +(n!==coStep&&canDoStep(n)?' <button onclick="coLeftGoto('+n+')" style="margin-left:6px;padding:3px 9px;border-radius:7px;border:2px solid var(--re);background:#fff;color:var(--rl);font-size:12px;font-weight:900;cursor:pointer;text-transform:none;">Go to step →</button>':'')
+      +'</div>';
+    if(items.length)h+=qcUncheckedHTML('Not ticked',function(i){return i.step===CO_ITEM_STEP[n];});
+    if(other.length)h+='<ul style="margin:0 0 6px 18px;padding:0;font-size:15px;font-weight:700;color:var(--tx);line-height:1.7;">'
+      +other.map(function(x){return '<li>'+_bx(x)+'</li>';}).join('')+'</ul>';
+  });
+  return h;
+}
+function coLeftInline(steps,title){
+  try{
+    var n=coLeftCount(steps);if(!n)return '';
+    return '<div class="left-box" style="background:var(--rg);border:2px solid var(--re);border-radius:var(--rs);padding:12px 14px;margin-bottom:14px;">'
+      +'<div style="font-size:16px;font-weight:900;color:var(--rl);">🔴 '+_bx(title)+' ('+n+')</div>'
+      +'<div style="font-size:12px;color:var(--g5);">Tap OK / Issue right here, or go to the step.</div>'
+      +coLeftHTML(steps)+'</div>';
+  }catch(e){return '';}
+}
+var _coLeft=null;
+function coLeftBox(steps,o){
+  _coLeft={steps:steps,o:o};
+  var old=document.getElementById('co-step-left');if(old)old.remove();
+  var n=coLeftCount(steps);
+  var box=document.createElement('div');box.id='co-step-left';
+  box.setAttribute('style','position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:18px;');
+  box.innerHTML='<div style="background:var(--g1);border:2px solid var(--re);border-radius:16px;max-width:560px;width:100%;padding:18px;max-height:88vh;overflow:auto;">'
+    +'<div style="font-size:19px;font-weight:900;color:var(--rl);margin-bottom:2px;">⚠ '+_bx(o.title)+' — '+n+' thing'+(n===1?'':'s')+' open</div>'
+    +'<div style="font-size:13px;color:var(--g5);margin-bottom:6px;">'+_bx(o.sub||'')+'</div>'
+    +coLeftHTML(steps)
+    +'<div style="display:flex;gap:8px;margin-top:12px;position:sticky;bottom:-18px;background:var(--g1);padding:10px 0 4px;">'
+    +'<button class="btn g" style="flex:2;" onclick="coLeftClose()">← Stay and fix</button>'
+    +'<button class="btn s" style="flex:1;" onclick="coLeftGo()">'+_bx(o.goLbl||'Go on anyway →')+'</button>'
+    +'</div></div>';
+  document.body.appendChild(box);
+}
+function coLeftClose(){var b=document.getElementById('co-step-left');if(b)b.remove();_coLeft=null;}
+function coLeftGo(){var c=_coLeft;coLeftClose();if(c&&c.o&&c.o.onGo)c.o.onGo();}
+function coLeftGoto(n){coLeftClose();window._coLeftSkip=true;try{coGoStep(n);}finally{window._coLeftSkip=false;}window.scrollTo(0,0);}
+// After a tick inside the popup: redraw it, and once everything is done carry on where they were going
+function coLeftRefresh(){
+  var c=_coLeft;if(!c)return;
+  if(!coLeftCount(c.steps)){coLeftClose();toast('✅ All done','ok');if(c.o.onGo)c.o.onGo();return;}
+  coLeftBox(c.steps,c.o);
+}
 function coMissing(){
   var m=[],c=co.contract||{},d=co.docItems||{},v=co.v||{};
   var clean=coCleanItems().filter(function(l){return !coPst(l);});
@@ -9083,6 +9215,11 @@ function guideCO(){
     if(b)return t('All done — tap ✅ Release vehicle.',b);
     return t('A manager must release the vehicle.',null);
   }
+  // anything the guide does not walk through but is still open in this step
+  if(st!==6&&coLeftCount([st])){
+    var _l=coLeftList([st]);
+    return t('Still open in this step: '+(_l[0]||'')+(_l.length>1?' (+'+(_l.length-1)+' more)':''),gFind(R,'.left-box')||gFind(R,'.insp-flash'));
+  }
   // this step is finished
   if(st<6){
     var n=st+1;if(n===1)n=2;
@@ -9120,7 +9257,7 @@ function guideCI(){
 }
 function guideNow(){
   var pg=(document.querySelector('.page.on')||{}).id;
-  if(document.querySelector('#ask-box,#contract-modal,#co-missing,#qty-pick,#ho-who-modal,#ct-who-modal,#pin-cancel'))return null;
+  if(document.querySelector('#ask-box,#contract-modal,#co-missing,#co-step-left,#qty-pick,#ho-who-modal,#ct-who-modal,#pin-cancel'))return null;
   if(pg==='page-co'&&co&&co.v&&!co._done)return guideCO();
   if(pg==='page-ci'&&ci&&ci.v&&!ci._done)return guideCI();
   return null;
