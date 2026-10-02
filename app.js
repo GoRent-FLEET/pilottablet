@@ -2972,6 +2972,18 @@ function hoTopRow(){
     +'</div>';
 }
 function coSetDoc(k,v){if(!co.docItems)co.docItems={};co.docItems[k]=v;if(!co.docWho)co.docWho={};co.docWho[k]=((APP_USER&&APP_USER.name)||'')+' · '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});saveCOProgress();drawCO();}
+// Check-in: one compact row per small item — name, Returned, Not returned
+function ciMiniRet(id,title,val,onOk,onBad){
+  var bad=val==='missing',ok=val==='ok';
+  var bs='padding:8px 10px;border-radius:8px;font-size:13px;font-weight:900;cursor:pointer;touch-action:manipulation;white-space:nowrap;';
+  return '<div id="'+id+'" class="'+(val?'':'insp-flash')+'" style="display:flex;align-items:center;gap:6px;border:2px solid '+(ok?'var(--gb)':bad?'var(--re)':'var(--am)')+';border-radius:10px;padding:6px 8px;background:'+(ok?'var(--sg)':bad?'var(--rg)':'var(--ag)')+';">'
+    +'<span style="flex:1;min-width:0;font-size:14px;font-weight:900;color:var(--tx);">'+title+' *</span>'
+    +'<button style="'+bs+(ok?'border:2px solid var(--gb);background:var(--se);color:#fff;':'border:2px solid var(--g3);background:var(--g0);color:var(--tx);')+'" onclick="'+onOk+'">'+(ok?'✓ ':'')+'Returned</button>'
+    +'<button style="'+bs+(bad?'border:2px solid var(--re);background:var(--re);color:#fff;':'border:2px solid var(--g3);background:var(--g0);color:var(--tx);')+'" onclick="'+onBad+'">'+(bad?'✗ ':'')+'Not returned</button>'
+    +'</div>';
+}
+function ciSetRet(k,v){retSt[k]=(retSt[k]===v)?'':v;if(!ci.retEqBy)ci.retEqBy={};ci.retEqBy[k]={st:retSt[k],by:ci.receivedBy||(APP_USER&&APP_USER.name)||'',at:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})};
+  if(retSt[k]==='missing')toast('✗ '+k+' NOT returned — shows on the client and management report','err');drawCI();}
 function ciSetWifi(v){retSt['WiFi device']=v;if(!ci.retEqBy)ci.retEqBy={};ci.retEqBy['WiFi device']={st:v,by:ci.receivedBy||(APP_USER&&APP_USER.name)||'',at:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})};drawCI();}
 // ── No-camping bookings: only vehicle, mechanical, Box 4 and a few loose items ─────────
 // Camping (2 or 4 pax): every tent / camping check is done. No camping: hide the camping gear below.
@@ -6121,7 +6133,10 @@ function ciStep0_CI(){
     <div class="who-lbl">👤 Who is receiving this vehicle?</div>
     ${selStaff('ci-rcv',STAFF_HO,r.receivedBy)}
   </div>
-  ${wifiBox('📶 WIFI DEVICE — returned?','Every vehicle goes out with a WiFi device · check the device (and charger) is back',retSt['WiFi device']||'',"ciSetWifi('ok')","ciSetWifi('missing')",'Returned','NOT returned')}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 12px;">
+    ${ciMiniRet('ci-wifi-box','📶 WiFi device',retSt['WiFi device']||'',"ciSetWifi('ok')","ciSetWifi('missing')")}
+    ${ciMiniRet('ci-usb-box','🔌 USB charger',retSt['USB charger']||'',"ciSetRet('USB charger','ok')","ciSetRet('USB charger','missing')")}
+  </div>
   <!-- ODO + FUEL ROW -->
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
     <div>
@@ -6360,6 +6375,7 @@ async function peterOverrideCI(){
   if(!ci.odoIn)open.unshift({lbl:'Odometer in (Step 1)'});
   if(!ci.fuelIn)open.unshift({lbl:'Fuel in (Step 1)'});
   if(!retSt['WiFi device'])open.unshift({lbl:'WiFi device returned? (Step 1)'});
+  if(!retSt['USB charger'])open.unshift({lbl:'USB charger returned? (Step 1)'});
   if(!open.length)open=[{lbl:'Management sign-off (Step 5)'}];
   ci.forceClosedBy=null;           // always ask Peter to confirm + give a reason for this override
   if(!(await ciPeterOverride(open)))return;
@@ -6583,7 +6599,7 @@ function ciBuildRetGroups(){
     if(!cur||cur.g.indexOf('Exterior')>=0||!ciShow(x,i))return;
     cur.items.push(String(x[1]).replace('__QTY__',''));
   });
-  groups.push({g:'🔑 Keys, WiFi & documents',items:['WiFi device','All keys & remote','Vehicle licence & insurance']});
+  groups.push({g:'🔑 Keys, WiFi & documents',items:['WiFi device','USB charger','All keys & remote','Vehicle licence & insurance']});
   // Order at check-in: 1) the items clients lose most, 2) the other loose items, 3) Box 1, 2, 3, 4 in number order, 4) the rest
   var loose=groups.filter(function(g){return /Loose Items/i.test(g.g);})[0]||{g:'📦 Loose Items',items:[]};
   var hasComp=loose.items.indexOf('Compressor')>=0;
@@ -6646,6 +6662,7 @@ function signRetCheck(){
   var _oo=ci.odometerOut||ci.v.odo||0;
   if(_oo&&ci.odoIn<_oo){toast('Odometer IN ('+ci.odoIn+') is lower than km OUT ('+_oo+') — check the reading','err');return;}
   if(!retSt['WiFi device']){toast('Check the WiFi device first (top of this step)','err');return;}
+  if(!retSt['USB charger']){toast('Check the USB charger first (top of this step)','err');return;}
   ci.retSig=getSig('ci-ret-sig');ci.retAt=now();
   try{
     const raw=localStorage.getItem(ipKey(ci.fn));
@@ -6693,6 +6710,7 @@ function ciOpenBeforeSign(){
   try{
     if(!ci.receivedBy)out.push({s:0,t:'Who is receiving the vehicle'});
     if(!retSt['WiFi device'])out.push({s:0,t:'WiFi device — returned or not'});
+    if(!retSt['USB charger'])out.push({s:0,t:'USB charger — returned or not'});
     if(!ci.odoIn)out.push({s:0,t:'Kilometres from the dashboard'});
     if(!ci.fuelIn)out.push({s:0,t:'Fuel level'});
     var items=L_CI.filter(function(x,i){return x[0]!=='__SECTION__'&&x[0]!=='__OPTIONAL__'&&ciShow(x,i)&&ciStep1Item(i);});
@@ -9474,7 +9492,8 @@ function guideCI(){
   var g=ciGroup(ciStep),b;
   if(g===0){
     if(!ci.receivedBy)return t('Choose your name: who is receiving the vehicle?',gFind(R,'.who-box'));
-    if(!retSt['WiFi device']){b=gFind(R,'div',function(x){return /^📶 WIFI DEVICE/.test((x.textContent||'').trim());});return t('Is the WiFi device back? Tap Returned or NOT returned.',b);}
+    if(!retSt['WiFi device'])return t('Is the WiFi device back? Tap Returned or Not returned.',document.getElementById('ci-wifi-box'));
+    if(!retSt['USB charger'])return t('Is the USB charger back? Tap Returned or Not returned.',document.getElementById('ci-usb-box'));
     if(!ci.odoIn)return t('Type the kilometres from the dashboard.',document.getElementById('ci-odo'));
     if(!ci.fuelIn)return t('Look at the fuel gauge and choose the level.',document.getElementById('ci-fuel'));
     var items=L_CI.filter(function(x,i){return x[0]!=='__SECTION__'&&x[0]!=='__OPTIONAL__'&&ciShow(x,i)&&ciStep1Item(i);});
