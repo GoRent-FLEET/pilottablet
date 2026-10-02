@@ -2150,9 +2150,8 @@ function drPhotoRef(src,id){
   if(src.indexOf('data:image')!==0||src.length<=60000)return src;
   return 'draftimg:drafts/'+id.replace(/[^A-Za-z0-9_-]/g,'_')+'/'+drHash(src)+(src.indexOf('data:image/png')===0?'.png':'.jpg');
 }
-async function drMergePhotos(r,data){
-  var q=await SB.from('work_drafts').select('data').eq('id',r.id).maybeSingle();
-  var srv=q&&q.data&&q.data.data&&q.data.data.o;var mine=data&&data.o;
+async function drMergePhotos(r,data,srvData){
+  var srv=srvData&&srvData.o;var mine=data&&data.o;
   if(!srv||!mine)return;
   var del={};(mine._phDel||[]).concat(srv._phDel||[]).forEach(function(x){del[x]=1;});
   mine._phDel=Object.keys(del);
@@ -2176,6 +2175,31 @@ async function drMergePhotos(r,data){
   job._phDel=mine._phDel;
   _drDirty=true;
   try{if(drPageOn(kind==='checkout'?'co':'ci'))redraw();}catch(e){}
+}
+// Fully Kiosk on the Blackview blocks new windows ("Popups and new tabs disabled").
+function openExt(url){
+  var w=null;try{w=window.open(url,'_blank');}catch(e){}
+  if(!w){try{askBox({title:'This tablet blocked the window',ok:'OK',
+    text:'Fully Kiosk is blocking new windows, so '+(/wa\.me|whatsapp/i.test(url)?'WhatsApp':'the page')+' could not open.\n\nManager: Fully → Settings → Web Browsing Settings → turn ON “Enable Popups”, then try again.'});}catch(e){toast('Window blocked — turn on popups in Fully settings','err');}}
+  return w;
+}
+// Links that open a new tab: photos open full screen in the app, everything else through openExt
+document.addEventListener('click',function(e){
+  try{
+    var a=e.target&&e.target.closest&&e.target.closest('a[target="_blank"]');if(!a||!a.href)return;
+    e.preventDefault();
+    if(a.querySelector('img')||/\.(jpe?g|png|webp)(\?|$)/i.test(a.href)){showImg(a.href);return;}
+    openExt(a.href);
+  }catch(err){}
+},true);
+// Saved handover / return report: shown inside the app (no new window)
+async function rfOpenSaved(which){
+  var R=window._rfData||{},u=which==='ret'?R.ret:R.handover;if(!u)return;
+  banner('Opening…');
+  var t='';try{var r=await fetch(u);t=r.ok?await r.text():'';}catch(e){}
+  hideBanner();
+  if(!t){openExt('https://gorent-fleet.github.io/tablet/#r='+encodeURIComponent(u));return;}
+  openDoc(t,which==='ret'?'Return report':'Handover document');
 }
 function drBlobToData(b){return new Promise(function(res,rej){var r=new FileReader();r.onload=function(){res(r.result);};r.onerror=rej;r.readAsDataURL(b);});}
 async function drUnpack(val){
@@ -2214,19 +2238,20 @@ async function drPush(){
       }
       if(r.pushed)continue;
       // Someone else changed it since this device last synced? Ask once.
-      var chk=await SB.from('work_drafts').select('updated_at,updated_by,device,summary').eq('id',r.id).maybeSingle();
+      var chk=await SB.from('work_drafts').select('updated_at,updated_by,device,summary,data').eq('id',r.id).maybeSingle();
       if(chk.error){_drDirty=true;break;}
       var row=chk.data;
       if(row&&row.device!==DR_DEV&&row.summary&&Object.keys(row.summary).length&&(!r.base||row.updated_at>r.base)){   // (older-format rows have no summary: just replace them)
         drOtherDeviceNote(r,row);   // someone else has it open too — never interrupt the person in front of the screen
         r.base=row.updated_at;
-        r._mergePh=true;
       }
       var data=await drPack(JSON.parse(r.json),r.id);
       // Two devices on the same job (Blackview taking equipment photos, office doing the contract on
       // another tablet): the whole job was replaced by whichever saved last, so photos taken on the
       // other device vanished. Photos are now added together; only a photo someone deleted stays gone.
-      if(r._mergePh){try{await drMergePhotos(r,data);}catch(e){}}
+      // Done on EVERY save (also from the same tablet): an older copy of the job on this tablet
+      // must never wipe photos already saved on the server (H-001, 2 Oct: 5 equipment photos lost).
+      if(row&&row.data){try{await drMergePhotos(r,data,row.data);}catch(e){}}
       var up=await SB.from('work_drafts').upsert({id:r.id,kind:r.kind,fleet_no:r.fn,client:r.cl,staff:r.staff,step:r.step,summary:r.sum||{},
         data:data,updated_by:r.by||(APP_USER&&APP_USER.name),device:DR_DEV},{onConflict:'id'}).select('updated_at,started_at').single();
       if(up.error){_drDirty=true;break;}
@@ -6099,7 +6124,7 @@ function sendGuideWA(){
   if(!phone){toast('Enter WhatsApp number','err');return;}
   var first=firstNameOf(mainRenter()||co.v.cl,(co.drivers||[])[0]);
   var msg='Hi '+first+',\n\nHere is your Namibia driving guide from Go Rent 4x4 - our road rules, what to do after an accident or breakdown, emergency numbers, tyre pressure and where to shop. Please keep it handy, many roads have no signal:\n'+guideLink()+'\n\nSafe travels! WhatsApp us anytime: +264 81 861 8085\n- Go Rent 4x4 Team';
-  window.open('https://wa.me/'+waNumber(phone)+'?text='+encodeURIComponent(msg),'_blank');
+  openExt('https://wa.me/'+waNumber(phone)+'?text='+encodeURIComponent(msg));
 }
 function sendHandoverWA(){
   const phone=((function(){var _e=document.getElementById('send-wa');return _e?_e.value:undefined;})()||'').trim();
@@ -6107,7 +6132,7 @@ function sendHandoverWA(){
   if(!co._handoverLink){toast('The handover report is still being saved — try again in a moment','err');return;}
   var first=firstNameOf(mainRenter()||co.v.cl,(co.drivers||[])[0]);
   const msg=encodeURIComponent('Hi '+first+',\n\nThank you for renting with Go Rent 4x4 Namibia!\n\nVehicle: '+co.fn+' ('+(co.v.reg||'')+')\nPickup: '+(coPickupDate()||'today')+' | Return: '+(co.v.rt||'-')+'\nFuel at departure: '+(co.fuelOut||'Full')+' - please return at the same level. DIESEL ONLY.\n\nYour handover document - handover checklist, vehicle condition and damage, photos, equipment issued and your full signed rental contract:\n'+co._handoverLink+(co.sendGuide===false?'':'\n\nYour Namibia driving guide - our road rules, what to do after an accident or breakdown, emergency numbers (please keep it handy, many roads have no signal):\n'+guideLink())+'\n\nSafe travels! WhatsApp us anytime: +264 81 861 8085\n- Go Rent 4x4 Team');
-  window.open('https://wa.me/'+waNumber(phone)+'?text='+msg,'_blank');
+  openExt('https://wa.me/'+waNumber(phone)+'?text='+msg);
   if(!co._mgmtSent)toast('Now send the copy to Management (green button)','ok');
 }
 
@@ -6747,7 +6772,7 @@ async function saveDeposit(id){
   var box=document.getElementById('dep-'+id);
   if(box)box.outerHTML='<div class="al ok" style="margin-bottom:12px;">✅ '+_bx(c.fleet_no)+' · '+_bx(c.client||'')+' — '+_bx(reason)+' — saved by '+_bx(who)
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"><input id="dep-wa-'+id+'" type="tel" value="'+_bx(v.phone||'')+'" placeholder="Client WhatsApp number" style="flex:1;min-width:180px;padding:8px 10px;border-radius:8px;">'
-    +'<button onclick="window.open(\'https://wa.me/\'+waNumber(document.getElementById(\'dep-wa-'+id+'\').value)+\'?text='+encodeURIComponent(msg).replace(/'/g,'%27')+'\',\'_blank\')" style="padding:8px 14px;border-radius:8px;border:none;background:#25d366;color:#04240f;font-weight:900;">💬 Tell the client on WhatsApp</button></div></div>';
+    +'<button onclick="openExt(\'https://wa.me/\'+waNumber(document.getElementById(\'dep-wa-'+id+'\').value)+\'?text='+encodeURIComponent(msg).replace(/'/g,'%27')+'\')" style="padding:8px 14px;border-radius:8px;border:none;background:#25d366;color:#04240f;font-weight:900;">💬 Tell the client on WhatsApp</button></div></div>';
   toast('Deposit decision saved ✅','ok');showDepositBanner();
 }
 setInterval(function(){if(APP_USER&&typeof canViewReports==='function'&&canViewReports())refreshDeposits();},60000);
@@ -7286,7 +7311,7 @@ async function openRentalFile(key,fn,client,alsoKeys,part){
     var RD=window._rfData;
     h+='<button class="btn g" style="width:100%;margin-bottom:6px;" onclick="rfPrintPicker()">🖨 Print / save documents (choose what)</button>'
       +'<div style="font-size:12px;color:var(--g5);margin-bottom:6px;">Pick what you need — contract, passports, equipment &amp; vehicle checks, damage, photos, return report — then print it or save it as a PDF.</div>'
-      +(((RD.handover&&part!=='in')||(RD.ret&&part!=='out'))?'<div style="display:flex;gap:8px;flex-wrap:wrap;">'+((RD.handover&&part!=='in')?'<a class="btn s" style="flex:1;text-align:center;text-decoration:none;" href="https://gorent-fleet.github.io/tablet/#r='+encodeURIComponent(RD.handover)+'" target="_blank">🤝 Open handover document</a>':'')+((RD.ret&&part!=='out')?'<a class="btn s" style="flex:1;text-align:center;text-decoration:none;" href="https://gorent-fleet.github.io/tablet/#r='+encodeURIComponent(RD.ret)+'" target="_blank">🏠 Open return report</a>':'')+'</div>':'');
+      +(((RD.handover&&part!=='in')||(RD.ret&&part!=='out'))?'<div style="display:flex;gap:8px;flex-wrap:wrap;">'+((RD.handover&&part!=='in')?'<button class="btn s" style="flex:1;text-align:center;" onclick="rfOpenSaved(\'handover\')">🤝 Open handover document</button>':'')+((RD.ret&&part!=='out')?'<button class="btn s" style="flex:1;text-align:center;" onclick="rfOpenSaved(\'ret\')">🏠 Open return report</button>':'')+'</div>':'');
     h+=sec('📝 Signed contract',contract?(line('Signed by client',_bx(contract.client_name||'')+(contract.client_signed_at?' · '+new Date(contract.client_signed_at).toLocaleString('en-GB'):''))+line('Staff',_bx(contract.staff_signed_by||contract.created_by||'—'))+line('Deposit',contract.deposit_amount?('N$ '+Number(contract.deposit_amount).toLocaleString()):'—')
       +(window._rfContractHTML?'<button class="btn g" style="margin-top:8px;width:auto;padding:10px 16px;" onclick="rfShowContract()">📄 Open full signed contract</button>':'')):'<div style="font-size:13px;color:var(--g5);">No signed contract saved for this booking yet.</div>');
     h+=sec('🪪 Passport, ID & licence scans',idDocs.length?idDocs.map(function(p){return signed[p]?thumb(signed[p],rfLabel(p)+(_from[p]&&_from[p]!==key?' · from '+_from[p]:''),p,'client-docs'):'';}).join(''):'<div style="font-size:13px;color:var(--g5);">No scans saved for this booking yet.</div>');
@@ -7437,7 +7462,7 @@ function ciWaBox(phone,link){
 }
 // Management always gets a copy of every client document on WhatsApp (for their records)
 var MGMT_WA='264818618085';
-function mgmtWA(text){window.open('https://wa.me/'+MGMT_WA+'?text='+encodeURIComponent(text),'_blank');}
+function mgmtWA(text){openExt('https://wa.me/'+MGMT_WA+'?text='+encodeURIComponent(text));}
 function mgmtBtn(id,fn,sent){return '<button id="'+id+'" onclick="'+fn+'" class="'+(sent?'':'insp-flash')+'" style="width:100%;margin-top:10px;padding:12px 14px;border-radius:10px;border:2px solid '+(sent?'var(--gb)':'var(--re)')+';background:'+(sent?'var(--sg)':'var(--g0)')+';color:var(--tx);font-size:15px;font-weight:900;cursor:pointer;">'+(sent?'✅ Copy sent to Management':'📋 Send copy to Management (+264 81 861 8085)')+'</button>';}
 function sendHandoverMgmt(){
   if(!co._handoverLink){toast('The handover report is still being saved — try again in a moment','err');return;}
@@ -7470,7 +7495,7 @@ function sendCIWhatsApp(){
   var raw=(document.getElementById('ci-wa-to')||{}).value||'';
   var num=waNumber(raw);
   var url='https://wa.me/'+(num||'')+'?text='+encodeURIComponent(ciWaText(ci._reportLink));
-  window.open(url,'_blank');
+  openExt(url);
   try{SB.from('checkins').update({report_whatsapp_at:new Date().toISOString()}).eq('booking_id',bkKey(ci.v)).then(function(){},function(){});}catch(e){}
   if(!ci._mgmtSent)toast('Now send the copy to Management (green button)','ok');
 }
@@ -7520,7 +7545,7 @@ function sharedReportWA(){
       +(veh?'\n\nVehicle: '+veh:'')+(ret?'\nReturn: '+ret:'')
       +'\n\nIt opens straight on your phone:\n'+link
       +'\n\nWhatsApp us any time: +264 81 861 8085\n- Go Rent 4x4 Team';
-    window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+    openExt('https://wa.me/?text='+encodeURIComponent(msg));
   }catch(e){
     try{toast('Could not open WhatsApp','err');}catch(e2){alert('Could not open WhatsApp');}
   }
