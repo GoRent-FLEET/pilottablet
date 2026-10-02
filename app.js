@@ -551,8 +551,10 @@ function syncOpenBooking(){
     BK_SYNC_FIELDS.forEach(function(f){
       var k=f[0],a=old[k]||'',b=now[k]||'';
       if(a===b)return;
-      if(p[0]==='co'&&k==='phone'&&(!job.clientPhone||job.clientPhone===a))job.clientPhone=b;
-      if(p[0]==='co'&&k==='email'&&(!job.clientEmail||job.clientEmail===a))job.clientEmail=b;
+      if(p[0]==='co'&&k==='phone'&&(!job._phoneTyped||!job.clientPhone||job.clientPhone===a))job.clientPhone=b;
+      if(p[0]==='co'&&k==='email'&&(!job._emailTyped||!job.clientEmail||job.clientEmail===a))job.clientEmail=b;
+      if(p[0]==='co'&&k==='puLocation'&&_isRemoteLoc(b)&&job._fmPickup!==undefined&&job.pickupArrangement===job._fmPickup){job.pickupArrangement=b;job._fmPickup=b;}
+      if(p[0]==='co'&&k==='doLocation'&&_isRemoteLoc(b)&&job._fmDropoff!==undefined&&job.dropoffArrangement===job._fmDropoff){job.dropoffArrangement=b;job._fmDropoff=b;}
       old[k]=b;
       if(f[1])changed.push(f[1]+(b?': '+b:' removed'));
     });
@@ -2641,6 +2643,7 @@ function coWhatsLeft(){
 }
 function drawCO(){
   try{coAutoWho();}catch(e){}
+  try{coFillFromBooking();}catch(e){}
   sigScope('co:'+((co&&co.fn)||''));   // ink belongs to this vehicle's check-out only
   // Safety guard
   if(!co||!co.v){
@@ -3517,7 +3520,49 @@ function coContractWho(){
     +'<select id="co-ct-nm" onchange="co.contractBy=this.value;this.style.borderColor=this.value?\'var(--gb)\':\'var(--am)\';saveCOProgress()" style="color-scheme:light;width:100%;padding:12px 14px;font-size:16px;font-weight:800;background:var(--g0);border:2px solid '+(co.contractBy?'var(--gb)':'var(--am)')+';border-radius:var(--rs);color:var(--tx);">'
     +'<option value="">— Select your name —</option>'+CONTRACT_STAFF.map(function(n){return '<option'+(n===co.contractBy?' selected':'')+'>'+n+'</option>';}).join('')+'</select></div>');
 }
+// Client contact comes from the Fleet Manager booking. Every field stays editable on the
+// tablet: once staff type in a field, what they typed is kept (a later Fleet Manager
+// change no longer overwrites it). An empty field that nobody has touched is always
+// filled from the booking — also for check-outs started before the booking had it.
+function coBookingContact(){
+  var v=(co&&co.v)||{},b=v.b||{};
+  return {email:String(v.email||b.email||'').trim(),phone:String(v.phone||b.phone||'').trim()};
+}
+function coFillFromBooking(){
+  if(!co||!co.v)return;
+  var bc=coBookingContact(),v=co.v;
+  if(!co._emailTyped&&!co.clientEmail&&bc.email)co.clientEmail=bc.email;
+  if(!co._phoneTyped&&!co.clientPhone&&bc.phone)co.clientPhone=bc.phone;
+  // a collection / return somewhere other than Windhoek is already in the booking
+  if(_isRemoteLoc(v.puLocation)&&!co.pickupArrangement&&co._pickupArrangementOther===undefined){
+    co.pickupArrangement=v.puLocation;co._pickupArrangementOther=1;co._fmPickup=v.puLocation;}
+  if(_isRemoteLoc(v.doLocation)&&!co.dropoffArrangement&&co._dropoffArrangementOther===undefined){
+    co.dropoffArrangement=v.doLocation;co._dropoffArrangementOther=1;co._fmDropoff=v.doLocation;}
+}
+function coEmailBad(s){s=String(s||'').trim();return !!s&&!/^[^\s@,;]+@[^\s@,;]+\.[a-z]{2,}$/i.test(s);}
+function coPhoneBad(s){s=String(s||'').replace(/[\s\-().]/g,'');return !!s&&!/^\+\d{8,15}$/.test(s);}
+function coContactInput(kind,el){
+  var val=el.value;
+  if(kind==='email'){co.clientEmail=val;co._emailTyped=1;}else{co.clientPhone=val;co._phoneTyped=1;}
+  var bad=kind==='email'?coEmailBad(val):coPhoneBad(val);
+  el.style.borderColor=bad?'var(--am)':(val?'var(--gb)':'var(--g3)');
+  var w=document.getElementById('cc-warn-'+kind);if(w)w.style.display=bad?'':'none';
+  var t=document.getElementById('cc-fm-'+kind);if(t){var bv=coBookingContact()[kind];t.style.display=(val&&val.trim()===bv)?'':'none';}
+}
+function coContactField(kind){
+  var isE=kind==='email',val=isE?(co.clientEmail||''):(co.clientPhone||''),bv=coBookingContact()[kind];
+  var bad=isE?coEmailBad(val):coPhoneBad(val);
+  return '<label>'+(isE?'📧 Email address':'💬 WhatsApp number')
+    +' <span id="cc-fm-'+kind+'" style="display:'+(val&&val.trim()===bv?'':'none')+';font-size:11px;font-weight:800;color:var(--se);text-transform:none;letter-spacing:0;">· from Fleet Manager</span></label>'
+    +'<input type="'+(isE?'email':'tel')+'" inputmode="'+(isE?'email':'tel')+'" autocomplete="off" autocapitalize="off" spellcheck="false" value="'+_bx(val)+'" placeholder="'+(isE?'client@email.com':'+264 81 ...')+'"'
+    +' oninput="coContactInput(\''+kind+'\',this)" onchange="saveCOProgress()"'
+    +' style="border-color:'+(bad?'var(--am)':(val?'var(--gb)':'var(--g3)'))+'">'
+    +'<div id="cc-warn-'+kind+'" style="display:'+(bad?'':'none')+';font-size:12px;font-weight:800;color:var(--al);margin-top:3px;">'
+    +(isE?'⚠ This email looks wrong — please check it with the client':'⚠ Use the full international number, starting with + (e.g. +49 170 1234567)')+'</div>'
+    +(!val&&!bv?'<div style="font-size:12px;color:var(--g5);margin-top:3px;">Not in the Fleet Manager booking — ask the client</div>':'');
+}
 function coStep1(){
+  try{coFillFromBooking();}catch(e){}
   // the booking already says an airport transfer was arranged: start on 'somewhere else'
   try{ if(co&&co.v&&co.v.transfer&&!co.pickupArrangement&&co._pickupArrangementOther===undefined){
     co.pickupArrangement=co.v.transfer;co._pickupArrangementOther=1;} }catch(e){}
@@ -3626,14 +3671,8 @@ function coStep1(){
   ${ctInsuranceHTML()}
   <div class="sum-box sec-contact" style="margin-bottom:12px"><div class="sum-title" style="margin-bottom:10px">📇 Client contact · transfer · collection &amp; return</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
-        <div class="fi" style="flex:2 1 220px;min-width:180px;"><label>📧 Email address</label>
-          <input type="email" value="${co.clientEmail||''}" placeholder="client@email.com" oninput="co.clientEmail=this.value" onchange="saveCOProgress()"
-            style="border-color:${co.clientEmail?'var(--gb)':'var(--g3)'}">
-        </div>
-        <div class="fi" style="flex:1.3 1 180px;min-width:150px;"><label>💬 WhatsApp number</label>
-          <input type="tel" value="${co.clientPhone||''}" placeholder="+264 81 ..." oninput="co.clientPhone=this.value" onchange="saveCOProgress()"
-            style="border-color:${co.clientPhone?'var(--gb)':'var(--g3)'}">
-        </div>
+        <div class="fi" style="flex:2 1 220px;min-width:180px;">${coContactField('email')}</div>
+        <div class="fi" style="flex:1.3 1 180px;min-width:150px;">${coContactField('phone')}</div>
       </div>
 
       
