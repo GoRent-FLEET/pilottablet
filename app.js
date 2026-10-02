@@ -2942,21 +2942,32 @@ function hoQuickTimes(v){
     +(sug?b(sug,'✈ '+sug+' <span style="font-weight:700;font-size:11px;">(flight '+fl+')</span>',true):'')
     +opts.filter(function(t){return t!==sug;}).map(function(t){return b(t,t,false);}).join('')+'</div>';
 }
-// Handover: WiFi device (+ cross-border docs) next to the expected return date & time
+// Expected return time + WiFi device: on the Contract step, right under Collection & Return,
+// as two compact rows (they used to be two big boxes at the top of Handover).
+function ctReturnWifiHTML(){
+  var v=co.v,d=co.docItems||{};
+  var due=v.rt?new Date(v.rt+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}):'—';
+  var ok=!!co.returnTime;
+  var ret='<div id="ct-rtime-box" style="border:2px solid '+(ok?'var(--gb)':'var(--am)')+';border-radius:10px;padding:8px 10px;background:'+(ok?'var(--sg)':'var(--ag)')+';">'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+    +'<span style="font-size:13px;font-weight:900;color:var(--tx);white-space:nowrap;">🕑 Return '+due+' — expected time *</span>'
+    +'<span style="display:flex;gap:6px;min-width:180px;flex:0 1 220px;">'+timePickers('ho-rtime',co.returnTime||'',"var _t=timePickValue('ho-rtime');if(_t){co.returnTime=_t;saveCOProgress();drawCO();}")+'</span>'
+    +'</div>'
+    +hoQuickTimes(v)+'</div>';
+  var w=d.wifi||'',bs='padding:7px 14px;border-radius:8px;font-size:13px;font-weight:900;cursor:pointer;touch-action:manipulation;';
+  var wifi='<div id="ct-wifi-box" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border:2px solid '+(w==='ok'?'var(--gb)':w?'var(--re)':'var(--am)')+';border-radius:10px;padding:7px 10px;background:'+(w==='ok'?'var(--sg)':w?'var(--rg)':'var(--ag)')+';">'
+    +'<span style="font-size:13px;font-weight:900;color:var(--tx);flex:1;min-width:140px;">📶 WiFi device *</span>'
+    +'<button style="'+bs+(w==='ok'?'border:2px solid var(--gb);background:var(--se);color:#fff;':'border:2px solid var(--g3);background:var(--g0);color:var(--tx);')+'" onclick="coSetDoc(\'wifi\',\'ok\')">'+(w==='ok'?'✓ ':'')+'Handed over</button>'
+    +'<button style="'+bs+(w&&w!=='ok'?'border:2px solid var(--re);background:var(--re);color:#fff;':'border:2px solid var(--g3);background:var(--g0);color:var(--tx);')+'" onclick="coSetDoc(\'wifi\',\'issue\')">'+(w&&w!=='ok'?'⚠ ':'')+'Not available</button>'
+    +'</div>';
+  return '<div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">'+ret+wifi+'</div>';
+}
+// Handover: only the cross-border papers are left up here (WiFi + return time moved to Contract)
 function hoTopRow(){
   var v=co.v,d=co.docItems||{};
-  var due=v.rt?new Date(v.rt+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'}):'—';
-  var fl=(v.b&&v.b.departure_flight)?'<div style="font-size:11px;color:var(--g5);margin-top:4px;">🛫 Client flight: '+_bx(v.b.departure_flight)+'</div>':'';
-  var ret='<div style="border:2px solid '+(co.returnTime?'var(--gb)':'var(--am)')+';border-radius:10px;padding:8px 10px;background:'+(co.returnTime?'var(--sg)':'var(--ag)')+';">'
-    +'<div style="font-size:14px;font-weight:900;color:var(--tx);margin-bottom:6px;">📅 Return: '+due+'</div>'
-    +'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;font-weight:800;color:var(--g5);">Expected time *</span>'
-    +timePickers('ho-rtime',co.returnTime||'',"var _t=timePickValue('ho-rtime');if(_t){co.returnTime=_t;saveCOProgress();drawCO();}")+'</div>'
-    +hoQuickTimes(v)
-    +fl+'</div>';
-  return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0 12px;">'
-    +miniBox('📶 WiFi device',d.wifi||'',"coSetDoc('wifi','ok')","coSetDoc('wifi','issue')",'Handed over','Not available')
-    +ret
-    +(v.xb?miniBox('🌍 Cross-border docs — '+_bx(v.xb),d.xb||'',"coSetDoc('xb','ok')","coSetDoc('xb','issue')",'Handed over','Missing'):'')
+  if(!v.xb)return '';
+  return '<div style="margin:10px 0 12px;">'
+    +miniBox('🌍 Cross-border docs — '+_bx(v.xb),d.xb||'',"coSetDoc('xb','ok')","coSetDoc('xb','issue')",'Handed over','Missing')
     +'</div>';
 }
 function coSetDoc(k,v){if(!co.docItems)co.docItems={};co.docItems[k]=v;if(!co.docWho)co.docWho={};co.docWho[k]=((APP_USER&&APP_USER.name)||'')+' · '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});saveCOProgress();drawCO();}
@@ -3565,6 +3576,7 @@ function coStep1(){
       <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
         ${placePicker('pickupArrangement','📍 Collection — where the client picks the vehicle up','e.g. Hosea Kutako Airport · arrivals · 09:30')}
         ${placePicker('dropoffArrangement','📍 Return — where the client brings it back','e.g. Hosea Kutako Airport · departures · 16:00')}
+        ${ctReturnWifiHTML()}
         ${(co.remoteLocation||co.clientNotes||co._moreOpen)?'':'<button onclick="co._moreOpen=1;drawCO()" style="align-self:flex-start;padding:8px 14px;border-radius:8px;border:1px dashed var(--g4);background:transparent;color:var(--g5);font-size:14px;font-weight:800;cursor:pointer;">＋ Remote location / notes</button>'}
         <div style="display:flex;flex-direction:column;gap:8px;${(co.remoteLocation||co.clientNotes||co._moreOpen)?'':'display:none;'}">
         <div class="fi">
@@ -5035,9 +5047,9 @@ async function overrideClientSig(){
 function handoverClosed(){ return !!(co&&(co.custSig||co.sigOverride)); }
 function signHandover(){
   if(coLeftCount(CO_BEFORE_HANDOVER)){coLeftBox(CO_BEFORE_HANDOVER,{block:true,title:'Handover cannot be signed yet',sub:'Staff must finish these first.'});return;}
-  if(!(co.docItems&&co.docItems.wifi)){toast('Check the WiFi device first (top of this step)','err');return;}
+  if(!(co.docItems&&co.docItems.wifi)){toast('WiFi device not done — it is on the Contract step, under Collection & Return','err');return;}
   if(co.v.xb&&!(co.docItems&&co.docItems.xb)){toast('Check the cross-border documents first','err');return;}
-  if(!co.returnTime){toast('Ask the client what time they will return and enter it (top of this step)','err');var _t=document.getElementById('ho-rtime');if(_t)_t.focus();return;}
+  if(!co.returnTime){toast('Return time not set — it is on the Contract step, under Collection & Return','err');return;}
   if(!hasSig('co-c-sig')){toast('Customer must sign','err');return;}
   co.custSig=getSig('co-c-sig');co.custAt=now();
   co.dmgd=getDmgData();
@@ -9417,6 +9429,8 @@ function guideCO(){
       if(co.v.xb&&!c0.cross_border_deposit){b=gFind(R,'label,div',function(x){return /Cross-border\/Damage deposit/.test(x.textContent)&&x.querySelector('input[type=checkbox]')&&x.textContent.length<200;});return t('Take the Cross-border deposit, then tick it.',b);}
       b=gFind(R,'select',function(x){return /how the deposit was paid/.test(x.textContent)&&!x.value;});if(b)return t('Choose how the deposit was paid.',b);
     }
+    if(!co.returnTime)return t('Ask the client what time they will bring it back, and set the time.',document.getElementById('ct-rtime-box'));
+    if(!(co.docItems&&co.docItems.wifi))return t('WiFi device: tap Handed over (or Not available).',document.getElementById('ct-wifi-box'));
     var ds=co.drivers||[];
     for(var i=0;i<ds.length;i++){var d=ds[i],who=i===0?'the main driver':'driver '+(i+1);
       if(!d.passportImg)return t('Take a photo of the PASSPORT of '+who+'.',document.getElementById('fi-drv-'+i+'-passportImg')&&document.getElementById('fi-drv-'+i+'-passportImg').parentNode);
@@ -9438,9 +9452,9 @@ function guideCO(){
   }else if(st===6){
     if(!handoverClosed()&&coLeftCount(CO_BEFORE_HANDOVER)){var _l6=coLeftList(CO_BEFORE_HANDOVER);return t(_l6.length===1?'Handover locked: '+_l6[0]:'Handover locked — '+_l6.length+' checks still open. Tap Show on the red line to see them.',gFind(R,'.left-box'));}
     var dd=co.docItems||{};
-    if(!dd.wifi){b=gFind(R,'div.insp-flash',function(x){return /^📶 WiFi device/.test((x.textContent||'').trim());});return t('Give the client the WiFi device, then tap Handed over.',b);}
+    if(!dd.wifi)return {done:true,text:'📶 WiFi device not done yet — it is on the Contract step',next:'Go to Contract →',go:function(){coGoStep(5);}};
     if(co.v.xb&&!dd.xb){b=gFind(R,'div.insp-flash',function(x){return /^🌍 Cross-border docs/.test((x.textContent||'').trim());});return t('Give the client the cross-border papers, then tap Handed over.',b);}
-    if(!co.returnTime){b=gFind(R,'div',function(x){return /^📅 Return:/.test((x.textContent||'').trim());});return t('Ask the client what time they will bring it back, and set the time.',b);}
+    if(!co.returnTime)return {done:true,text:'🕑 Return time not set yet — it is on the Contract step',next:'Go to Contract →',go:function(){coGoStep(5);}};
     var secs=window._HO_SECTIONS||[],hc=co.handoverChecks||{};
     for(var k=0;k<secs.length;k++){var sec=secs[k];
       if(!sec.items.every(function(it){return hc[it.k]==='ok'||(it.k==='xb'&&!co.v.xb);})){
