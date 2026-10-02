@@ -868,6 +868,7 @@ function appBack(){
 }
 function goPage(p,_fromBack){
   if(!APP_USER){showLogin();return;}
+  try{if(p!=='ov')closeResumePanel();}catch(e){}
   try{var _cur=((document.querySelector('.page.on')||{}).id||'').replace('page-','');if(!_fromBack&&_cur&&_cur!==p&&_cur!=='login'){NAV_HIST.push(_cur);if(NAV_HIST.length>20)NAV_HIST.shift();}}catch(e){}
   if(['out','cal','doc','rp'].indexOf(p)>=0 && !canSeeOverview()){
     toast('🔒 Not available for '+(APP_USER?APP_USER.name:'you'),'err');
@@ -9269,6 +9270,7 @@ function lsDel() {
 
 function debugGo() { showLoginScreen(); } // old emergency bypass removed — log in with a PIN
 function showLoginScreen() {
+  try{closeResumePanel();}catch(e){}
   APP_USER = null;
   LS_PIN = ''; LS_WHO = '';
   try { localStorage.removeItem('gorent_user'); } catch(e) {}
@@ -9283,55 +9285,42 @@ function showLoginScreen() {
 function debugSwitch(){ showLoginScreen(); } // old bypass removed
 
 // ── RESUME PANEL ──────────────────────────────────────────────────
+// "Carry on where you left off": a slim strip under the menu (was a panel + dark overlay over
+// the whole screen). One chip per unfinished job of the person who signed in; tap to resume,
+// ✕ to dismiss. It goes away by itself on any page change. Finished jobs are not offered.
 function checkResume() {
-  // Look for THIS USER's in-progress vehicles only
-  var inProgress = [];
-  var prefix = 'ip_' + (APP_USER ? APP_USER.name : 'x') + '_';
+  closeResumePanel();
+  if(!APP_USER)return;
+  try{var _pg=(document.querySelector('.page.on')||{}).id;
+    if((_pg==='page-co'&&co&&co.v&&!co._done)||(_pg==='page-ci'&&ci&&ci.v&&!ci._done))return;   // already back in a job
+  }catch(e){}
+  var inProgress = [], seen={};
+  var prefix = 'ip_' + APP_USER.name + '_';
   try {
     for (var i = 0; i < localStorage.length; i++) {
       var key = localStorage.key(i);
       if (key && key.startsWith(prefix)) {
         var data = JSON.parse(localStorage.getItem(key));
-        if (data && data.fn) inProgress.push(data);
+        if (!data || !data.fn || seen[data.type+data.fn]) continue;
+        var v = FLEET.find(function(x){ return x.fn === data.fn; });
+        if (v && (data.type==='checkin' ? ciIsDone(v) : coIsDone(v))) continue;
+        seen[data.type+data.fn]=1; inProgress.push(data);
       }
     }
   } catch(e) {}
-  
-  if (inProgress.length === 0) return;
-  
-  // Build list
-  var list = document.getElementById('resume-list');
-  if (!list) return;
-  
-  list.innerHTML = '';
-  inProgress.forEach(function(rec) {
-    var v = FLEET.find(function(x){ return x.fn === rec.fn; });
-    var isOut = rec.type === 'checkout';
-    var card = document.createElement('div');
-    card.className = 'resume-card ' + (isOut ? 'co-card' : 'ci-card');
-    card.setAttribute('data-fn', rec.fn);
-    card.setAttribute('data-type', rec.type);
-    
-    var started = rec.started ? new Date(rec.started).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
-    var clientName = rec.cl || (v ? v.cl : '');
-    
-    card.innerHTML = 
-      '<div style="font-size:24px;">' + (isOut ? '▶' : '◀') + '</div>' +
-      '<div style="flex:1;">' +
-        '<div style="font-size:15px;font-weight:900;color:' + (isOut ? '#7ba3d4' : 'var(--se)') + ';">' + rec.fn + '</div>' +
-        '<div style="font-size:14px;font-weight:700;color:var(--tx);margin-top:1px;">' + clientName + '</div>' +
-        '<div style="font-size:13px;color:var(--g5);margin-top:2px;">' + (isOut ? '▶ CHECK-OUT' : '◀ CHECK-IN') + (started ? ' · started ' + started : '') + '</div>' +
-      '</div>' +
-      '<div style="font-size:15px;font-weight:800;color:' + (isOut ? '#7ba3d4' : 'var(--se)') + ';padding:8px 14px;background:var(--g1);border-radius:8px;border:2px solid ' + (isOut ? '#4a6fa5' : 'var(--gb)') + ';">Resume →</div>';
-    
-    card.ontouchend = function(e) { e.preventDefault(); resumeVehicle(this.dataset.fn, this.dataset.type); };
-    card.onclick = function() { resumeVehicle(this.dataset.fn, this.dataset.type); };
-    list.appendChild(card);
-  });
-  
-  // Show panel
-  document.getElementById('resume-panel').classList.add('open');
-  document.getElementById('resume-overlay').style.display = 'block';
+  if (!inProgress.length) return;
+  var bar=document.createElement('div');bar.id='resume-strip';
+  bar.setAttribute('style','position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:9000;max-width:calc(100% - 24px);display:flex;align-items:center;gap:6px;padding:5px 6px 5px 12px;border-radius:24px;background:#fff;border:2px solid #f6ad55;box-shadow:0 4px 16px rgba(0,0,0,.18);overflow-x:auto;white-space:nowrap;');
+  bar.innerHTML='<span style="font-size:12px;font-weight:900;color:#92400e;">⏳ Carry on:</span>'
+    +inProgress.map(function(rec){
+      var isOut=rec.type==='checkout';
+      var v=FLEET.find(function(x){return x.fn===rec.fn;});
+      var nm=String(rec.cl||(v?v.cl:'')).split(' ')[0];
+      return '<button data-fn="'+_bx(rec.fn)+'" data-type="'+_bx(rec.type)+'" onclick="resumeVehicle(this.dataset.fn,this.dataset.type)" style="padding:6px 12px;border-radius:18px;border:2px solid '+(isOut?'#4a6fa5':'#2a9d5c')+';background:'+(isOut?'#eef2f8':'#e2f4ea')+';color:#1a1a1a;font-size:13px;font-weight:900;cursor:pointer;touch-action:manipulation;">'
+        +(isOut?'↗ ':'↙ ')+_bx(rec.fn)+(nm?' · '+_bx(nm):'')+'</button>';
+    }).join('')
+    +'<button onclick="closeResumePanel()" title="Close" style="width:30px;height:30px;flex-shrink:0;border-radius:50%;border:none;background:#f1f5f9;color:#475569;font-size:15px;font-weight:900;cursor:pointer;">✕</button>';
+  document.body.appendChild(bar);
 }
 
 function resumeVehicle(fn, type) {
@@ -9344,6 +9333,7 @@ function resumeVehicle(fn, type) {
 }
 
 function closeResumePanel() {
+  var st=document.getElementById('resume-strip');if(st)st.remove();
   var panel = document.getElementById('resume-panel');
   if (panel) panel.classList.remove('open');
   var overlay = document.getElementById('resume-overlay');
