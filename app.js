@@ -543,6 +543,7 @@ async function autoRefresh(force){
 var BK_SYNC_FIELDS=[['flightIn','Arrival flight'],['flightOut','Departure flight'],['transfer','Transfer'],['transferPays',''],
   ['puLocation','Collection place'],['doLocation','Return place'],['location',''],['phone','Phone'],['email','Email']];
 function syncOpenBooking(){
+  coRetryContactSave();   // a corrected email / number that could not be sent yet
   [['co',typeof co==='object'?co:null],['ci',typeof ci==='object'?ci:null]].forEach(function(p){
     var job=p[1];if(!job||!job.v||!job.v.bid||job._done)return;
     var now=FLEET.filter(function(f){return String(f.bid)===String(job.v.bid);})[0];
@@ -3547,15 +3548,49 @@ function coContactInput(kind,el){
   var bad=kind==='email'?coEmailBad(val):coPhoneBad(val);
   el.style.borderColor=bad?'var(--am)':(val?'var(--gb)':'var(--g3)');
   var w=document.getElementById('cc-warn-'+kind);if(w)w.style.display=bad?'':'none';
-  var t=document.getElementById('cc-fm-'+kind);if(t){var bv=coBookingContact()[kind];t.style.display=(val&&val.trim()===bv)?'':'none';}
+  var t=document.getElementById('cc-fm-'+kind);if(t){var bv=coBookingContact()[kind];t.style.display=(val&&val.trim()===bv)?'':'none';
+    t.textContent=(val&&co['_'+kind+'Saved']===val.trim())?'· ✓ saved to Fleet Manager':'· from Fleet Manager';}
+}
+// A corrected email / number goes back to the Fleet Manager booking, so the office has it
+// too. The tablet account may not edit bookings; the database function
+// tablet_update_booking_contact changes only these two fields. No internet: it stays
+// marked as waiting and is sent on the next refresh.
+async function coSaveContactToFM(kind,quiet){
+  if(!co||!co.v||!co.v.bid)return;
+  var val=String((kind==='email'?co.clientEmail:co.clientPhone)||'').trim();
+  var pend=co._contactPending||(co._contactPending={});
+  if(!val||(kind==='email'?coEmailBad(val):coPhoneBad(val))){delete pend[kind];return;}   // never wipe or spoil the booking
+  if(val===coBookingContact()[kind]){delete pend[kind];return;}
+  pend[kind]=val;
+  try{
+    var args={p_id:String(co.v.bid),p_email:kind==='email'?val:null,p_phone:kind==='phone'?val:null,p_by:(APP_USER&&APP_USER.name)||co.contractBy||''};
+    var r=await SB.rpc('tablet_update_booking_contact',args);
+    if(r.error)throw r.error;
+    var job=co;
+    if(!job||!job.v)return;
+    job.v[kind]=val;if(job.v.b)job.v.b[kind]=val;
+    FLEET.forEach(function(f){if(String(f.bid)===String(job.v.bid)){f[kind]=val;if(f.b)f.b[kind]=val;}});
+    if(job._contactPending&&job._contactPending[kind]===val)delete job._contactPending[kind];
+    job['_'+kind+'Saved']=val;
+    try{saveCOProgress();}catch(e){}
+    var t=document.getElementById('cc-fm-'+kind);if(t){t.textContent='· ✓ saved to Fleet Manager';t.style.display='';}
+    if(!quiet)toast('✓ '+(kind==='email'?'Email':'WhatsApp number')+' saved to the Fleet Manager','ok');
+  }catch(e){
+    try{saveCOProgress();}catch(_){}
+    if(!quiet)toast('Not saved to the Fleet Manager yet — will retry'+(e&&e.message?' ('+e.message+')':''),'warn');
+  }
+}
+function coRetryContactSave(){
+  try{var p=co&&co._contactPending;if(!p)return;['email','phone'].forEach(function(k){if(p[k])coSaveContactToFM(k,true);});}catch(e){}
 }
 function coContactField(kind){
   var isE=kind==='email',val=isE?(co.clientEmail||''):(co.clientPhone||''),bv=coBookingContact()[kind];
   var bad=isE?coEmailBad(val):coPhoneBad(val);
+  var saved=val&&co['_'+kind+'Saved']===val.trim();
   return '<label>'+(isE?'📧 Email address':'💬 WhatsApp number')
-    +' <span id="cc-fm-'+kind+'" style="display:'+(val&&val.trim()===bv?'':'none')+';font-size:11px;font-weight:800;color:var(--se);text-transform:none;letter-spacing:0;">· from Fleet Manager</span></label>'
+    +' <span id="cc-fm-'+kind+'" style="display:'+(val&&val.trim()===bv?'':'none')+';font-size:11px;font-weight:800;color:var(--se);text-transform:none;letter-spacing:0;">'+(saved?'· ✓ saved to Fleet Manager':'· from Fleet Manager')+'</span></label>'
     +'<input type="'+(isE?'email':'tel')+'" inputmode="'+(isE?'email':'tel')+'" autocomplete="off" autocapitalize="off" spellcheck="false" value="'+_bx(val)+'" placeholder="'+(isE?'client@email.com':'+264 81 ...')+'"'
-    +' oninput="coContactInput(\''+kind+'\',this)" onchange="saveCOProgress()"'
+    +' oninput="coContactInput(\''+kind+'\',this)" onchange="saveCOProgress();coSaveContactToFM(\''+kind+'\')"'
     +' style="border-color:'+(bad?'var(--am)':(val?'var(--gb)':'var(--g3)'))+'">'
     +'<div id="cc-warn-'+kind+'" style="display:'+(bad?'':'none')+';font-size:12px;font-weight:800;color:var(--al);margin-top:3px;">'
     +(isE?'⚠ This email looks wrong — please check it with the client':'⚠ Use the full international number, starting with + (e.g. +49 170 1234567)')+'</div>'
