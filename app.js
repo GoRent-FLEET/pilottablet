@@ -3611,14 +3611,48 @@ function coFillFromBooking(){
   if(_isRemoteLoc(v.doLocation)&&!co.dropoffArrangement&&co._dropoffArrangementOther===undefined){
     co.dropoffArrangement=v.doLocation;co._dropoffArrangementOther=1;co._fmDropoff=v.doLocation;}
 }
-function coEmailBad(s){s=String(s||'').trim();return !!s&&!/^[^\s@,;]+@[^\s@,;]+\.[a-z]{2,}$/i.test(s);}
-function coPhoneBad(s){s=String(s||'').replace(/[\s\-().]/g,'');return !!s&&!/^\+\d{8,15}$/.test(s);}
+// Same checks as the Fleet Manager (keep the two in step).
+var CT_DOMAIN_TYPOS={'gmial.com':'gmail.com','gmal.com':'gmail.com','gmai.com':'gmail.com','gmail.co':'gmail.com','gmail.con':'gmail.com','gmail.cm':'gmail.com','gamil.com':'gmail.com','gnail.com':'gmail.com','hotmial.com':'hotmail.com','hotmai.com':'hotmail.com','hotmail.co':'hotmail.com','hotmail.con':'hotmail.com','yahooo.com':'yahoo.com','yaho.com':'yahoo.com','yahoo.co':'yahoo.com','yahoo.con':'yahoo.com','outlok.com':'outlook.com','outlook.co':'outlook.com','iclod.com':'icloud.com','icloud.co':'icloud.com'};
+function ctEmailProblem(v){
+  v=String(v||'').trim(); if(!v) return '';
+  const at=(v.match(/@/g)||[]).length;
+  if(at>1) return 'has two addresses in one field — keep one';
+  if(/\s/.test(v)) return 'has a space in it';
+  if(/[,;]/.test(v)) return 'has a comma or semicolon in it';
+  if(at===0) return 'has no @';
+  const dom=v.split('@')[1].toLowerCase();
+  if(!v.split('@')[0]) return 'has nothing before the @';
+  if(CT_DOMAIN_TYPOS[dom]) return 'probably means @'+CT_DOMAIN_TYPOS[dom];
+  const tld=dom.split('.').pop();
+  if(/^(con|cmo|comm|ocm|emai|mail|gmail)$/.test(tld)) return 'ends in .'+tld+' — probably .com';
+  if(!/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(dom)) return 'the part after @ is not a valid address (e.g. gmail.com)';
+  if(/\.\./.test(v)||/^\.|\.@|@\./.test(v)) return 'has a misplaced dot';
+  return '';
+}
+function ctPhoneProblem(v){
+  v=String(v||'').trim(); if(!v) return '';
+  if((v.match(/\+/g)||[]).length>1||/\/\//.test(v)) return 'has two numbers in one field — keep one';
+  if(/[^\d+\s\-().\/]/.test(v)) return 'has letters or symbols in it';
+  const d=v.replace(/[\s\-().\/]/g,'');
+  if(/^00\d/.test(d)) return 'starts with 00 — write + instead (e.g. +'+d.slice(2,4)+'…)';
+  if(!d.startsWith('+')) return 'has no country code — start with + (e.g. +49 170 1234567, +264 81 …)';
+  if(/\+.*\+/.test(d)) return 'has more than one +';
+  const n=d.slice(1).length;
+  if(n<8) return 'is too short ('+n+' digits)';
+  if(n>15) return 'is too long ('+n+' digits) — two numbers in one field?';
+  const tz=/^\+(264|254|27|44|49|31|32|33|41|43|61|353|46|47|45|48|420|1)0/.exec(d);
+  if(tz) return 'drop the 0 after +'+tz[1]+' (the 0 is only for calls inside the country)';
+  return '';
+}
+function coEmailBad(s){return !!ctEmailProblem(s);}
+function coPhoneBad(s){return !!ctPhoneProblem(s);}
+function coContactMsg(kind,val){var p=kind==='email'?ctEmailProblem(val):ctPhoneProblem(val);return p?'⚠ '+(kind==='email'?'Email ':'WhatsApp number ')+p+' — please check it with the client':'';}
 function coContactInput(kind,el){
   var val=el.value;
   if(kind==='email'){co.clientEmail=val;co._emailTyped=1;}else{co.clientPhone=val;co._phoneTyped=1;}
   var bad=kind==='email'?coEmailBad(val):coPhoneBad(val);
   el.style.borderColor=bad?'var(--am)':(val?'var(--gb)':'var(--g3)');
-  var w=document.getElementById('cc-warn-'+kind);if(w)w.style.display=bad?'':'none';
+  var w=document.getElementById('cc-warn-'+kind);if(w){w.style.display=bad?'':'none';w.textContent=coContactMsg(kind,val);}
   var t=document.getElementById('cc-fm-'+kind);if(t){var bv=coBookingContact()[kind];t.style.display=(val&&val.trim()===bv)?'':'none';
     t.textContent=(val&&co['_'+kind+'Saved']===val.trim())?'· ✓ saved to Fleet Manager':'· from Fleet Manager';}
 }
@@ -3664,7 +3698,7 @@ function coContactField(kind){
     +' oninput="coContactInput(\''+kind+'\',this)" onchange="saveCOProgress();coSaveContactToFM(\''+kind+'\')"'
     +' style="border-color:'+(bad?'var(--am)':(val?'var(--gb)':'var(--g3)'))+'">'
     +'<div id="cc-warn-'+kind+'" style="display:'+(bad?'':'none')+';font-size:12px;font-weight:800;color:var(--al);margin-top:3px;">'
-    +(isE?'⚠ This email looks wrong — please check it with the client':'⚠ Use the full international number, starting with + (e.g. +49 170 1234567)')+'</div>'
+    +_bx(coContactMsg(kind,val))+'</div>'
     +(!val&&!bv?'<div style="font-size:12px;color:var(--g5);margin-top:3px;">Not in the Fleet Manager booking — ask the client</div>':'');
 }
 function coStep1(){
