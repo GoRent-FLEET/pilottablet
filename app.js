@@ -2938,7 +2938,7 @@ function miniBox(title,val,onOk,onBad,okLbl,badLbl){
 // One tap for the usual return times, plus one worked out from the client's flight home
 // (3 hours before departure, on the half hour, never before 07:00)
 function hoSetTime(t){co.returnTime=t;saveCOProgress();drawCO();}
-function hoQuickTimes(v){
+function hoQuickTimes(v,inline){
   var opts=['08:00','10:00','12:00','14:00','16:00'],sug='',fl='';
   try{
     var m=String((v&&v.flightOut)||'').match(/(\d{1,2}):(\d{2})/);
@@ -2948,7 +2948,7 @@ function hoQuickTimes(v){
   var b=function(t,lbl,hl){var on=co.returnTime===t;
     return '<button onclick="hoSetTime(\''+t+'\')" style="padding:7px 10px;border-radius:8px;font-size:13px;font-weight:900;cursor:pointer;touch-action:manipulation;'
       +(on?'border:2px solid var(--gb);background:var(--se);color:#fff;':hl?'border:2px solid #7c3aed;background:#f3e8ff;color:#4c1d95;':'border:2px solid var(--g3);background:var(--g0);color:var(--tx);')+'">'+lbl+'</button>';};
-  return '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">'
+  return '<div style="display:flex;flex-wrap:wrap;gap:6px;'+(inline?'':'margin-top:8px;')+'">'
     +(sug?b(sug,'✈ '+sug+' <span style="font-weight:700;font-size:11px;">(flight '+fl+')</span>',true):'')
     +opts.filter(function(t){return t!==sug;}).map(function(t){return b(t,t,false);}).join('')+'</div>';
 }
@@ -2962,8 +2962,8 @@ function ctReturnWifiHTML(){
     +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
     +'<span style="font-size:13px;font-weight:900;color:var(--tx);white-space:nowrap;">🕑 Return '+due+' — expected time *</span>'
     +'<span style="display:flex;gap:6px;min-width:180px;flex:0 1 220px;">'+timePickers('ho-rtime',co.returnTime||'',"var _t=timePickValue('ho-rtime');if(_t){co.returnTime=_t;saveCOProgress();drawCO();}")+'</span>'
-    +'</div>'
-    +hoQuickTimes(v)+'</div>';
+    +hoQuickTimes(v,true)
+    +'</div></div>';
   var w=d.wifi||'',bs='padding:7px 14px;border-radius:8px;font-size:13px;font-weight:900;cursor:pointer;touch-action:manipulation;';
   var wifi='<div id="ct-wifi-box" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border:2px solid '+(w==='ok'?'var(--gb)':w?'var(--re)':'var(--am)')+';border-radius:10px;padding:7px 10px;background:'+(w==='ok'?'var(--sg)':w?'var(--rg)':'var(--ag)')+';">'
     +'<span style="font-size:13px;font-weight:900;color:var(--tx);flex:1;min-width:140px;">📶 WiFi device *</span>'
