@@ -524,6 +524,7 @@ async function autoRefresh(force){
     await loadDoneSets();   // so a finished check-out stops showing as in progress
     LAST_SYNC=new Date();
     checkVehicleSwap();
+    try{syncOpenBooking();}catch(e){console.warn('syncOpenBooking',e);}
     if(!force&&busyNow())return;
     var pg=(document.querySelector('.page.on')||{}).id||'';
     if(pg==='page-ov')renderOV();
@@ -533,6 +534,38 @@ async function autoRefresh(force){
     else if(pg==='page-co'&&!(co&&co.fn))renderCOPicker();
   }catch(e){}
   finally{_arBusy=false;}
+}
+// The check-out / check-in that is open keeps its own copy of the booking. Every refresh
+// (3 min, and whenever the tablet wakes) copies across what the office may have changed in
+// the Fleet Manager since: flights, transfer, collection / return place, phone and email.
+// Phone and email typed on the tablet are kept — only an untouched (or empty) field follows
+// the Fleet Manager.
+var BK_SYNC_FIELDS=[['flightIn','Arrival flight'],['flightOut','Departure flight'],['transfer','Transfer'],['transferPays',''],
+  ['puLocation','Collection place'],['doLocation','Return place'],['location',''],['phone','Phone'],['email','Email']];
+function syncOpenBooking(){
+  [['co',typeof co==='object'?co:null],['ci',typeof ci==='object'?ci:null]].forEach(function(p){
+    var job=p[1];if(!job||!job.v||!job.v.bid||job._done)return;
+    var now=FLEET.filter(function(f){return String(f.bid)===String(job.v.bid);})[0];
+    if(!now||now.fn!==job.v.fn)return;   // a vehicle swap is handled by checkVehicleSwap
+    var old=job.v,changed=[];
+    BK_SYNC_FIELDS.forEach(function(f){
+      var k=f[0],a=old[k]||'',b=now[k]||'';
+      if(a===b)return;
+      if(p[0]==='co'&&k==='phone'&&(!job.clientPhone||job.clientPhone===a))job.clientPhone=b;
+      if(p[0]==='co'&&k==='email'&&(!job.clientEmail||job.clientEmail===a))job.clientEmail=b;
+      old[k]=b;
+      if(f[1])changed.push(f[1]+(b?': '+b:' removed'));
+    });
+    old.b=now.b;
+    if(!changed.length)return;
+    try{toast('🔄 Updated from the Fleet Manager — '+changed.join(' · '),'ok');}catch(e){}
+    try{if(p[0]==='co'&&typeof saveCOProgress==='function')saveCOProgress();}catch(e){}
+    // redraw only when nobody is typing in a field, so nothing they are entering is lost
+    var ae=document.activeElement;
+    if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))return;
+    if(document.getElementById('contract-modal'))return;
+    try{if(p[0]==='co'&&typeof drawCO==='function')drawCO();else if(p[0]==='ci'&&typeof drawCI==='function')drawCI();}catch(e){}
+  });
 }
 // The office moved this booking to a different vehicle. The client's paperwork belongs
 // to the BOOKING and follows it. Everything that describes a vehicle — the cleaning,
