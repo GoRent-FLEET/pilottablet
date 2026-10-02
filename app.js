@@ -899,7 +899,7 @@ function renderCOPicker(){
   var body=document.getElementById('co-body');
   if(!body)return;
   if(co&&co.v){ try{drawCO();}catch(err){toast('Error: '+err.message,'err');} return;}
-  var today=new Date().toISOString().split('T')[0];
+  var _n=new Date(),today=_n.getFullYear()+'-'+String(_n.getMonth()+1).padStart(2,'0')+'-'+String(_n.getDate()).padStart(2,'0');   // local date, not UTC
   // A client whose flight lands late often only collects the next day. The booking still says
   // yesterday, so earlier departures stay on this list until the vehicle actually goes out.
   function puDiff(v){return Math.round((new Date(v.pu+'T00:00:00')-new Date(today+'T00:00:00'))/86400000);}
@@ -907,8 +907,12 @@ function renderCOPicker(){
     var diff=puDiff(v);
     return diff>=-CO_LOOKBACK&&diff<=7;
   }).sort(function(a,b){
-    var la=puDiff(a)<0,lb=puDiff(b)<0;
-    if(la!==lb)return la?-1:1;   // not collected yet on the day it was due — deal with these first
+    // TODAY's departures first (still to do before finished), then the coming days, and the ones
+    // from earlier days that were never collected at the bottom under their own heading
+    var ga=puDiff(a)===0?0:puDiff(a)>0?1:2, gb=puDiff(b)===0?0:puDiff(b)>0?1:2;
+    if(ga!==gb)return ga-gb;
+    if(ga===0){var fa=coIsDone(a)?1:0,fb=coIsDone(b)?1:0;if(fa!==fb)return fa-fb;}
+    if(ga===2){var na=coIsDone(a)?1:0,nb=coIsDone(b)?1:0;if(na!==nb)return na-nb;return a.pu<b.pu?1:-1;}   // not collected first, then most recent
     return a.pu>b.pu?1:-1;
   });
   function ipInfo(fn,bid){
@@ -932,8 +936,20 @@ function renderCOPicker(){
     }catch(e){}
     return best;
   }
-  var rows='';
+  var lateN=upcoming.filter(function(v){return puDiff(v)<0&&!coIsDone(v);}).length;
+  var rows='',_grp=-1;
+  var _cnt=[0,0,0];upcoming.forEach(function(v){var d=puDiff(v);_cnt[d===0?0:d>0?1:2]++;});
+  var _todo=upcoming.filter(function(v){return puDiff(v)===0&&!coIsDone(v);}).length;
   upcoming.forEach(function(v){
+    var _g=puDiff(v)===0?0:puDiff(v)>0?1:2;
+    if(_g!==_grp){
+      if(_grp===-1&&_g!==0)rows+='<div style="padding:14px 16px;margin-bottom:12px;border-radius:10px;background:var(--g1);border:2px dashed var(--g3);font-size:14px;font-weight:800;color:var(--g5);text-align:center;">Nothing going out today</div>';
+      _grp=_g;
+      var _h=_g===0?['🚙 GOING OUT TODAY — '+_cnt[0]+(_todo<_cnt[0]?' ('+_todo+' still to do)':''),'#4a6fa5']
+            :_g===1?['📅 COMING UP — next 7 days','var(--g5)']
+            :(lateN?['⚠ EARLIER DAYS — '+lateN+' not collected yet','var(--rl)']:['EARLIER DAYS','var(--g5)']);
+      rows+='<div style="font-size:13px;font-weight:900;letter-spacing:.4px;color:'+_h[1]+';margin:'+(rows?'18px':'0')+' 0 8px;">'+_h[0]+'</div>';
+    }
     var isToday=v.pu===today;
     var dDiff=puDiff(v),late=dDiff<0,lateTxt=Math.abs(dDiff)+' day'+(Math.abs(dDiff)===1?'':'s')+' ago';
     var ip=coIsDone(v)?null:ipInfo(v.fn,v.bid);
@@ -965,7 +981,6 @@ function renderCOPicker(){
       +'<div>'+badge+'</div></div></div>';
   });
   if(!upcoming.length) rows='<div style="padding:40px;text-align:center;color:var(--g5);font-size:13px;">No check-outs due in this period</div>';
-  var lateN=upcoming.filter(function(v){return puDiff(v)<0&&!coIsDone(v);}).length;
   var back='<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:12px;">'
     +'<span style="font-size:12px;font-weight:800;color:var(--g5);">Also show departures from:</span>'
     +[[1,'Yesterday'],[7,'Last 7 days'],[30,'Last 30 days']].map(function(o){
@@ -974,7 +989,7 @@ function renderCOPicker(){
           +'border:2px solid '+(on?'var(--gb)':'var(--g3)')+';background:'+(on?'var(--se)':'#ffffff')+';color:'+(on?'#ffffff':'var(--tx)')+';">'+o[1]+'</button>';
       }).join('')
     +'</div>'
-    +(lateN?'<div style="background:var(--rg);border:2px solid var(--re);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;font-weight:800;color:var(--rl);">⚠ '+lateN+' vehicle'+(lateN===1?'':'s')+' still to go out from an earlier day — tap to finish the check-out</div>':'');
+    +(false&&lateN?'<div style="background:var(--rg);border:2px solid var(--re);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;font-weight:800;color:var(--rl);">⚠ '+lateN+' vehicle'+(lateN===1?'':'s')+' still to go out from an earlier day — tap to finish the check-out</div>':'');
   body.innerHTML='<div style="padding:16px;"><div style="font-size:13px;font-weight:800;color:var(--g5);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;">&#9654; Select Vehicle to Check Out</div>'+back+rows+'</div>';
   body.querySelectorAll('.picker-row').forEach(function(el){
     el.addEventListener('click',function(){ startCO(this.dataset.fn); });
