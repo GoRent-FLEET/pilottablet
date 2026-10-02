@@ -2796,11 +2796,20 @@ function rentalDays(v){
     return d>0?d:0;
   }catch(e){return 0;}
 }
-function shortPlace(x){
+function shortPlace(x,max){
+  max=max||20;
   x=String(x||'').trim();if(!x)return '—';
   if(/airport|hkia|hosea|kutako/i.test(x))return 'Airport';
   var p=x.split(/[,(]/)[0].trim()||x;
-  return p.length>20?p.slice(0,19)+'…':p;
+  return p.length>max?p.slice(0,max-1)+'…':p;
+}
+// Collect / Return chips whose text does not fit take a second column instead of being cut off
+function fhFit(){
+  document.querySelectorAll('.fh-grid>[data-fit]').forEach(function(c){
+    if(c.offsetParent===null)return;
+    if(c.style.gridColumn)return;
+    if(c.scrollWidth>c.clientWidth+1)c.style.gridColumn='span 2';
+  });
 }
 // Header chips are cut short to fit: a tap on one shows the whole text
 document.addEventListener('click',function(e){
@@ -2831,8 +2840,8 @@ function hdrTripChips(v){
   var dr=eff('dropoffArrangement',(v&&v.doLocation)||'');
   var isHQ=function(x){return !x||x===GR_HQ||/^\s*windhoek\s*$/i.test(x)||/6 diehl/i.test(x)||/go ?rent (office|hq)/i.test(x);};
   // short words on the chip ("Collect: Airport"); tapping it shows the full place
-  out+=chip(isHQ(pu)?'🏢 Collect: Office':'📍 Collect: '+shortPlace(pu),!isHQ(pu),'Collect: '+pu);
-  out+=chip(isHQ(dr)?'🏢 Return: Office':'📍 Return: '+shortPlace(dr),!isHQ(dr),'Return: '+dr);
+  out+=chip(isHQ(pu)?'🏢 Collect: Office':'📍 Collect: '+shortPlace(pu,30),!isHQ(pu),'Collect: '+pu).replace('<span','<span data-fit="1"');
+  out+=chip(isHQ(dr)?'🏢 Return: Office':'📍 Return: '+shortPlace(dr,30),!isHQ(dr),'Return: '+dr).replace('<span','<span data-fit="1"');
   return out;
 }
 function coStep0(){
@@ -6300,6 +6309,7 @@ var FH_MORE=false;
 function fhKeep(el){
   var t=el.textContent||'',st=(el.getAttribute('style')||'')+' '+el.innerHTML.slice(0,300);
   if(/📅|🏕|🏨/.test(t))return true;
+  if(el.classList.contains('wa-chip'))return true;   // the client's WhatsApp number always shows
   if(/⚠|EXPIRED|DUE|REMOTE|🚩|No disc/.test(t))return true;
   if(el.classList.contains('disc-flash')||el.classList.contains('insp-flash')||el.querySelector('.disc-flash,.insp-flash'))return true;
   if(/var\(--rl\)|var\(--al\)|#b91c1c/.test(el.getAttribute('style')||''))return true;
@@ -6328,7 +6338,7 @@ function fhCompact(){
   });
 }
 setInterval(function(){try{flashNext();}catch(e){}},1500); // also after scrolling/tab switches
-(function(){var q=false;new MutationObserver(function(){if(q||document.hidden)return;q=true;requestAnimationFrame(function(){q=false;try{fhCompact();}catch(e){}try{flashNext();}catch(e){}try{if(typeof guideSoon==='function')guideSoon();}catch(e){}});}).observe(document.documentElement,{childList:true,subtree:true});})();
+(function(){var q=false;new MutationObserver(function(){if(q||document.hidden)return;q=true;requestAnimationFrame(function(){q=false;try{fhCompact();}catch(e){}try{fhFit();}catch(e){}try{flashNext();}catch(e){}try{if(typeof guideSoon==='function')guideSoon();}catch(e){}});}).observe(document.documentElement,{childList:true,subtree:true});})();
 // ── One tablet-sized box instead of the browser's confirm()/prompt()/alert() ──
 // askBox({title,text,ok,cancel,reason:'label',reasonDefault,minReason,danger}) → Promise<{ok,reason}>
 function askBox(o){
