@@ -6155,7 +6155,7 @@ function ciStep0_CI(){
   <div class="step-intro">
     <div class="step-ico">🧹</div>
     <div><div class="step-title">Step 1 — Vehicle, damage &amp; client signs</div>
-    <div class="step-sub">Km, fuel, glass, wheels, undercarriage, tent · once = ✅ OK · twice = ⚠ Problem · then damage photos · then the client signs the vehicle condition · equipment is Step 2</div></div>
+    <div class="step-sub">WiFi & charger · km · fuel · vehicle check (✓ All good, tap only what is wrong) · any new damage? · client signs and can go · equipment is Step 2</div></div>
   </div>
   <div class="ci-top3" style="display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1fr) minmax(0,1fr);gap:8px;margin:10px 0 12px;">
     ${ciRcvMini()}
@@ -6174,29 +6174,24 @@ function ciStep0_CI(){
     </div>
     <div>
       <div style="font-size:13px;font-weight:700;color:var(--g5);text-transform:uppercase;margin-bottom:4px;">⛽ Fuel IN *</div>
-      <select id="ci-fuel" onchange="ci.fuelIn=this.value;drawCI()"
-        style="color-scheme:light;padding:12px 14px;font-size:15px;font-weight:700;width:100%;background:var(--g0);border:2px solid ${!r.fuelIn?'var(--am)':r.fuelIn===v.fuelOut?'var(--gb)':'var(--re)'};border-radius:var(--rs);color:${!r.fuelIn?'var(--al)':r.fuelIn===v.fuelOut?'var(--se)':'var(--rl)'};">
-        ${'<option value=""'+(!r.fuelIn?' selected':'')+'>— Not checked —</option>'}
-        ${['Fill up','1/4','1/2','3/4','Full'].concat(r.fuelIn==='Empty'?['Empty']:[]).map(f=>`<option${r.fuelIn===f?' selected':''}>${f}</option>`).join('')}
-      </select>
+      <div id="ci-fuel" style="display:flex;gap:5px;">${['Fill up','1/4','1/2','3/4','Full'].map(function(f){var on=r.fuelIn===f;return '<button onclick="ci.fuelIn=\''+f+'\';drawCI()" style="flex:1;padding:11px 2px;border-radius:8px;font-size:14px;font-weight:900;cursor:pointer;touch-action:manipulation;white-space:nowrap;'+(on?(f===(v.fuelOut||'Full')?'border:2px solid var(--gb);background:var(--se);color:#fff;':'border:2px solid var(--re);background:var(--re);color:#fff;'):'border:2px solid '+(r.fuelIn?'var(--g3)':'var(--am)')+';background:var(--g0);color:var(--tx);')+'">'+f+'</button>';}).join('')}</div>
       <div style="font-size:14px;margin-top:4px;font-weight:700;color:${!r.fuelIn?'var(--al)':r.fuelIn===v.fuelOut?'var(--se)':'var(--rl)'};">
-        ${!r.fuelIn?'⚠ Fuel not checked yet — select the level on the gauge':r.fuelIn===v.fuelOut?'✅ Matches departure':'⚠ Out: '+(v.fuelOut||'Full')+' → In: '+r.fuelIn+' — fuel charge applies'}
+        ${!r.fuelIn?'⚠ Tap the level on the fuel gauge':r.fuelIn===v.fuelOut?'✅ Matches departure':'⚠ Out: '+(v.fuelOut||'Full')+' → In: '+r.fuelIn+' — fuel charge applies'}
       </div>
       ${r.fuelIn&&r.fuelIn!=='Full'?`
       <div style="margin-top:10px;">
-        <div style="font-size:12px;font-weight:800;color:var(--al);margin-bottom:5px;">📝 Fuel note (required)</div>
+        <div style="font-size:12px;font-weight:800;color:var(--g5);margin-bottom:5px;">📝 Fuel note (optional)</div>
         <textarea id="ci-fuel-note" placeholder="e.g. Client returned with 1/2 tank — fuel charge to be invoiced. Authorised by..." 
-          style="width:100%;padding:10px 12px;background:var(--g0);border:2px solid var(--al);border-radius:var(--rs);color:var(--tx);font-size:14px;font-family:var(--font);resize:none;height:80px;box-sizing:border-box;"
+          style="width:100%;padding:8px 10px;background:var(--g0);border:2px solid var(--g3);border-radius:var(--rs);color:var(--tx);font-size:14px;font-family:var(--font);resize:none;height:44px;box-sizing:border-box;"
           oninput="ci.fuelNote=this.value">${r.fuelNote||''}</textarea>
       </div>`:''}
-      ${(r.fuelIn&&r.fuelIn!==(v.fuelOut||'Full'))?photoHTML('ci.fuelPhotos','🧾 Fuel receipt — required','Take a photo of the filling-station receipt once the vehicle has been refuelled (can also be added at management sign-off).',3):''}
     </div>
   </div>
 
   <div class="prog-wrap">
     <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:var(--se)"></div></div>
-    <div class="prog-lbl"><span class="prog-n">${done}/${checkable}</span> items checked
-    ${pct===100?'<span style="color:var(--se);font-weight:700;margin-left:8px">✅ All done!</span>':''}</div>
+    <div class="prog-lbl" style="display:flex;align-items:center;gap:8px;"><span><span class="prog-n">${done}/${checkable}</span> items checked</span>
+    ${pct===100?'<span style="color:var(--se);font-weight:700;">✅ All done!</span>':'<button id="ci-veh-allgood" onclick="ciVehAllGood()" style="margin-left:auto;padding:8px 14px;border-radius:9px;border:2px solid var(--se);background:var(--se);color:#052010;font-size:13px;font-weight:900;cursor:pointer;touch-action:manipulation;">✓ All good ('+(checkable-done)+')</button>'}</div>
   </div>
 
   <div class="chk-list">${L_CI.map(([ico,lbl,det],i)=>{
@@ -6250,7 +6245,6 @@ function ciStep0_CI(){
 
   ${probs.length?'<div class="al warn">⚠ Problems noted: '+probs.join(' · ')+'</div>':''}
   ${retStaff.length>1?`<div style="background:var(--g1);border:2px solid var(--am);border-radius:var(--rs);padding:10px 14px;margin-bottom:10px;"><div style="font-size:13px;font-weight:700;color:var(--al);text-transform:uppercase;letter-spacing:.4px;margin-bottom:7px;">👥 Multiple staff on return check</div><div style="display:flex;flex-wrap:wrap;gap:6px;">${retStaff.map(n=>{const cnt=(ci.retLog?ci.retLog.filter(function(e){return e.by===n;}).length:0)||0;return '<div style="background:var(--g0);border:1px solid var(--am);border-radius:8px;padding:6px 12px;display:flex;align-items:center;gap:8px;"><div style="width:28px;height:28px;border-radius:50%;background:var(--am);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#000;">'+n.slice(0,2).toUpperCase()+'</div><div><div style="font-size:14px;font-weight:700;color:var(--al);">'+n+'</div><div style="font-size:13px;color:var(--g5);">'+cnt+' item'+(cnt!==1?'s':'')+' checked</div></div></div>';}).join('')}</div></div>`:''}
-  ${photoHTML('ci.dmgPhotos','📷 Vehicle Return Photos','Photo the exterior before unloading. Shows client condition matches what they signed.',6)}
 
 `;
 }
@@ -6707,17 +6701,19 @@ function ciStep1_CI(){
   var ex=(ci._coDmg||[]).filter(function(d){return d.cells&&d.cells.length;});
   var names={sc:'scratch',de:'dent',pr:'marked'};
   var exList=ex.map(function(d){var t={};d.cells.forEach(function(c){t[c.t]=(t[c.t]||0)+1;});return '<b>'+_bx(d.view_name||d.view)+'</b>: '+Object.keys(t).map(function(k){return (names[k]||k)+' ('+t[k]+')';}).join(', ');}).join(' · ');
+  var hasNew=ciHasNewDmg(),ans=hasNew?'yes':(ci.dmgAns||''),open=ans==='yes';
+  var bs='flex:1;padding:12px 8px;border-radius:10px;font-size:15px;font-weight:900;cursor:pointer;touch-action:manipulation;';
   return `
-  <div class="step-intro">
-    <div class="step-ico">🔍</div>
-    <div><div class="step-title">Damage — mark NEW damage only</div>
-    <div class="step-sub">Mark NEW damage only — blue = new scratch · red = new dent · yellow = existing damage from check-out</div></div>
+  <div id="ci-dmg-q" class="${ans?'':'insp-flash'}" style="border:2px solid ${ans==='none'?'var(--gb)':ans==='yes'?'var(--re)':'var(--am)'};background:${ans==='none'?'var(--sg)':ans==='yes'?'var(--rg)':'var(--ag)'};border-radius:12px;padding:10px 12px;margin:6px 0 10px;">
+    <div style="font-size:16px;font-weight:900;color:var(--tx);margin-bottom:2px;">🔍 Walk around the vehicle — any NEW damage? *</div>
+    <div style="font-size:12px;color:var(--g5);margin-bottom:8px;">${ex.length?'Already on record from check-out (not new): '+exList:(ci._coLoaded?'No damage was recorded at check-out.':'No check-out damage record found — compare with the check-out photos.')}</div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="ciDmgAnswer('none')" style="${bs}${ans==='none'?'border:2px solid var(--gb);background:var(--se);color:#fff;':'border:2px solid var(--g3);background:var(--g0);color:var(--tx);'}">${ans==='none'?'✓ ':''}No new damage</button>
+      <button onclick="ciDmgAnswer('yes')" style="${bs}${ans==='yes'?'border:2px solid var(--re);background:var(--re);color:#fff;':'border:2px solid var(--g3);background:var(--g0);color:var(--tx);'}">${ans==='yes'?'⚠ ':''}Yes — mark it</button>
+    </div>
   </div>
-  ${ex.length?
-    '<div class="al info" style="margin-bottom:8px;font-size:14px">⭐ Damage recorded at check-out (shown in yellow on the photos): '+exList+'. Only mark damage that is NEW.</div>':
-    (ci._coLoaded?'<div class="al ok" style="margin-bottom:8px;font-size:14px">✓ No damage was recorded at check-out. Mark any new damage found now.</div>':'<div class="al warn" style="margin-bottom:8px;font-size:14px">No check-out damage record found for this rental — compare with the check-out photos before marking.</div>')}
-  ${insHTML(true)}
-  ${photoHTML('ci.dmgPhotos','📷 Damage Photos','Photograph ALL damage found — new and existing. Essential evidence for insurance and deposit deductions.',8)}`;
+  ${open?`<div id="ci-dmg-grid"><div class="al info" style="margin-bottom:8px;font-size:13px;">Tap the pictures where the NEW damage is — blue = new scratch · red = new dent · yellow = existing from check-out</div>${insHTML(true)}</div>`:''}
+  ${photoHTML('ci.dmgPhotos','📷 Photos'+(open?' — photograph every new damage *':' (optional)'),open?'Close-ups of each new damage — evidence for the deposit.':'Exterior or anything worth recording.',8)}`;
 }
 
 function ciStep2_CI(){
@@ -6727,6 +6723,7 @@ function ciStep2_CI(){
     <div><div class="step-title">Step 2 — Equipment Return</div>
     <div class="step-sub">Tap an item when it is back · tap <b style="color:var(--rl)">✗ Missing</b> if it is not · missing items go on the client report and to management</div></div>
   </div>
+  <button id="ci-eq-all" onclick="ciEqAllReturned()" style="width:100%;margin:0 0 10px;padding:14px;border-radius:12px;border:2px solid var(--gb);background:var(--se);color:#fff;font-size:16px;font-weight:900;cursor:pointer;touch-action:manipulation;">✓ Everything else returned — then tap only what is missing</button>
   <div id="ret-grps">${renderRetGroups()}</div>
   <div class="fi" style="margin-top:10px">
     <label>Notes / client comments</label>
@@ -6747,6 +6744,7 @@ function ciOpenBeforeSign(){
     var items=L_CI.filter(function(x,i){return x[0]!=='__SECTION__'&&x[0]!=='__OPTIONAL__'&&ciShow(x,i)&&ciStep1Item(i);});
     var n1=items.filter(function(x){var y=ci.retItems[x[1]];return !(y&&(y.st!==undefined?y.st:y));}).length;
     if(n1)out.push({s:0,t:'Vehicle check: '+n1+' item'+(n1===1?'':'s')+' not ticked'});
+    if(!ci.dmgAns&&!ciHasNewDmg())out.push({s:0,t:'New damage — No / Yes'});
     var eq=RET_GROUPS.reduce(function(a,g){return a.concat(g.items);},[]);
     var n2=eq.filter(function(i){return !retSt[i];}).length;
     if(n2)out.push({s:2,t:'Equipment: '+n2+' item'+(n2===1?'':'s')+' not checked'});
@@ -6768,11 +6766,32 @@ function ciVehicleIssues(){
   var probs=L_CI.filter(function(x,i){return x[0]!=='__SECTION__'&&x[0]!=='__OPTIONAL__'&&ciShow(x,i)&&ciStep1Item(i)&&ci.retItems[x[1]]&&ci.retItems[x[1]].st==='prob';}).map(function(x){return x[1];});
   return {newDmg:newDmg,fuelShort:fuelShort,probs:probs,any:!!(newDmg.length||fuelShort||probs.length)};
 }
+// ✓ All good on the vehicle check: every item nobody has answered becomes OK (a problem stays a problem)
+function ciVehAllGood(){
+  var who=ci.receivedBy||(APP_USER&&APP_USER.name)||'';if(!who){toast('Select your name first','err');return;}
+  if(!ci.receivedBy)ci.receivedBy=who;
+  var t=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),n=0;
+  L_CI.forEach(function(x,i){if(x[0]==='__SECTION__'||x[0]==='__OPTIONAL__'||!ciShow(x,i)||!ciStep1Item(i))return;
+    var y=ci.retItems[x[1]];if(y&&(y.st!==undefined?y.st:y))return;
+    ci.retItems[x[1]]={st:'ok',by:who,at:t};if(!ci.retLog)ci.retLog=[];ci.retLog.push({lbl:x[1],st:'ok',by:who,at:t});n++;});
+  if(!ci.retCheckedBy)ci.retCheckedBy={};ci.retCheckedBy[who]=(ci.retCheckedBy[who]||0)+n;
+  toast('✓ '+n+' marked OK — '+who,'ok');
+  var _sc=document.getElementById('ci-body'),_y=_sc?_sc.scrollTop:0;drawCI();try{if(_sc)_sc.scrollTop=_y;}catch(e){}
+}
+// New damage: one question first. "No new damage" = one tap; the 5 vehicle pictures only open
+// when there IS new damage to mark (they made Step 1 five screens long).
+function ciHasNewDmg(){try{return getDmgData().some(function(d){return (d.cells||[]).some(function(c){return c.t!=='pr';});});}catch(e){return false;}}
+function ciDmgAnswer(a){
+  if(a==='none'&&ciHasNewDmg()){toast('New damage is marked on the pictures — clear it first, or keep "Yes"','err');return;}
+  ci.dmgAns=a;
+  var _sc=document.getElementById('ci-body'),_y=_sc?_sc.scrollTop:0;drawCI();try{if(_sc)_sc.scrollTop=_y;}catch(e){}
+  if(a==='yes')setTimeout(function(){var e=document.getElementById('ci-dmg-grid');if(e&&e.scrollIntoView)e.scrollIntoView({behavior:'smooth',block:'start'});},150);
+}
 // Tap a line in the red "client signs once these are done" box: go to that thing and flash it
 function ciGoOpen(k){
   var open=ciOpenBeforeSign().filter(function(o){return o.s===0;});
   var o=open[k]||open[0];if(!o)return;
-  var id=/receiving/i.test(o.t)?'ci-rcv':/WiFi/.test(o.t)?'ci-wifi-box':/USB/.test(o.t)?'ci-usb-box':/Kilometres/.test(o.t)?'ci-odo':/Fuel/.test(o.t)?'ci-fuel':'';
+  var id=/receiving/i.test(o.t)?'ci-rcv':/WiFi/.test(o.t)?'ci-wifi-box':/USB/.test(o.t)?'ci-usb-box':/Kilometres/.test(o.t)?'ci-odo':/Fuel/.test(o.t)?'ci-fuel':/damage/i.test(o.t)?'ci-dmg-q':'';
   if(ciStep>1){ciStep=0;drawCI();}
   setTimeout(function(){
     var el=id?document.getElementById(id):null;
@@ -6812,7 +6831,7 @@ function ciClientSignHTML(){
     +'<div style="padding:12px 16px;border-bottom:1px solid var(--g2);background:rgba(0,0,0,.04);"><div style="font-size:14px;font-weight:700;color:var(--tx);margin-bottom:6px">By signing below, I confirm that:</div>'
       +stmts.map(function(t){return '<div style="display:flex;gap:8px;padding:3px 0;font-size:14px;color:var(--g6)"><span style="color:var(--se)">✓</span>'+t+'</div>';}).join('')+'</div>'
     +'<div style="padding:14px 16px">'
-    +(r.custSig?'<div class="signed">✅<div class="signed-name">'+_bx(v.cl||'')+' — vehicle condition signed</div><div class="signed-time">'+_bx(r.custAt||'')+'</div></div>'
+    +(r.custSig?'<div class="signed">✅<div class="signed-name">'+_bx(v.cl||'')+' — vehicle condition signed</div><div class="signed-time">'+_bx(r.custAt||'')+'</div></div><div style="margin-top:8px;padding:10px 12px;border-radius:10px;background:var(--sg);border:2px solid var(--gb);font-size:15px;font-weight:900;color:var(--se);">👋 The client can go — the return report comes on WhatsApp once the equipment is checked.</div>'
       :open.length?'<div class="left-box" onclick="ciGoOpen(0)" style="cursor:pointer;background:var(--rg);border:2px solid var(--re);border-radius:var(--rs);padding:12px 14px;"><div style="font-size:16px;font-weight:900;color:var(--rl);margin-bottom:2px;">🔒 The client signs once these are done ('+open.length+')</div><div style="font-size:12px;font-weight:700;color:var(--g5);margin-bottom:6px;">Tap a line to go to it</div><ul style="margin:0 0 4px 18px;padding:0;font-size:15px;font-weight:700;line-height:1.9;">'+open.map(function(o,k){return '<li onclick="event.stopPropagation();ciGoOpen('+k+')" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;">'+_bx(o.t)+' →</li>';}).join('')+'</ul></div>'
       :'<div class="sig-area" style="border-color:'+(x.any?'var(--re)':'var(--gb)')+'"><div class="sig-hdr" style="background:'+(x.any?'#200505':'#15532f')+';border-bottom-color:'+(x.any?'var(--re)':'var(--gb)')+'"><span class="sig-lbl" style="color:'+(x.any?'var(--rl)':'var(--se)')+'">'+_bx(v.cl||'')+' — sign to confirm the vehicle condition</span><span><span class="sig-clr" onclick="undoSig(\'ci-c-sig\')">&#8630; Undo</span><span class="sig-clr" onclick="clrSig(\'ci-c-sig\')">Clear</span></span></div><canvas class="sig-cv" id="ci-c-sig" style="height:220px"></canvas></div>'
         +'<button class="btn '+(x.any?'r':'g')+'" style="margin-top:10px;font-size:15px;padding:18px;'+(x.any?'background:#c0392b;color:#fff':'')+'" onclick="signCustCI()">✍️ '+(x.any?'I acknowledge the issues — ':'')+'Client signs</button>')
@@ -6917,7 +6936,7 @@ async function signCustCI(){
   ci.custSig=getSig('ci-c-sig');ci.custAt=now();
   try{uploadCISigs();}catch(e){}
   uploadPhotos(ci.dmgPhotos,ci.fn,ci.v.cl,'damage-in');
-  toast('Client signed ✅ — now check the equipment','ok');
+  toast('Client signed ✅ — the client can go. Now check the equipment.','ok');
   ciStep=2;drawCI();window.scrollTo(0,0);try{var _b=document.getElementById('ci-body');if(_b)_b.scrollTop=0;}catch(e){}
 }
 
@@ -8693,6 +8712,15 @@ function renderRetGroups(){
       +'</div>';
   }).join('');
 }
+// One tap: every item nobody has answered yet = returned (counts as booked out). Missing ones
+// already marked stay missing; staff then tap ✗ on anything that is not back.
+function ciEqAllReturned(){
+  var who=(ci&&ci.receivedBy)||(APP_USER&&APP_USER.name)||'';var at=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  if(!ci.retEqBy)ci.retEqBy={};var n=0;
+  RET_GROUPS.forEach(function(g){g.items.forEach(function(i){if(retSt[i])return;retSt[i]='ok';var o=ciQtyOut(i);if(o){if(!ci.retQty)ci.retQty={};ci.retQty[i]=o;}ci.retEqBy[i]={st:'ok',by:who,at:at};n++;});});
+  toast('✓ '+n+' items returned — now tap ✗ on anything missing','ok');
+  var el=document.getElementById('ret-grps');if(el)el.innerHTML=renderRetGroups();
+}
 // Returned / missing for one item (tapping the same choice again clears it)
 function setRetState(gi,ii,want){
   var i=RET_GROUPS[gi].items[ii],o=ciQtyOut(i),cur=retSt[i]||'';
@@ -9560,12 +9588,13 @@ function guideCI(){
     for(var j=0;j<items.length;j++){var l=items[j][1],x=ci.retItems[l];if(!(x&&(x.st!==undefined?x.st:x))){
       b=gFind(R,'.chk-list *',function(e){return e.children.length<6&&(e.textContent||'').trim().indexOf(l)===0&&e.getAttribute('onclick');})||gFind(R,'.chk-list div',function(e){return (e.textContent||'').indexOf(l)>=0;});
       return t('Check: '+l+' — tap once if OK, twice if there is a problem.',b);}}
-    if(!ci.custSig)return t('Mark any NEW damage and take the damage photos, then give the tablet to the client to sign.',document.getElementById('ci-client-sign'));
+    if(!ci.dmgAns&&!ciHasNewDmg())return t('Walk around the vehicle: any NEW damage? Tap No new damage, or Yes — mark it.',document.getElementById('ci-dmg-q'));
+    if(!ci.custSig)return t('Give the tablet to the client to sign the vehicle condition.',document.getElementById('ci-client-sign'));
     return {done:true,text:'✅ Client has signed the vehicle condition',next:'Next: Equipment →',go:function(){ciStep=2;drawCI();window.scrollTo(0,0);}};
   }
   if(g===2){
-    b=gFind(R,'.rbtn',function(x){return /All returned/.test(x.textContent)&&!x.classList.contains('ok-on');});
-    if(b)return t('Check each box: tap ✓ All returned, or ✗ Missing on anything that is not back.',b);
+    var _un=RET_GROUPS.reduce(function(a2,g){return a2.concat(g.items);},[]).filter(function(i){return !retSt[i];}).length;
+    if(_un)return t('Unload the equipment. Tap ✓ Everything else returned, then ✗ on anything that is not back ('+_un+' to answer).',document.getElementById('ci-eq-all'));
     return {done:true,text:'✅ Equipment checked',next:'Next: Report & WhatsApp →',go:function(){ciStep=3;drawCI();window.scrollTo(0,0);}};
   }
   if(!ci.custSig)return {done:true,text:'The client signs at the end of Step 1 (vehicle condition)',next:'← Step 1 · Client signs',go:function(){ciStep=0;drawCI();setTimeout(function(){var e=document.getElementById('ci-client-sign');if(e)e.scrollIntoView({block:'center'});},150);}};
