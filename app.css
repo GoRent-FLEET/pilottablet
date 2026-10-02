@@ -400,3 +400,9 @@ body.guide-next .co-next{display:none!important;}
 
 /* guide bar never shows over the login / lock / PIN screens */
 #login-screen[style*="flex"] ~ #guide,#device-login[style*="flex"] ~ #guide{display:none!important;}
+
+/* Step 5a sections: each its own colour so staff can find them while scrolling */
+.sum-box.sec-dep{background:#fff8e6;border-color:#e0b44a;border-left:8px solid #d49a12;}
+.sum-box.sec-ins{background:#eaf1fd;border-color:#9bb8ea;border-left:8px solid #3b6fd1;}
+.sum-box.sec-contact{background:#e9f7f0;border-color:#8fd0b0;border-left:8px solid #23935f;}
+.sum-box.sec-dep>.sum-title,.sum-box.sec-ins>.sum-title,.sum-box.sec-contact>.sum-title{font-size:15px;font-weight:900;text-transform:uppercase;letter-spacing:.5px;}

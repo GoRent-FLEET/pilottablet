@@ -3590,7 +3590,8 @@ function coStep1(){
   </div>
   ${coContractWho()}
   ${ctDepositsHTML()}
-  <div class="sum-box" style="margin-bottom:12px"><div class="sum-title" style="margin-bottom:10px">📇 Client contact · transfer · collection &amp; return</div>
+  ${ctInsuranceHTML()}
+  <div class="sum-box sec-contact" style="margin-bottom:12px"><div class="sum-title" style="margin-bottom:10px">📇 Client contact · transfer · collection &amp; return</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
         <div class="fi" style="flex:2 1 220px;min-width:180px;"><label>📧 Email address</label>
           <input type="email" value="${co.clientEmail||''}" placeholder="client@email.com" oninput="co.clientEmail=this.value" onchange="saveCOProgress()"
@@ -4263,7 +4264,15 @@ function ctDepositsHTML(){
   setTimeout(function(){
     [['ct-fdr','fuel_deposit_received'],['ct-xbd','cross_border_deposit'],['ct-edf','extra_driver_paid']].forEach(function(p){var e=document.getElementById(p[0]);if(e)e.onchange=function(){ctSet(p[1],this.checked);};});
   },0);
-  return '<div class="sum-box" style="margin-bottom:12px"><div class="sum-title" style="margin-bottom:10px">💰 Deposits received</div>'+h+'</div>';
+  return '<div class="sum-box sec-dep" style="margin-bottom:12px"><div class="sum-title" style="margin-bottom:10px">💰 Deposits received</div>'+h+'</div>';
+}
+// Insurance, extra cover and cross-border: sits right under the deposits on step 5a
+function ctInsuranceHTML(){
+  if(co.contractSigned)return '';
+  return '<div class="sum-box sec-ins" style="margin-bottom:12px"><div class="sum-title" style="margin-bottom:10px">🛡 Insurance &amp; extra cover</div>'
+    +ctDetailsForm()
+    +'<div class="fi"><label>Cross-border authorised</label><input id="ct-xb" value="'+_bx((co.contract&&co.contract.cross_border)||co.v.xb||'')+'" placeholder="e.g. Botswana" oninput="(co.contract=co.contract||{}).cross_border=this.value"></div>'
+    +'</div>';
 }
 // One way to show a finished document, everywhere in the app: a full-screen panel with a
 // Back button and a Print button. It deliberately does NOT open a new browser window —
@@ -4316,11 +4325,6 @@ function coStep2(){
     <div><div class="step-title">Step 5b — Rental Contract</div>
     <div class="step-sub">Fill in details, client reads contract, then signs</div></div>
   </div>
-  <div class="sum-box" style="margin-bottom:12px">
-    <div class="sum-title" style="margin-bottom:10px">Contract Details</div>
-    ${ctDetailsForm()}
-    <div class="fi"><label>Cross-border authorised</label><input id="ct-xb" value="${(co.contract&&co.contract.cross_border)||co.v.xb||''}" placeholder="e.g. Botswana" oninput="(co.contract=co.contract||{}).cross_border=this.value"></div>
-      </div>
   ${coLeftInline(CO_BEFORE_CONTRACT,'🔒 Contract locked — staff checks still open')}
   <button class="btn ${coLeftCount(CO_BEFORE_CONTRACT)?'s':'g'}" onclick="previewAndSignContract()">${coLeftCount(CO_BEFORE_CONTRACT)?'🔒 Contract locked — '+coLeftCount(CO_BEFORE_CONTRACT)+' checks open':'📋 Preview Full Contract &amp; Sign →'}</button>`;
 }
