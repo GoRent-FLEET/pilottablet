@@ -3531,7 +3531,24 @@ function coStep1(){
         </div>
       </div>
       </div>
-      ${isPrimary?`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+
+    </div>`;
+  };
+
+  const complete=co.drivers.filter(d=>d.name&&d.passportImg&&d.licFront).length;
+
+  return `
+  <div class="step-intro">
+    <div class="step-ico">📷</div>
+    <div>
+      <div class="step-title">Step 5a — Client &amp; Driver Details</div>
+      <div class="step-sub">Photograph the passport and licence of every driver · check the name · then fill in the contract below</div>
+    </div>
+  </div>
+  ${coContractWho()}
+  ${ctDepositsHTML()}
+  <div class="sum-box" style="margin-bottom:12px"><div class="sum-title" style="margin-bottom:10px">📇 Client contact · transfer · collection &amp; return</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
         <div class="fi" style="flex:2 1 220px;min-width:180px;"><label>📧 Email address</label>
           <input type="email" value="${co.clientEmail||''}" placeholder="client@email.com" oninput="co.clientEmail=this.value"
             style="border-color:${co.clientEmail?'var(--gb)':'var(--g3)'}">
@@ -3540,9 +3557,10 @@ function coStep1(){
           <input type="tel" value="${co.clientPhone||''}" placeholder="+264 81 ..." oninput="co.clientPhone=this.value"
             style="border-color:${co.clientPhone?'var(--gb)':'var(--g3)'}">
         </div>
-      </div>`:''}
+      </div>
 
-      ${isPrimary?`
+      
+      ${co.v.transfer?`<div style="margin-top:8px;padding:10px 12px;border-radius:10px;border:2px solid ${co.v.transferPays==='included'?'var(--gb)':'var(--am)'};background:${co.v.transferPays==='included'?'var(--sg)':'var(--ag)'};font-size:14px;font-weight:800;color:var(--tx);">🚐 Transfer: ${_bx(co.v.transfer)} · <span style="color:${co.v.transferPays==='included'?'var(--se)':'var(--al)'};">${co.v.transferPays==='included'?'included (on us)':co.v.transferPays==='client'?'client pays':''}</span></div>`:''}
       <!-- Collection / return & notes -->
       <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
         ${placePicker('pickupArrangement','📍 Collection — where the client picks the vehicle up','e.g. Hosea Kutako Airport · arrivals · 09:30')}
@@ -3561,22 +3579,8 @@ function coStep1(){
             style="width:100%;min-height:70px;padding:10px 12px;border-radius:var(--rs);border:2px solid ${co.clientNotes?'var(--gb)':'var(--g3)'};background:var(--g0);color:var(--tx);font-size:15px;resize:vertical;font-family:inherit;">${co.clientNotes||''}</textarea>
         </div>
         </div>
-      </div>`:''}
-
-    </div>`;
-  };
-
-  const complete=co.drivers.filter(d=>d.name&&d.passportImg&&d.licFront).length;
-
-  return `
-  <div class="step-intro">
-    <div class="step-ico">📷</div>
-    <div>
-      <div class="step-title">Step 5a — Client &amp; Driver Details</div>
-      <div class="step-sub">Photograph the passport and licence of every driver · check the name · then fill in the contract below</div>
-    </div>
+      </div>
   </div>
-  ${coContractWho()}
 
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
     <div style="font-size:14px;color:var(--g5);">
@@ -4188,18 +4192,34 @@ function ctDetailsForm(){
     +'<div id="ct-aws">'+choice('addon_windscreen','🛞 Windscreen &amp; Tyre cover','N$184 per day · 1 windscreen, '+(days>14?'2 tyres':'1 tyre')+' · rims excluded','N$184/day','N$184 × '+days+' = '+ctMoney(wsT))+'</div>'
     +'<div id="ct-aeq">'+choice('addon_equipment','🏕 Camping Equipment cover','N$103.50 per day · accidental damage or loss of camping gear','N$103.50/day','N$103.50 × '+days+' = '+ctMoney(eqT))+'</div>'
     +((ws||eq)?'<div style="display:flex;justify-content:space-between;padding:8px 14px;margin:-2px 0 8px;border-top:1px dashed var(--g3);font-size:15px;font-weight:900;"><span style="color:var(--g5);">Cover total ('+days+' days)</span><span style="color:var(--se);">'+ctMoney((ws?wsT:0)+(eq?eqT:0))+'</span></div>':'')
-    +'<div style="font-size:12px;font-weight:800;color:var(--g5);text-transform:uppercase;letter-spacing:.4px;margin:12px 0 6px;">Deposits received</div>'
+    ;
+  return h;
+}
+// Deposits sit at the TOP of the contract step (taken first, before the photos)
+function ctDepositsHTML(){
+  if(co.contractSigned)return '';
+  var c=co.contract=co.contract||{};
+  var need=!!(co.v.xb||c.cross_border);
+  function tick(id,on,title,sub,right,state){
+    var bd=on?'var(--gb)':state==='req'?'var(--re)':'var(--g3)',bg=on?'var(--sg)':state==='req'?'var(--rg)':'var(--g0)';
+    return '<label style="display:flex;align-items:center;gap:12px;cursor:pointer;margin:0 0 8px;padding:12px 14px;border-radius:10px;border:2px solid '+bd+';background:'+bg+';">'
+      +'<input type="checkbox" id="'+id+'" '+(on?'checked':'')+' style="width:24px;height:24px;flex-shrink:0;">'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:15px;font-weight:900;color:var(--tx);">'+title+'</div>'+(sub?'<div style="font-size:12px;color:var(--g5);margin-top:2px;">'+sub+'</div>':'')+'</div>'
+      +(right?'<div style="text-align:right;font-size:14px;font-weight:900;color:'+(on?'var(--se)':'var(--g5)')+';white-space:nowrap;">'+right+'</div>':'')
+      +'</label>';
+  }
+  var h=''
+
     +tick('ct-fdr',!!c.fuel_deposit_received,'⛽ Fuel &amp; Admin deposit — N$7,500.00','Required for every rental · refunded within 7 days after return',c.fuel_deposit_received?'✓ Received':'Required','req')
     +tick('ct-xbd',c.cross_border_deposit===true,'🌍 Cross-border/Damage deposit — N$30,000.00',need?'Required: this booking goes cross-border ('+_bx(co.v.xb||c.cross_border)+')':'Only for travel outside Namibia',c.cross_border_deposit===true?'✓ Received':(need?'Required':'Not needed'),need?'req':'opt')
     +((function(){var n=extraDriverCount();if(!n)return '';return tick('ct-edf',c.extra_driver_paid===true,'\uD83D\uDC64 Extra driver fee \u2014 '+ctMoney(extraDriverFee()),n+' extra driver'+(n===1?'':'s')+' \u00d7 N$280 once-off \u00b7 take this at collection',c.extra_driver_paid?'\u2713 Received':'TAKE PAYMENT','req');})())
     +'<div class="fi" style="margin-bottom:8px;"><label for="ct-dmethod">💳 Deposit method *</label><select id="ct-dmethod" onchange="ctSet(\'deposit_method\',this.value)" style="color-scheme:light;font-size:16px;font-weight:700;border:2px solid '+(c.deposit_method?'var(--gb)':'var(--am)')+';">'
       +['','Adumo','Swipe (card machine)','Cash','EFT / bank transfer','Paid online','Other (see notes)'].map(function(o){return '<option value="'+o+'"'+((c.deposit_method||'')===o?' selected':'')+'>'+(o||'— select how the deposit was paid —')+'</option>';}).join('')
     +'</select></div>';
-  // wire the tick boxes after the screen is drawn
   setTimeout(function(){
     [['ct-fdr','fuel_deposit_received'],['ct-xbd','cross_border_deposit'],['ct-edf','extra_driver_paid']].forEach(function(p){var e=document.getElementById(p[0]);if(e)e.onchange=function(){ctSet(p[1],this.checked);};});
   },0);
-  return h;
+  return '<div class="sum-box" style="margin-bottom:12px"><div class="sum-title" style="margin-bottom:10px">💰 Deposits received</div>'+h+'</div>';
 }
 // One way to show a finished document, everywhere in the app: a full-screen panel with a
 // Back button and a Print button. It deliberately does NOT open a new browser window —
@@ -9390,6 +9410,13 @@ function guideCO(){
     b=gFind(R,'.insp-flash',function(x){return gTxt(x,'OK')||x.querySelector('select');});
     if(b){var nm=(b.querySelector('div div:nth-child(2)')||{}).textContent||'';return t('Not ticked yet: '+nm+' — check it and tap OK (or Issue).',b);}
   }else if(st===5){
+    // same order as the screen: deposits first, then the photos, then the cover
+    if(!co.contractSigned){
+      var c0=co.contract||{};
+      if(!c0.fuel_deposit_received){b=gFind(R,'label,div',function(x){return /Fuel & Admin deposit/.test(x.textContent)&&x.querySelector('input[type=checkbox]')&&x.textContent.length<200;});return t('Take the Fuel & Admin deposit, then tick it.',b);}
+      if(co.v.xb&&!c0.cross_border_deposit){b=gFind(R,'label,div',function(x){return /Cross-border\/Damage deposit/.test(x.textContent)&&x.querySelector('input[type=checkbox]')&&x.textContent.length<200;});return t('Take the Cross-border deposit, then tick it.',b);}
+      b=gFind(R,'select',function(x){return /how the deposit was paid/.test(x.textContent)&&!x.value;});if(b)return t('Choose how the deposit was paid.',b);
+    }
     var ds=co.drivers||[];
     for(var i=0;i<ds.length;i++){var d=ds[i],who=i===0?'the main driver':'driver '+(i+1);
       if(!d.passportImg)return t('Take a photo of the PASSPORT of '+who+'.',document.getElementById('fi-drv-'+i+'-passportImg')&&document.getElementById('fi-drv-'+i+'-passportImg').parentNode);
