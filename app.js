@@ -2910,6 +2910,23 @@ function miniBox(title,val,onOk,onBad,okLbl,badLbl){
     +'<button style="'+bs+(val==='ok'?'border:2px solid var(--gb);background:var(--se);color:#fff;':'border:2px solid var(--g3);background:var(--g0);color:var(--tx);')+'" onclick="'+onOk+'">'+(val==='ok'?'✓ ':'')+okLbl+'</button>'
     +'<button style="'+bs+(bad?'border:2px solid var(--re);background:var(--re);color:#fff;':'border:2px solid var(--g3);background:var(--g0);color:var(--tx);')+'" onclick="'+onBad+'">'+(bad?'⚠ ':'')+badLbl+'</button></div></div>';
 }
+// One tap for the usual return times, plus one worked out from the client's flight home
+// (3 hours before departure, on the half hour, never before 07:00)
+function hoSetTime(t){co.returnTime=t;saveCOProgress();drawCO();}
+function hoQuickTimes(v){
+  var opts=['08:00','10:00','12:00','14:00','16:00'],sug='',fl='';
+  try{
+    var m=String((v&&v.flightOut)||'').match(/(\d{1,2}):(\d{2})/);
+    if(m){fl=('0'+m[1]).slice(-2)+':'+m[2];var mins=(+m[1])*60+(+m[2])-180;mins=Math.max(7*60,Math.floor(mins/30)*30);
+      sug=('0'+Math.floor(mins/60)).slice(-2)+':'+('0'+(mins%60)).slice(-2);}
+  }catch(e){}
+  var b=function(t,lbl,hl){var on=co.returnTime===t;
+    return '<button onclick="hoSetTime(\''+t+'\')" style="padding:7px 10px;border-radius:8px;font-size:13px;font-weight:900;cursor:pointer;touch-action:manipulation;'
+      +(on?'border:2px solid var(--gb);background:var(--se);color:#fff;':hl?'border:2px solid #7c3aed;background:#f3e8ff;color:#4c1d95;':'border:2px solid var(--g3);background:var(--g0);color:var(--tx);')+'">'+lbl+'</button>';};
+  return '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">'
+    +(sug?b(sug,'✈ '+sug+' <span style="font-weight:700;font-size:11px;">(flight '+fl+')</span>',true):'')
+    +opts.filter(function(t){return t!==sug;}).map(function(t){return b(t,t,false);}).join('')+'</div>';
+}
 // Handover: WiFi device (+ cross-border docs) next to the expected return date & time
 function hoTopRow(){
   var v=co.v,d=co.docItems||{};
@@ -2919,6 +2936,7 @@ function hoTopRow(){
     +'<div style="font-size:14px;font-weight:900;color:var(--tx);margin-bottom:6px;">📅 Return: '+due+'</div>'
     +'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;font-weight:800;color:var(--g5);">Expected time *</span>'
     +timePickers('ho-rtime',co.returnTime||'',"var _t=timePickValue('ho-rtime');if(_t){co.returnTime=_t;saveCOProgress();drawCO();}")+'</div>'
+    +hoQuickTimes(v)
     +fl+'</div>';
   return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0 12px;">'
     +miniBox('📶 WiFi device',d.wifi||'',"coSetDoc('wifi','ok')","coSetDoc('wifi','issue')",'Handed over','Not available')
@@ -4224,7 +4242,7 @@ function coStep2(){
     ${ctDetailsForm()}
     <div class="fi"><label>Cross-border authorised</label><input id="ct-xb" value="${(co.contract&&co.contract.cross_border)||co.v.xb||''}" placeholder="e.g. Botswana" oninput="(co.contract=co.contract||{}).cross_border=this.value"></div>
       </div>
-  ${coLeftInline(CO_BEFORE_CONTRACT,'🔒 Contract locked — staff must finish these checks first')}
+  ${coLeftInline(CO_BEFORE_CONTRACT,'🔒 Contract locked — staff checks still open')}
   <button class="btn ${coLeftCount(CO_BEFORE_CONTRACT)?'s':'g'}" onclick="previewAndSignContract()">${coLeftCount(CO_BEFORE_CONTRACT)?'🔒 Contract locked — '+coLeftCount(CO_BEFORE_CONTRACT)+' checks open':'📋 Preview Full Contract &amp; Sign →'}</button>`;
 }
 
@@ -5026,7 +5044,6 @@ function coStep5_client(){
     ${(function(){var pr=(co.dmgd||[]).reduce(function(a,d){return a+((d.cells||[]).filter(function(c){return c.t==='pr';}).length);},0);
       return pr?'<div class="al warn" style="margin-bottom:10px;font-size:13px;">⭐ '+pr+' yellow block'+(pr===1?'':'s')+' = damage already on this vehicle'+(co._prevDmgSrc?' (from the '+co._prevDmgSrc+')':'')+'. Check it with the client: tap a yellow block with <b>Pre-existing</b> selected to remove it if it is no longer there, or add more with <b>Pre-existing</b>.</div>'
         :'<div class="al info" style="margin-bottom:10px;font-size:13px;">No damage on record for this vehicle. Mark anything you find: blue = scratch · red = dent · yellow = pre-existing.</div>';})()}
-    <div class="al info" style="margin-bottom:10px;font-size:13px;">Blue = Scratch · Red = Dent · Yellow = Pre-existing</div>
     ${insHTML()}
     ${photoHTML('co.dmgPhotos','📷 Damage Photos','Photograph all damage — these protect the company.',8)}
   </div>`;
@@ -5094,7 +5111,7 @@ function coStep5_client(){
   return `
   ${hoTopRow()}
   ${whoMini('ho',co.mechBy,'Handover by','')}
-  ${handoverClosed()?'':coLeftInline(CO_BEFORE_HANDOVER,'🔒 Handover locked — staff must finish these first')}
+  ${handoverClosed()?'':coLeftInline(CO_BEFORE_HANDOVER,'🔒 Handover locked — checks still open')}
   ${dmgSectionHTML}
   <div class="step-intro">
     <div class="step-ico">🤝</div>
@@ -5492,13 +5509,24 @@ function coLeftHTML(steps){
   });
   return h;
 }
+// On Contract and Handover the client is usually standing there: the open checks are ONE red
+// line with a count per step ("Cleaning 2 · Equipment 1") and a Show button. The full tappable
+// list (up to 65 rows) only opens when someone asks for it.
+var _coLeftOpen={};
+function coLeftToggle(k){_coLeftOpen[k]=!_coLeftOpen[k];try{drawCO();}catch(e){}}
 function coLeftInline(steps,title){
   try{
     var n=coLeftCount(steps);if(!n)return '';
-    return '<div class="left-box" style="background:var(--rg);border:2px solid var(--re);border-radius:var(--rs);padding:12px 14px;margin-bottom:14px;">'
-      +'<div style="font-size:16px;font-weight:900;color:var(--rl);">🔴 '+_bx(title)+' ('+n+')</div>'
-      +'<div style="font-size:12px;color:var(--g5);">Tap OK / Issue right here, or go to the step.</div>'
-      +coLeftHTML(steps)+'</div>';
+    var k=steps.join(''),open=!!_coLeftOpen[k];
+    var per=steps.map(function(st){var c=coStepItems(st).length+coStepMissing(st).length;return c?(CO_NAMES[st]||('Step '+st))+' '+c:'';}).filter(Boolean).join(' · ');
+    return '<div class="left-box" style="background:var(--rg);border:2px solid var(--re);border-radius:var(--rs);padding:10px 14px;margin-bottom:14px;">'
+      +'<div style="display:flex;align-items:center;gap:10px;">'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:15px;font-weight:900;color:var(--rl);">🔴 '+_bx(title)+' — '+n+' open</div>'
+      +'<div style="font-size:12px;font-weight:700;color:var(--g5);">'+_bx(per)+'</div></div>'
+      +'<button onclick="coLeftToggle(\''+k+'\')" style="flex-shrink:0;padding:8px 14px;border-radius:9px;border:2px solid var(--re);background:#fff;color:var(--rl);font-size:13px;font-weight:900;cursor:pointer;">'+(open?'▲ Hide':'Show ▼')+'</button>'
+      +'</div>'
+      +(open?'<div style="font-size:12px;color:var(--g5);margin-top:6px;">Tap OK / Issue right here, or go to the step.</div>'+coLeftHTML(steps):'')
+      +'</div>';
   }catch(e){return '';}
 }
 var _coLeft=null;
@@ -9323,12 +9351,12 @@ function guideCO(){
       if(!c.fuel_deposit_received){b=gFind(R,'label,div',function(x){return /Fuel & Admin deposit/.test(x.textContent)&&x.querySelector('input[type=checkbox]')&&x.textContent.length<200;});return t('Take the Fuel & Admin deposit, then tick it.',b);}
       if(co.v.xb&&!c.cross_border_deposit){b=gFind(R,'label,div',function(x){return /Cross-border\/Damage deposit/.test(x.textContent)&&x.querySelector('input[type=checkbox]')&&x.textContent.length<200;});return t('Take the Cross-border deposit, then tick it.',b);}
       b=gFind(R,'select',function(x){return /how the deposit was paid/.test(x.textContent)&&!x.value;});if(b)return t('Choose how the deposit was paid.',b);
-      if(coLeftCount(CO_BEFORE_CONTRACT)){var _l5=coLeftList(CO_BEFORE_CONTRACT);return t('Contract locked until staff finish: '+_l5[0]+(_l5.length>1?' (+'+(_l5.length-1)+' more)':''),gFind(R,'.left-box'));}
+      if(coLeftCount(CO_BEFORE_CONTRACT)){var _l5=coLeftList(CO_BEFORE_CONTRACT);return t(_l5.length===1?'Contract locked until staff finish: '+_l5[0]:'Contract locked — '+_l5.length+' staff checks still open. Tap Show on the red line to tick them.',gFind(R,'.left-box'));}
       b=gFind(R,'button',function(x){return gTxt(x,'Preview Full Contract');});
       return t('Tap 📋 Preview Full Contract & Sign — the client reads it and signs.',b);
     }
   }else if(st===6){
-    if(!handoverClosed()&&coLeftCount(CO_BEFORE_HANDOVER)){var _l6=coLeftList(CO_BEFORE_HANDOVER);return t('Handover locked: '+_l6[0]+(_l6.length>1?' (+'+(_l6.length-1)+' more)':''),gFind(R,'.left-box'));}
+    if(!handoverClosed()&&coLeftCount(CO_BEFORE_HANDOVER)){var _l6=coLeftList(CO_BEFORE_HANDOVER);return t(_l6.length===1?'Handover locked: '+_l6[0]:'Handover locked — '+_l6.length+' checks still open. Tap Show on the red line to see them.',gFind(R,'.left-box'));}
     var dd=co.docItems||{};
     if(!dd.wifi){b=gFind(R,'div.insp-flash',function(x){return /^📶 WiFi device/.test((x.textContent||'').trim());});return t('Give the client the WiFi device, then tap Handed over.',b);}
     if(co.v.xb&&!dd.xb){b=gFind(R,'div.insp-flash',function(x){return /^🌍 Cross-border docs/.test((x.textContent||'').trim());});return t('Give the client the cross-border papers, then tap Handed over.',b);}
