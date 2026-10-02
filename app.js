@@ -2525,7 +2525,7 @@ async function startCO(fn){
     prepBy:'',prepSig:null,prepAt:'',prepItems:{},prepPhotos:[],fuelOut:'Full',
     prepLog:[],prepCheckedBy:{},
     equipSig:null,equipAt:'',equipLog:[],
-    clientName:v.cl||'',clientEmail:'',clientPhone:'',quoteNo:'',pickupArrangement:'',dropoffArrangement:'',remoteLocation:'',clientNotes:'',clientPassport:null,clientID:null,
+    clientName:v.cl||'',clientEmail:v.email||'',clientPhone:v.phone||'',quoteNo:'',pickupArrangement:'',dropoffArrangement:'',remoteLocation:'',clientNotes:'',clientPassport:null,clientID:null,
     licFront:null,licBack:null,
     contract:null,contractSigned:false,
     dmgDone:false,
@@ -3550,11 +3550,11 @@ function coStep1(){
   <div class="sum-box" style="margin-bottom:12px"><div class="sum-title" style="margin-bottom:10px">📇 Client contact · transfer · collection &amp; return</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
         <div class="fi" style="flex:2 1 220px;min-width:180px;"><label>📧 Email address</label>
-          <input type="email" value="${co.clientEmail||''}" placeholder="client@email.com" oninput="co.clientEmail=this.value"
+          <input type="email" value="${co.clientEmail||''}" placeholder="client@email.com" oninput="co.clientEmail=this.value" onchange="saveCOProgress()"
             style="border-color:${co.clientEmail?'var(--gb)':'var(--g3)'}">
         </div>
         <div class="fi" style="flex:1.3 1 180px;min-width:150px;"><label>💬 WhatsApp number</label>
-          <input type="tel" value="${co.clientPhone||''}" placeholder="+264 81 ..." oninput="co.clientPhone=this.value"
+          <input type="tel" value="${co.clientPhone||''}" placeholder="+264 81 ..." oninput="co.clientPhone=this.value" onchange="saveCOProgress()"
             style="border-color:${co.clientPhone?'var(--gb)':'var(--g3)'}">
         </div>
       </div>
