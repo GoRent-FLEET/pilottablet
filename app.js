@@ -656,7 +656,9 @@ async function checkAppUpdate(onReturn){
       if(!lm||new Date(lm).getTime()<=APP_LOADED_AT+5000)return;
       _appNew=true;
     }
-    if(onReturn){appUpdateNow();return;}   // work in progress is saved (device + server) and reopens after the reload
+    // Coming back from the CAMERA is also a "return": reloading then threw away the photo that was
+    // still being saved (Blackview, 2 Oct). Only reload straight away when nothing is open.
+    if(onReturn&&!busyNow()&&!photoBusy()){appUpdateNow();return;}
     if(busyNow()){showAppUpdateBar();return;}
     showAppUpdateBar();
   }catch(e){}
@@ -2140,6 +2142,41 @@ async function drPack(val,id){
   }
   return packed;
 }
+// Photo lists in a job: prepPhotos, dmgPhotos, fuelPhotos …
+function drPhotoKeys(o){return Object.keys(o||{}).filter(function(k){return /Photos$/.test(k)&&Array.isArray(o[k]);});}
+// The reference a photo has in the saved draft (same as drPack makes)
+function drPhotoRef(src,id){
+  if(typeof src!=='string')return '';
+  if(src.indexOf('data:image')!==0||src.length<=60000)return src;
+  return 'draftimg:drafts/'+id.replace(/[^A-Za-z0-9_-]/g,'_')+'/'+drHash(src)+(src.indexOf('data:image/png')===0?'.png':'.jpg');
+}
+async function drMergePhotos(r,data){
+  var q=await SB.from('work_drafts').select('data').eq('id',r.id).maybeSingle();
+  var srv=q&&q.data&&q.data.data&&q.data.data.o;var mine=data&&data.o;
+  if(!srv||!mine)return;
+  var del={};(mine._phDel||[]).concat(srv._phDel||[]).forEach(function(x){del[x]=1;});
+  mine._phDel=Object.keys(del);
+  var added={};
+  drPhotoKeys(srv).concat(drPhotoKeys(mine)).forEach(function(k){
+    var a=(mine[k]||[]).filter(function(x){return !del[x];}),have={};
+    a.forEach(function(x){have[x]=1;});
+    (srv[k]||[]).forEach(function(x){if(x&&!have[x]&&!del[x]){a.push(x);have[x]=1;(added[k]=added[k]||[]).push(x);}});
+    mine[k]=a;
+  });
+  // Put the other device's photos on this screen too, or the next save here would drop them again
+  var kind=r.id.split(':')[0],job=kind==='checkout'?co:ci;
+  if(!job||!job.v||drId(kind,job)!==r.id)return;
+  var keys=Object.keys(added);if(!keys.length)return;
+  for(var i=0;i<keys.length;i++){
+    var k=keys[i],imgs;try{imgs=await drUnpack(added[k]);}catch(e){continue;}
+    if(!Array.isArray(job[k]))job[k]=[];
+    var cur={};job[k].forEach(function(x){cur[drPhotoRef(x,r.id)]=1;});
+    imgs.forEach(function(x){if(x&&!cur[drPhotoRef(x,r.id)])job[k].push(x);});
+  }
+  job._phDel=mine._phDel;
+  _drDirty=true;
+  try{if(drPageOn(kind==='checkout'?'co':'ci'))redraw();}catch(e){}
+}
 function drBlobToData(b){return new Promise(function(res,rej){var r=new FileReader();r.onload=function(){res(r.result);};r.onerror=rej;r.readAsDataURL(b);});}
 async function drUnpack(val){
   var paths=[];
@@ -2183,8 +2220,13 @@ async function drPush(){
       if(row&&row.device!==DR_DEV&&row.summary&&Object.keys(row.summary).length&&(!r.base||row.updated_at>r.base)){   // (older-format rows have no summary: just replace them)
         drOtherDeviceNote(r,row);   // someone else has it open too — never interrupt the person in front of the screen
         r.base=row.updated_at;
+        r._mergePh=true;
       }
       var data=await drPack(JSON.parse(r.json),r.id);
+      // Two devices on the same job (Blackview taking equipment photos, office doing the contract on
+      // another tablet): the whole job was replaced by whichever saved last, so photos taken on the
+      // other device vanished. Photos are now added together; only a photo someone deleted stays gone.
+      if(r._mergePh){try{await drMergePhotos(r,data);}catch(e){}}
       var up=await SB.from('work_drafts').upsert({id:r.id,kind:r.kind,fleet_no:r.fn,client:r.cl,staff:r.staff,step:r.step,summary:r.sum||{},
         data:data,updated_by:r.by||(APP_USER&&APP_USER.name),device:DR_DEV},{onConflict:'id'}).select('updated_at,started_at').single();
       if(up.error){_drDirty=true;break;}
@@ -8586,8 +8628,8 @@ function uncSVG(){return`<svg width="32" height="32" viewBox="0 0 24 24" fill="n
 
 // ── PHOTOS ────────────────────────────────────────────────────────
 function getPA(key){
-  if(key==='co.prepPhotos')return co.prepPhotos;
-  if(key==='co.dmgPhotos')return co.dmgPhotos;
+  if(key==='co.prepPhotos')return(co.prepPhotos=co.prepPhotos||[]);   // older drafts may not have the list yet
+  if(key==='co.dmgPhotos')return(co.dmgPhotos=co.dmgPhotos||[]);
   if(key==='ci.dmgPhotos')return(ci.dmgPhotos=ci.dmgPhotos||[]);
   if(key==='ci.fuelPhotos')return(ci.fuelPhotos=ci.fuelPhotos||[]);
   return[];
@@ -8599,7 +8641,7 @@ function photoHTML(key,title,sub,max){
     <div class="photo-sub">${sub}</div>
     <div class="photo-grid">
       ${arr.map((src,i)=>`<div class="p-thumb"><img src="${src}"><button class="p-del" onclick="delPhoto('${key}',${i})">✕</button></div>`).join('')}
-      ${arr.length<max?`<div class="p-add" onclick="document.getElementById('fi-${safe}').click()">
+      ${arr.length<max?`<div class="p-add" onclick="window._photoAt=Date.now();document.getElementById('fi-${safe}').click()">
         <input type="file" id="fi-${safe}" accept="image/*" capture="environment" multiple onchange="handlePhotos(event,'${key}',${max})">
         <div class="p-add-ico">📷</div><div class="p-add-lbl">${arr.length?'Add more':'Take photo'}</div>
       </div>`:''}
@@ -8608,13 +8650,14 @@ function photoHTML(key,title,sub,max){
   </div>`;
 }
 async function handlePhotos(e,key,max){
-  const arr=getPA(key);const files=Array.from((e&&e.target&&e.target.files)||[]);
+  window._photoAt=Date.now();
+  let arr=getPA(key);const files=Array.from((e&&e.target&&e.target.files)||[]);
   // the limit each section declares was ignored here, so a counter could read 8/3
   const cap=parseInt(max)||8;
   const toAdd=Math.max(0,Math.min(files.length,cap-arr.length));
   if(files.length>toAdd){try{toast('Only '+cap+' photos here — '+(toAdd?'added the first '+toAdd:'none added'),'err');}catch(e2){}}
   try{e.target.value='';}catch(e3){}
-  if(!toAdd)return;
+  if(!toAdd){window._photoAt=0;return;}
   // Camera photos are 4–5 MB each. Kept at full size they filled the tablet's memory and the
   // work draft (saved every 2 s), so photos — and signatures — were lost and a check-in could
   // not be completed. Shrink them first: 1920 px is still sharp enough as damage evidence.
@@ -8623,14 +8666,23 @@ async function handlePhotos(e,key,max){
   for(let i=0;i<toAdd;i++){
     let url=null;
     try{const b=await compressImg(files[i],1920,0.8);if(b)url=await drBlobToData(b);}catch(err){}
+    // The job can be reloaded from the server while the photo is being shrunk (slow on the
+    // Blackview). The list taken before then belongs to the old copy, and the photo went nowhere.
+    arr=getPA(key)||arr;
     if(url)arr.push(url);else failed++;
   }
+  window._photoAt=0;
   try{hideBanner();}catch(e5){}
   if(failed){try{toast(failed+' photo'+(failed>1?'s':'')+' could not be read — please take '+(failed>1?'them':'it')+' again','err');}catch(e6){}}
   redraw();
   try{drTick();}catch(e7){}   // save the draft straight away, don't wait for the next 2-second tick
 }
-function delPhoto(key,i){if(!canDelete('photos'))return;const arr=getPA(key);arr.splice(i,1);redraw();}
+function delPhoto(key,i){if(!canDelete('photos'))return;const arr=getPA(key);
+  // remember the deletion, so a photo merged back from another device does not reappear
+  try{var job=key.indexOf('co.')===0?co:ci,id=drId(key.indexOf('co.')===0?'checkout':'checkin',job);
+    var ref=drPhotoRef(arr[i],id);if(ref){job._phDel=job._phDel||[];if(job._phDel.indexOf(ref)<0)job._phDel.push(ref);}}catch(e){}
+  arr.splice(i,1);redraw();}
+function photoBusy(){return !!(window._photoAt&&Date.now()-window._photoAt<180000);}
 function redraw(){
   if(document.getElementById('page-co').classList.contains('on'))drawCO();
   else drawCI();
@@ -9596,6 +9648,7 @@ function closeResumePanel() {
   var LOADED=Date.parse(document.lastModified)||Date.now();
   var checking=false,shown=false;
   function busy(){
+    try{if(typeof photoBusy==='function'&&photoBusy())return true;}catch(e){}
     try{if(co&&co.v&&!co._done)return true;}catch(e){}
     try{if(ci&&ci.v&&!ci._done)return true;}catch(e){}
     var ae=document.activeElement;return !!(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName));
