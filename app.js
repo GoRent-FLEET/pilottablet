@@ -1367,6 +1367,7 @@ async function restoreSession(){
   // Check for saved login
   try {
     var saved = localStorage.getItem('gorent_user');
+    var _wasWho='';try{_wasWho=(JSON.parse(saved||'null')||{}).name||'';}catch(e){}
     if (saved && lockedSinceSleep()) { saved = null; try{localStorage.removeItem('gorent_user');}catch(e){} window._lockReturn=null; }   // woke up / reopened: PIN again
     if (saved) {
       APP_USER = JSON.parse(saved);
@@ -1376,7 +1377,7 @@ async function restoreSession(){
       if (nl) nl.style.display = '';
     }
   } catch(e) {}
-  if (!APP_USER) { showLoginScreen(); return; }
+  if (!APP_USER) { showLoginScreen(); try{if(_wasWho&&ROLE[_wasWho])lsPick(_wasWho);}catch(e){} return; }   // reopened after a pause: straight to that person's PIN
   currentProfile={name:APP_USER.name,role:APP_USER.role};
   document.getElementById('nav-user').textContent='';
   await showApp();
@@ -1775,10 +1776,13 @@ function _renderOV(){
   var todayDepCount=(depGroups[TODAY]||[]).length;
 
   // Every day of the window gets a heading — days with nothing show "none"
+  // Days are built on local dates: toISOString() on local midnight is the PREVIOUS day in
+  // Namibia (UTC+2), which made "Next 14 days" start with yesterday.
+  function _ymdL(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
   function windowDays(groups){
     var out=[],base=new Date(TODAY+'T00:00:00');
-    if(view==='week'){for(var i=0;i<=WIN;i++){var d=new Date(base);d.setDate(d.getDate()+i);out.push(d.toISOString().split('T')[0]);}}
-    else{for(var j=WIN;j>=0;j--){var e=new Date(base);e.setDate(e.getDate()-j);out.push(e.toISOString().split('T')[0]);}}
+    if(view==='week'){for(var i=0;i<=WIN;i++){var d=new Date(base);d.setDate(d.getDate()+i);out.push(_ymdL(d));}}
+    else{for(var j=WIN;j>=0;j--){var e=new Date(base);e.setDate(e.getDate()-j);out.push(_ymdL(e));}}
     Object.keys(groups||{}).forEach(function(d){if(out.indexOf(d)<0)out.push(d);});
     return out.sort(function(a,b){return daysFrom(a)>daysFrom(b)?1:-1;});
   }
@@ -1788,33 +1792,51 @@ function _renderOV(){
     return '<div style="font-size:11px;font-weight:900;color:'+(isToday?'#c07a00':n?'#666':'#aaa')+';letter-spacing:.6px;padding-bottom:6px;margin-bottom:8px;border-bottom:2px solid '+(isToday?'#f6ad55':'#e8e8e8')+';">'
       +(isToday?'TODAY · '+full:full)+' · '+(n?n+(n===1?' '+one:' '+many):'none')+'</div>';
   }
-  function emptyRow(txt){return '<div style="padding:10px;text-align:center;color:#bbb;font-size:12px;border:1px dashed #e0e0e0;border-radius:8px;">'+txt+'</div>';}
-  var movHTML=''; var movDates=windowDays(movGroups);
-  movDates.forEach(function(d){
-    var items=movGroups[d]||[];
-    movHTML+='<div style="margin-bottom:14px;">'+dayHead(d,items.length,'MOVEMENT','MOVEMENTS');
-    if(items.length)items.forEach(function(x){ movHTML+=movCard(x.v,x.isOut); });
-    else movHTML+=emptyRow('No vehicles out or back');
-    movHTML+='</div>';
-  });
+  // Empty days no longer take a heading + a dashed box each: a run of empty days is one thin line
+  // ("Sat 3 – Mon 5 Oct · nothing"). Today always gets its full heading.
+  function shortDay(d){return new Date(d+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});}
+  function dayList(groups,cardFn,one,many,none){
+    var html='',run=[];
+    function flush(){
+      if(!run.length)return;
+      var lbl=run.length===1?shortDay(run[0]):shortDay(run[0])+' – '+shortDay(run[run.length-1]);
+      html+='<div style="font-size:11px;font-weight:700;color:#aaa;padding:3px 2px 9px;letter-spacing:.2px;">'+lbl+' · '+none+'</div>';
+      run=[];
+    }
+    windowDays(groups).forEach(function(d){
+      var items=groups[d]||[];
+      if(!items.length&&d!==TODAY){run.push(d);return;}
+      flush();
+      html+='<div style="margin-bottom:14px;">'+dayHead(d,items.length,one,many);
+      if(items.length)items.forEach(function(x){html+=cardFn(x);});
+      else html+='<div style="padding:8px;text-align:center;color:#bbb;font-size:12px;border:1px dashed #e0e0e0;border-radius:8px;">'+none+' today</div>';
+      html+='</div>';
+    });
+    flush();
+    return html;
+  }
+  var movHTML=dayList(movGroups,function(x){return movCard(x.v,x.isOut);},'MOVEMENT','MOVEMENTS','nothing out or back');
+  var arrHTML=dayList(arrGroups,function(x){return flightCard(x,true);},'ARRIVAL','ARRIVALS','no arrivals');
+  var depHTML=dayList(depGroups,function(x){return flightCard(x,false);},'DEPARTURE','DEPARTURES','no departures');
 
-  var arrHTML=''; var arrDates=windowDays(arrGroups);
-  arrDates.forEach(function(d){
-    var items=arrGroups[d]||[];
-    arrHTML+='<div style="margin-bottom:14px;">'+dayHead(d,items.length,'ARRIVAL','ARRIVALS');
-    if(items.length)items.forEach(function(x){ arrHTML+=flightCard(x,true); });
-    else arrHTML+=emptyRow('No arrivals');
-    arrHTML+='</div>';
-  });
-
-  var depHTML=''; var depDates=windowDays(depGroups);
-  depDates.forEach(function(d){
-    var items=depGroups[d]||[];
-    depHTML+='<div style="margin-bottom:14px;">'+dayHead(d,items.length,'DEPARTURE','DEPARTURES');
-    if(items.length)items.forEach(function(x){ depHTML+=flightCard(x,false); });
-    else depHTML+=emptyRow('No departures');
-    depHTML+='</div>';
-  });
+  // ── TODAY at a glance: what is still to go out / come back, how many are already started ──
+  var _ovToday=(function(){
+    var o={out:0,outGo:0,outIP:0,back:0,backGo:0,backIP:0};
+    (movGroups[TODAY]||[]).forEach(function(x){
+      var v=x.v,fin=x.isOut?coIsDone(v):ciIsDone(v),ip=null;
+      try{var r=localStorage.getItem(ipKey(v.fn));if(r)ip=JSON.parse(r);}catch(e){}
+      var isIP=!fin&&ip&&(ip.type===(x.isOut?'checkout':'checkin'));
+      if(x.isOut){o.out++;if(fin)o.outGo++;else if(isIP)o.outIP++;}else{o.back++;if(fin)o.backGo++;else if(isIP)o.backIP++;}
+    });
+    if(!o.out&&!o.back)return '';
+    function pill(n,done,ipn,lbl,col,bg,page){
+      if(!n)return '';
+      var left=n-done;
+      return '<button onclick="goPage(\''+page+'\')" style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;border:2px solid '+col+';background:'+bg+';color:#1a1a1a;font-size:13px;font-weight:900;cursor:pointer;touch-action:manipulation;white-space:nowrap;">'
+        +lbl+' '+(left?left+' to do':'all done ✅')+(ipn?' <span style="font-size:11px;font-weight:800;color:#c53030;">· '+ipn+' started</span>':'')+(done&&left?' <span style="font-size:11px;font-weight:800;color:#12803c;">· '+done+' done</span>':'')+'</button>';
+    }
+    return pill(o.out,o.outGo,o.outIP,'↗ Out today:','#4a6fa5','#eef2f8','co')+pill(o.back,o.backGo,o.backIP,'↙ Back today:','#2a9d5c','#e2f4ea','ci');
+  })();
 
   const body=document.getElementById('ov-body');
   if(!body) return;
@@ -1856,6 +1878,7 @@ function _renderOV(){
     +'<div style="display:flex;align-items:center;gap:10px;">'
     +'<div style="font-size:11px;font-weight:800;color:#666;letter-spacing:.3px;">'+dateStr+'</div>'
     +'<div id="ov-clock" style="font-size:15px;font-weight:900;color:#2a9d5c;font-variant-numeric:tabular-nums;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:8px;padding:3px 9px;">'+timeStr+'</div>'
+    +(view==='week'?_ovToday:'')
     +'</div>'
     +'<div style="display:flex;align-items:center;gap:8px;">'
     +'<button ontouchend="if(!tapOK(event))return;event.preventDefault();ovSetView(\'week\')" onclick="ovSetView(\'week\')" style="padding:6px 14px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:2px solid '+(view==='week'?'#f6ad55':'#e0e0e0')+';background:'+(view==='week'?'#fffbf0':'#fff')+';color:'+(view==='week'?'#c07a00':'#888')+';">📅 Next 14 Days</button>'
@@ -2320,10 +2343,12 @@ setInterval(function(){if(APP_USER&&!_drStarted)drStart();},1500);
 
 // ═══════════════════════════════════════════════════════════════
 //  LOCK AFTER SLEEP — the next person must enter their own PIN
-//  iPads: locks when the screen was off / app in background for 10 s or more (also after a reload)
+//  iPads: locks when the screen was off / app in background for 60 s or more (also after a reload)
+//  (was 10 s — staff had to type their PIN after every short pause; the PIN pad now opens for
+//  the person who was signed in, so going back to work is just the 4 digits)
 //  Laptops: locks after 10 minutes away
 // ═══════════════════════════════════════════════════════════════
-var LOCK_TABLET_SEC=10, LOCK_LAPTOP_SEC=600, _hiddenAt=0;
+var LOCK_TABLET_SEC=60, LOCK_LAPTOP_SEC=600, _hiddenAt=0;
 function isTabletDevice(){return (navigator.maxTouchPoints||0)>0&&/iPad|iPhone|Android|Macintosh|Tablet/i.test(navigator.userAgent);}
 function lockLimitSec(){return isTabletDevice()?LOCK_TABLET_SEC:LOCK_LAPTOP_SEC;}
 function markActive(){try{localStorage.setItem('gorent_active_at',String(Date.now()));}catch(e){}}
@@ -2347,9 +2372,10 @@ function lockForNextPerson(){
   window._lockPrev=APP_USER.name;
   try{closeRentalFile();}catch(e){}
   showLoginScreen();
+  try{if(window._lockPrev&&typeof lsPick==='function')lsPick(window._lockPrev);}catch(e){}
   try{var m=document.getElementById('ls-msg');if(m){m.style.color='#64748b';
     var job=open==='co'?co:open==='ci'?ci:null;
-    m.textContent='🔒 Locked after sleep'+(job?' — '+job.fn+' was being done by '+window._lockPrev:'')+'. Tap YOUR name and enter your PIN';}}catch(e){}
+    m.textContent='🔒 Locked after sleep'+(job?' — '+job.fn+' was being done by '+window._lockPrev:'')+'. Enter your PIN — or tap “Not you?” above';}}catch(e){}
 }
 // After a correct PIN: go back to the check-out / check-in that was open (as the person now signed in)
 function afterUnlock(){
