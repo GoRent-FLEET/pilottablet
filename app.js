@@ -2942,6 +2942,11 @@ function noCampHidden(lbl,camping){
   if(/Box [123]\b/.test(sec)||sec.indexOf('Camping Equipment')>=0)return true;
   return NO_CAMP_HIDE.indexOf(l)>=0;
 }
+// "(if booked)" extras the booking already answers: no extra fuel booked → no jerrycans row
+// (unless someone already ticked it on this check-out)
+function notBooked(lbl,v,items){
+  return String(lbl||'')==='Jerrycans (if booked)'&&!!v&&v.extraFuel===false&&!(items&&items[lbl]);
+}
 function noCampOpt(lbl,camping){return !camping&&NO_CAMP_OPT.indexOf(String(lbl||''))>=0;}
 // Step 1 (cleaning): no signature — completion = every item ticked; who did what is recorded per item
 function coCleanItems(){
@@ -2974,13 +2979,38 @@ function secItems(which,idx){
   }
   return out;
 }
+// Count rows (Chairs, Sleeping bags) in a section, and the number the booking asks for
+function secQtyItems(which,idx){
+  if(which!=='equip')return [];
+  var list=window._L_EQUIP||[],out=[];
+  for(var i=idx+1;i<list.length;i++){
+    var it=list[i];if(!it||!it[0])continue;
+    if(it[0]==='__SECTION__'||it[0]==='__OPTIONAL__')break;
+    if(String(it[1]||'').indexOf('__QTY__')===0)out.push({lbl:String(it[1]).slice(7),max:parseInt(it[2])||5});
+  }
+  return out;
+}
+function bookedQty(lbl,max){
+  var v=(co&&co.v)||{},pax=+v.pax||0,n=0;
+  if(/chair/i.test(lbl))n=pax;
+  else if(/sleeping bag/i.test(lbl))n=(v.sleepingBags!=null&&v.sleepingBags!=='')?+v.sleepingBags:pax;
+  if(!n||n<0)return null;   // booking does not say: staff choose the number
+  return Math.min(n,max);
+}
 function secAllGood(which,idx,ev){
   if(ev&&ev.stopPropagation)ev.stopPropagation();
   var who=(APP_USER&&APP_USER.name)||'';
   if(!who){toast('Sign in first','err');return;}
   var labels=secItems(which,idx);
-  if(!labels.length){toast('Nothing to mark here','err');return;}
+  var _qty=secQtyItems(which,idx);
+  if(!labels.length&&!_qty.length){toast('Nothing to mark here','err');return;}
   var t=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),n=0;
+  // counts: filled in with the booked number when nobody has chosen one yet
+  _qty.forEach(function(q){
+    var cur=co.prepItems[q.lbl];if(cur!=null&&cur!=='')return;
+    var b=bookedQty(q.lbl,q.max);if(b==null)return;
+    co.prepItems[q.lbl]=String(b);if(!co.prepBy)co.prepBy=who;n++;
+  });
   for(var i=0;i<labels.length;i++){
     var lbl=labels[i];
     if(which==='mech'){
@@ -3006,12 +3036,15 @@ function secAllGood(which,idx,ev){
 // The button that sits on a section heading, showing how far that section has got
 function secBtn(which,idx){
   var labels=secItems(which,idx);
-  if(!labels.length)return '';
+  var _q=secQtyItems(which,idx);
+  if(!labels.length&&!_q.length)return '';
   var done=0;
+  _q.forEach(function(q){labels=labels.concat(['__QTY__'+q.lbl]);});
   for(var i=0;i<labels.length;i++){
-    var v=which==='mech'?(co.mechItems&&co.mechItems[labels[i]]):(co.prepItems&&co.prepItems[labels[i]]);
-    var st=(v&&v.st!==undefined?v.st:v)||'';
-    if(st)done++;
+    var _l=String(labels[i]).replace('__QTY__','');
+    var v=which==='mech'?(co.mechItems&&co.mechItems[_l]):(co.prepItems&&co.prepItems[_l]);
+    var st=(v&&v.st!==undefined?v.st:v);st=(st==null?'':String(st));   // a count of 0 is an answer
+    if(st!=='')done++;
   }
   var all=done>=labels.length;
   return '<button onclick="secAllGood(\''+which+'\','+idx+',event)" style="margin-left:auto;flex-shrink:0;'
@@ -3222,6 +3255,7 @@ function coStep1_equip(){
     if(item[0]==='__SECTION__'&&item[1].startsWith('🏕')) inEquip=true;
     if(!inEquip) continue;
     if(item[0]!=='__SECTION__'&&item[0]!=='__OPTIONAL__'&&(noCampHidden(item[1],co.v.camping)||(item[0]==='__CAMPING__'&&!co.v.camping))) continue;
+    if(notBooked(item[1],co.v,co.prepItems)) continue;
     L_EQUIP.push(item);
   }
   // remove section headings that have nothing left under them
@@ -4828,7 +4862,20 @@ function applyDraft(d){
   try{ if(x.marks&&typeof imarks!=='undefined'){ VIEWS.forEach(function(v){ if(x.marks[v])imarks[v]=x.marks[v]; }); if(x.isize)isize=x.isize; } }catch(e){}
   return true;
 }
+function equipAutoConfirm(){
+  try{
+    if(!co||!co.v||co.equipSig||coStep!==2||co._done)return;
+    if(coStepItems(2).length)return;
+    var who=(APP_USER&&APP_USER.name)||co.prepBy;if(!who)return;
+    if(!co.prepBy)co.prepBy=who;
+    co.equipSig='confirmed';co.equipAt=now();co.equipAuto=true;
+    var all=Object.keys(co.prepCheckedBy||{});if(all.indexOf(co.prepBy)<0)all.push(co.prepBy);co.equipByAll=all;
+    toast('✅ Equipment complete — confirmed packed by '+co.prepBy,'ok');
+    setTimeout(function(){try{if(coStep===2)drawCO();}catch(e){}},50);
+  }catch(e){}
+}
 function saveCOProgress(){
+  try{equipAutoConfirm();}catch(e){}
   try{
     if(!co||!co.fn)return;
     var raw=localStorage.getItem(ipKey(co.fn));var rec=raw?JSON.parse(raw):{};
