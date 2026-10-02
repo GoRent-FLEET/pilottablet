@@ -6761,7 +6761,8 @@ function ciKmTxt(r,v){
 // goes on the WhatsApp report that the client receives at the end.
 function ciVehicleIssues(){
   var r=ci,v=r.v;
-  var newDmg=(r.dmgd||[]).filter(function(d){return d.types&&d.types.some(function(t){return t!=='pr';});});
+  var _d=r.dmgd||[];try{_d=getDmgData();r.dmgd=_d;}catch(e){}   // what is marked on the pictures right now
+  var newDmg=_d.filter(function(d){return d.types&&d.types.some(function(t){return t!=='pr';});});
   var fuelShort=(!!r.fuelIn&&r.fuelIn!==v.fuelOut);
   var probs=L_CI.filter(function(x,i){return x[0]!=='__SECTION__'&&x[0]!=='__OPTIONAL__'&&ciShow(x,i)&&ciStep1Item(i)&&ci.retItems[x[1]]&&ci.retItems[x[1]].st==='prob';}).map(function(x){return x[1];});
   return {newDmg:newDmg,fuelShort:fuelShort,probs:probs,any:!!(newDmg.length||fuelShort||probs.length)};
@@ -6810,11 +6811,11 @@ function ciClientSignHTML(){
   var r=ci,v=r.v,x=ciVehicleIssues();
   var open=r.custSig?[]:ciOpenBeforeSign().filter(function(o){return o.s===0;});
   var line=function(t,c){return '<div style="font-size:14px;color:'+c+';padding:4px 0;border-bottom:1px solid rgba(240,80,80,.2)">'+t+'</div>';};
-  var stmts=x.any?['I have checked the vehicle condition above with staff and agree that it is correct.',
-      'I accept responsibility for the new damage and fuel shortfall listed above.',
-      'I understand that the equipment is checked after I sign. Anything not returned is listed on the return report sent to me on WhatsApp, and the cost of repairs, missing items and fuel may be deducted from my security deposit.']
-    :['I have checked the vehicle condition above with staff and agree that it is correct — no new damage.',
-      'I understand that the equipment is checked after I sign. Anything not returned is listed on the return report sent to me on WhatsApp and may be deducted from my security deposit.'];
+  var stmts=['I have checked the vehicle condition above with staff and agree that it is correct.']
+    .concat(x.newDmg.length?['NEW DAMAGE was found on the vehicle ('+x.newDmg.map(function(d){return d.view_name;}).join(', ')+'). I accept responsibility for this new damage.']:['No new damage was found on the vehicle.'])
+    .concat(x.fuelShort?['The vehicle was not returned with the same fuel level ('+(v.fuelOut||'Full')+' out → '+r.fuelIn+' in). I accept the refill cost.']:[])
+    .concat(x.probs.length?['Problems found at the vehicle check: '+x.probs.join(', ')+'.']:[])
+    .concat(['I understand that the equipment is checked after I sign. Anything not returned is listed on the return report sent to me on WhatsApp, and the cost of repairs, missing items and fuel may be deducted from my security deposit.']);
   return '<div id="ci-client-sign" style="margin-top:18px;background:var(--g0);border:3px solid '+(x.any?'var(--re)':'var(--gb)')+';border-radius:var(--r);overflow:hidden;">'
     +'<div style="background:'+(x.any?'linear-gradient(135deg,#200505,#3a0808)':'linear-gradient(135deg,#1d6b3d,#145c30)')+';padding:12px 16px;">'
       +'<div style="font-size:16px;font-weight:800;color:#fff">✍️ Client signs — vehicle condition · '+_bx(v.cl||'')+'</div>'
@@ -8596,6 +8597,24 @@ function buildIG(v){
   }
 }
 document.addEventListener('mouseup',()=>window._id=false);document.addEventListener('mousedown',()=>window._id=true);
+// Check-in: marking new damage changes what the client signs ("no new damage" → the damage
+// list and "I accept responsibility for the new damage"). Refresh that box, keeping any ink.
+var _ciSignT=null;
+function ciRefreshClientSign(){
+  if(_ciSignT)clearTimeout(_ciSignT);
+  _ciSignT=setTimeout(function(){
+    try{
+      var box=document.getElementById('ci-client-sign');
+      if(!box||!ci||!ci.v||ci.custSig)return;
+      if(ciHasNewDmg()&&ci.dmgAns!=='yes')ci.dmgAns='yes';
+      var w=document.createElement('div');w.innerHTML=ciClientSignHTML();
+      box.parentNode.replaceChild(w.firstChild,box);
+      if(document.getElementById('ci-c-sig')){initSig('ci-c-sig');try{sigRepaint('ci-c-sig');}catch(e){}}
+      var q=document.getElementById('ci-dmg-q');
+      if(q&&ciHasNewDmg()){var w2=document.createElement('div');w2.innerHTML=ciStep1_CI();var nq=w2.querySelector('#ci-dmg-q');if(nq)q.parentNode.replaceChild(nq,q);}
+    }catch(e){}
+  },300);
+}
 function iCT(cell,v,r,c){const key=r+','+c;const cur=imarks[v][isize][key]||null;iundo={v,sz:isize,key,prev:cur};eU();if(cur===itool){cell.classList.remove(cur);delete imarks[v][isize][key];}else{if(cur)cell.classList.remove(cur);cell.classList.add(itool);imarks[v][isize][key]=itool;}renderIS();}
 function iCP(cell,v,r,c){const key=r+','+c;const cur=imarks[v][isize][key]||null;if(cur===itool)return;iundo={v,sz:isize,key,prev:cur};eU();if(cur)cell.classList.remove(cur);cell.classList.add(itool);imarks[v][isize][key]=itool;renderIS();}
 function eU(){const b=document.getElementById('ins-undo');if(b){b.disabled=false;b.style.opacity='1';}}
@@ -8629,7 +8648,7 @@ function setIS(s){
 function insUndo(){if(!iundo)return;const la=iundo;iundo=null;const b=document.getElementById('ins-undo');if(b){b.disabled=true;b.style.opacity='.4';}if(la.prev===null)delete imarks[la.v][la.sz][la.key];else imarks[la.v][la.sz][la.key]=la.prev;if(la.sz===isize){const p=la.key.split(',');const g=document.getElementById('ins-g-'+la.v);if(g){const[c]=IGR[la.v][isize];const cell=g.children[+p[0]*c+ +p[1]];if(cell){cell.classList.remove('sc','de','pr');if(la.prev)cell.classList.add(la.prev);}}}renderIS();}
 function insClearV(v){if(!canDelete('damage marks'))return;imarks[v][isize]={};buildIG(v);renderIS();}
 function insClear(){if(!canDelete('damage marks'))return;VIEWS.forEach(v=>{imarks[v]={S:{},M:{},L:{}};buildIG(v);});renderIS();}
-function renderIS(){const byVT={};let tot=0;VIEWS.forEach(v=>{const m=imarks[v][isize];const tp={};Object.values(m).forEach(t=>{tp[t]=true;});if(Object.keys(tp).length)byVT[v]=Object.keys(tp);tot+=Object.keys(m).length;});const cnt=document.getElementById('ins-cnt');if(cnt)cnt.textContent=tot+' block'+(tot!==1?'s':'');const tg=document.getElementById('ins-tags');if(!tg)return;if(!Object.keys(byVT).length){tg.innerHTML='<span class="ins-emsg">Tap vehicle photos above to mark damage</span>';return;}let h='';Object.keys(byVT).forEach(v=>{byVT[v].forEach(t=>{const c=Object.values(imarks[v][isize]).filter(x=>x===t).length;h+=`<div class="ins-tag ${t}">${VNAMES[v]} — ${ILBL[t]} (${c})</div>`;});});tg.innerHTML=h;}
+function renderIS(){const byVT={};let tot=0;VIEWS.forEach(v=>{const m=imarks[v][isize];const tp={};Object.values(m).forEach(t=>{tp[t]=true;});if(Object.keys(tp).length)byVT[v]=Object.keys(tp);tot+=Object.keys(m).length;});const cnt=document.getElementById('ins-cnt');if(cnt)cnt.textContent=tot+' block'+(tot!==1?'s':'');const tg=document.getElementById('ins-tags');if(!tg)return;if(!Object.keys(byVT).length){tg.innerHTML='<span class="ins-emsg">Tap vehicle photos above to mark damage</span>';try{if((document.querySelector('.page.on')||{}).id==='page-ci')ciRefreshClientSign();}catch(e){}return;}let h='';Object.keys(byVT).forEach(v=>{byVT[v].forEach(t=>{const c=Object.values(imarks[v][isize]).filter(x=>x===t).length;h+=`<div class="ins-tag ${t}">${VNAMES[v]} — ${ILBL[t]} (${c})</div>`;});});tg.innerHTML=h;try{if((document.querySelector('.page.on')||{}).id==='page-ci')ciRefreshClientSign();}catch(e){}}
 function getDmgData(){const out=[];VIEWS.forEach(v=>{const m=imarks[v][isize];if(!Object.keys(m).length)return;const cells=Object.keys(m).map(k=>{const[r,c]=k.split(',');return{r:+r,c:+c,t:m[k]};});out.push({view:v,view_name:VNAMES[v],size:isize,cells,types:[...new Set(cells.map(c=>c.t))]});});return out;}
 
 // ── Quantities (chairs, sleeping bags): what went out at check-out must come back ──
