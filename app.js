@@ -6160,7 +6160,7 @@ function ciStep0_CI(){
       <select id="ci-fuel" onchange="ci.fuelIn=this.value;drawCI()"
         style="color-scheme:light;padding:12px 14px;font-size:15px;font-weight:700;width:100%;background:var(--g0);border:2px solid ${!r.fuelIn?'var(--am)':r.fuelIn===v.fuelOut?'var(--gb)':'var(--re)'};border-radius:var(--rs);color:${!r.fuelIn?'var(--al)':r.fuelIn===v.fuelOut?'var(--se)':'var(--rl)'};">
         ${'<option value=""'+(!r.fuelIn?' selected':'')+'>— Not checked —</option>'}
-        ${['Full','3/4','1/2','1/4','Empty'].map(f=>`<option${r.fuelIn===f?' selected':''}>${f}</option>`).join('')}
+        ${['Fill up','1/4','1/2','3/4','Full'].concat(r.fuelIn==='Empty'?['Empty']:[]).map(f=>`<option${r.fuelIn===f?' selected':''}>${f}</option>`).join('')}
       </select>
       <div style="font-size:14px;margin-top:4px;font-weight:700;color:${!r.fuelIn?'var(--al)':r.fuelIn===v.fuelOut?'var(--se)':'var(--rl)'};">
         ${!r.fuelIn?'⚠ Fuel not checked yet — select the level on the gauge':r.fuelIn===v.fuelOut?'✅ Matches departure':'⚠ Out: '+(v.fuelOut||'Full')+' → In: '+r.fuelIn+' — fuel charge applies'}
