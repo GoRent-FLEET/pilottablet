@@ -6208,7 +6208,10 @@ function ciChecklistSummary(){
   var row=function(t,c){return '<div style="font-size:14px;color:'+c+';padding:3px 0;">'+t+'</div>';};
   return '<div style="padding:10px 16px;border-bottom:1px solid var(--g2);">'
     +'<div style="font-size:13px;font-weight:800;color:var(--g5);text-transform:uppercase;margin-bottom:4px;">Checklist</div>'
-    +row(probs.length?'⚠ Vehicle check — problem: '+probs.join(', '):'✅ Vehicle check — glass, wheels, undercarriage'+(ci.v.camping?', tent':'')+' OK',probs.length?'var(--al)':'var(--se)')
+    +(function(){var un=L_CI.filter(function(x,i){if(x[0]==='__SECTION__'||x[0]==='__OPTIONAL__'||!ciShow(x,i)||!ciStep1Item(i))return false;var y=ci.retItems[x[1]];return !(y&&(y.st!==undefined?y.st:y));}).length;
+      return probs.length?row('⚠ Vehicle check — problem: '+probs.join(', '),'var(--al)')
+        :un?row('⬜ Vehicle check — '+un+' not ticked yet','var(--al)')
+        :row('✅ Vehicle check — glass, wheels, undercarriage'+(ci.v.camping?', tent':'')+' OK','var(--se)');})()
     +row('📦 Equipment returned: '+back+' of '+all.length,back===all.length?'var(--se)':'var(--al)')
     +'</div>';
 }
@@ -6635,8 +6638,33 @@ function ciStep2_CI(){
   </div>`;
 }
 
+// What must be done before the client may sign the return. The client signs "no new damage
+// or missing items" — that must not be possible while the equipment is still unchecked.
+function ciOpenBeforeSign(){
+  var out=[];
+  try{
+    if(!ci.receivedBy)out.push({s:0,t:'Who is receiving the vehicle'});
+    if(!retSt['WiFi device'])out.push({s:0,t:'WiFi device — returned or not'});
+    if(!ci.odoIn)out.push({s:0,t:'Kilometres from the dashboard'});
+    if(!ci.fuelIn)out.push({s:0,t:'Fuel level'});
+    var items=L_CI.filter(function(x,i){return x[0]!=='__SECTION__'&&x[0]!=='__OPTIONAL__'&&ciShow(x,i)&&ciStep1Item(i);});
+    var n1=items.filter(function(x){var y=ci.retItems[x[1]];return !(y&&(y.st!==undefined?y.st:y));}).length;
+    if(n1)out.push({s:0,t:'Vehicle check: '+n1+' item'+(n1===1?'':'s')+' not ticked'});
+    if(!ci.retSig)out.push({s:0,t:'Vehicle check signature (Step 1)'});
+    var eq=RET_GROUPS.reduce(function(a,g){return a.concat(g.items);},[]);
+    var n2=eq.filter(function(i){return !retSt[i];}).length;
+    if(n2)out.push({s:2,t:'Equipment: '+n2+' item'+(n2===1?'':'s')+' not checked'});
+  }catch(e){}
+  return out;
+}
+function ciKmTxt(r,v){
+  if(!r.odoIn)return '—';
+  var k=(+r.odoIn)-(+(r.odometerOut||v.odo||0));
+  return k>=0?k.toLocaleString()+' km':'⚠ check km';
+}
 function ciStep3_CI(){
   const r=ci,v=r.v;
+  const _open=r.custSig?[]:ciOpenBeforeSign();
   const allItems=RET_GROUPS.flatMap(g=>g.items);
   const missing=allItems.filter(i=>retSt[i]==='missing').map(ciQtyLabel);
   const damaged=allItems.filter(i=>retSt[i]==='dmg');
@@ -6658,8 +6686,8 @@ function ciStep3_CI(){
       <div style="font-size:14px;color:rgba(255,255,255,.6)">Received by ${r.receivedBy||'—'} · ${new Date().toLocaleDateString('en-GB')}</div>
     </div>
     <div style="padding:12px 16px;border-bottom:1px solid var(--g2);display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-      ${[['🛣','KM driven',km.toLocaleString()+' km','ok'],
-         ['⛽','Fuel',`${v.fuelOut||'Full'} → ${r.fuelIn}`,fuelShort?'warn':'ok'],
+      ${[['🛣','KM driven',ciKmTxt(r,v),'ok'],
+         ['⛽','Fuel',r.fuelIn?`${v.fuelOut||'Full'} → ${r.fuelIn}`:'—',fuelShort?'warn':'ok'],
          ['📅','Days',(Math.round((new Date(v.rt)-new Date(v.pu))/86400000)||'?')+' days','ok'],
       ].map(([ico,lbl,val,st])=>`<div style="text-align:center;background:var(--g1);border-radius:8px;padding:10px 4px">
         <div style="font-size:16px">${ico}</div>
@@ -6685,6 +6713,15 @@ function ciStep3_CI(){
     <div style="padding:14px 16px">
       ${r.custSig?
         `<div class="signed">✅<div class="signed-name">${v.cl} — return confirmed</div><div class="signed-time">${r.custAt}</div></div>${ciWaBox(v.phone,r._reportLink)}`:
+      _open.length?
+        `<div class="left-box" style="background:var(--rg);border:2px solid var(--re);border-radius:var(--rs);padding:12px 14px;">
+          <div style="font-size:16px;font-weight:900;color:var(--rl);margin-bottom:6px;">🔒 The client signs once these are done (${_open.length})</div>
+          <ul style="margin:0 0 10px 18px;padding:0;font-size:15px;font-weight:700;line-height:1.7;">${_open.map(o=>'<li>'+_bx(o.t)+'</li>').join('')}</ul>
+          <div style="display:flex;gap:8px;">
+            ${_open.some(o=>o.s===0)?'<button class="btn s" style="flex:1" onclick="ciStep=0;drawCI();window.scrollTo(0,0);">← Step 1 · Vehicle</button>':''}
+            ${_open.some(o=>o.s===2)?'<button class="btn s" style="flex:1" onclick="ciStep=2;drawCI();window.scrollTo(0,0);">← Step 2 · Equipment</button>':''}
+          </div>
+        </div>`:
         `<div class="sig-area" style="border-color:${hasIssues?'var(--re)':'var(--gb)'}">
           <div class="sig-hdr" style="background:${hasIssues?'#200505':'#15532f'};border-bottom-color:${hasIssues?'var(--re)':'var(--gb)'}">
             <span class="sig-lbl" style="color:${hasIssues?'var(--rl)':'var(--se)'}">${v.cl} — sign to confirm return</span>
@@ -6707,8 +6744,8 @@ function ciReturnView(v,r,newDmg,fuelShort,missing,damaged){
       <div style="font-size:14px;color:rgba(255,255,255,.6)">Received by ${r.receivedBy||'—'} · ${new Date().toLocaleDateString('en-GB')}</div>
     </div>
     <div style="padding:12px 16px;border-bottom:1px solid var(--g2);display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-      ${[['🛣','KM driven',(r.odoIn-v.odo).toLocaleString()+' km','ok'],
-         ['⛽','Fuel',`${v.fuelOut||'Full'} → ${r.fuelIn}`,fuelShort?'warn':'ok'],
+      ${[['🛣','KM driven',ciKmTxt(r,v),'ok'],
+         ['⛽','Fuel',r.fuelIn?`${v.fuelOut||'Full'} → ${r.fuelIn}`:'—',fuelShort?'warn':'ok'],
          ['📅','Days',(Math.round((new Date(r.v.rt)-new Date(r.v.pu))/86400000)||'?')+' days','ok'],
       ].map(([i,l,val,st])=>`<div style="text-align:center;background:var(--g1);border-radius:8px;padding:10px 4px">
         <div style="font-size:16px">${i}</div>
@@ -6746,6 +6783,7 @@ function ciReturnView(v,r,newDmg,fuelShort,missing,damaged){
 
 async function signCustCI(){
   if(!ci.receivedBy){toast('Select who received the vehicle first','err');ciStep=0;drawCI();return;}
+  var _op=ciOpenBeforeSign();if(_op.length){toast('Not yet — '+_op[0].t,'err');drawCI();return;}
   if(!hasSig('ci-c-sig')){toast('Customer must sign','err');return;}
   ci.notes=(function(){var _e=document.getElementById('ci-notes');return _e?_e.value:undefined;})()||ci.notes;
   ci.custSig=getSig('ci-c-sig');ci.custAt=now();
@@ -9405,6 +9443,7 @@ function guideCI(){
     if(b)return t('Check each box: tap ✓ All returned, or ✗ Missing on anything that is not back.',b);
     return {done:true,text:'✅ Equipment checked',next:'Next: Sign & finish →',go:function(){ciStep=3;drawCI();window.scrollTo(0,0);}};
   }
+  if(!ci.custSig){var _op=ciOpenBeforeSign();if(_op.length)return t('Before the client signs: '+_op[0].t+(_op.length>1?' (+'+(_op.length-1)+' more)':''),gFind(R,'.left-box'));}
   if(!ci.custSig)return t('Give the tablet to the client to read and sign.',document.getElementById('ci-c-sig'));
   var x2=ciIssues();
   if(x2.fuelShort&&!(ci.fuelPhotos&&ci.fuelPhotos.length))return t('Fuel is short: take a photo of the fuel receipt.',gFind(R,'div',function(e){return /Fuel receipt/.test(e.textContent)&&e.querySelector('input[type=file]')&&e.textContent.length<400;}));
