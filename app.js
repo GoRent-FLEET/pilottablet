@@ -6131,7 +6131,7 @@ function fhCompact(){
   });
 }
 setInterval(function(){try{flashNext();}catch(e){}},1500); // also after scrolling/tab switches
-(function(){var q=false;new MutationObserver(function(){if(q||document.hidden)return;q=true;requestAnimationFrame(function(){q=false;try{fhCompact();}catch(e){}try{flashNext();}catch(e){}});}).observe(document.documentElement,{childList:true,subtree:true});})();
+(function(){var q=false;new MutationObserver(function(){if(q||document.hidden)return;q=true;requestAnimationFrame(function(){q=false;try{fhCompact();}catch(e){}try{flashNext();}catch(e){}try{if(typeof guideSoon==='function')guideSoon();}catch(e){}});}).observe(document.documentElement,{childList:true,subtree:true});})();
 // ── One tablet-sized box instead of the browser's confirm()/prompt()/alert() ──
 // askBox({title,text,ok,cancel,reason:'label',reasonDefault,minReason,danger}) → Promise<{ok,reason}>
 function askBox(o){
