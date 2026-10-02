@@ -81,7 +81,7 @@ html,body{height:100%;overflow:hidden;max-width:100%;background:var(--bg);color:
 .stg-bar.s2{grid-template-columns:1fr 1fr;}
 .stg-bar.s3{grid-template-columns:1fr 1fr 1fr;}
 .stg{padding:5px 2px;text-align:center;font-size:9px;font-weight:800;color:var(--g6);cursor:pointer;background:var(--g1);border:2px solid var(--g2);border-radius:var(--rs);transition:all .15s;}
-.stg.done{border-color:var(--gb);background:var(--sg);color:var(--se);}
+.stg.done{border-color:var(--gb);background:var(--sg);color:var(--se);padding:5px 2px;}  /* the page-wide .done rule (30px padding) made finished tabs, and the whole row, twice as tall */
 .stg.restricted{border-color:var(--g2);background:var(--g0);color:var(--g4);opacity:.4;cursor:not-allowed;}
 .stg.active{border-color:var(--pu);background:var(--ps);color:#4c1d95;}
 .stg.locked{opacity:.3;cursor:not-allowed;}
@@ -394,3 +394,6 @@ body.guide-on #co-body,body.guide-on #ci-body{padding-bottom:120px!important;}
 .guide-hl{outline:5px solid #e08a00!important;outline-offset:3px;border-radius:10px;animation:gHl .6s ease-in-out 4;}
 @keyframes gHl{0%,100%{outline-color:#e08a00}50%{outline-color:#ffd27a}}
 @media (max-width:700px){#guide .g-txt{font-size:15px;}#guide button{padding:12px 14px;font-size:15px;}}
+
+/* one Next button at a time: when the guide bar offers 'Next: … →', the step's own Next is hidden */
+body.guide-next .co-next{display:none!important;}

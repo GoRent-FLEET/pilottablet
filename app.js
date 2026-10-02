@@ -2613,12 +2613,12 @@ function drawCO(){
                   s.n===6?co.custBy:co.mgmtBy)||'');
     const active=s.n===coStep;
     const restricted=!canDoStep(s.n);
-    return `<div class="stg ${active?'active':done?'done':restricted?'restricted':''}" onclick="coGoStep(${s.n})" style="position:relative;overflow:hidden;${restricted?'opacity:.4;cursor:not-allowed;':''}">
-      ${done&&stepBy?`<div style="font-size:7px;font-weight:900;color:${ovr?'var(--al)':'var(--se)'};text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:1px 2px;background:${ovr?'var(--ag)':'var(--sg)'};border-radius:3px;position:relative;z-index:3;">${_bx(stepBy)}</div>`:''}
-      ${done?`<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:2;">
-        <span style="font-size:42px;line-height:1;color:#3ddc84;font-weight:900;opacity:.9;text-shadow:0 2px 6px rgba(0,0,0,.9);">✓</span></div>`:''}
-      <div style="font-size:13px;line-height:1.2;position:relative;z-index:1;${done?'opacity:.25;':''}">${s.ico}</div>
-      <div style="font-size:12px;font-weight:800;margin-top:2px;line-height:1.15;position:relative;z-index:1;${done?'opacity:.6;':''}">${s.n===6?'Handover & release':s.lbl}</div>
+    // Number + name, a small ✓ when finished and who did it in readable type. (A big ✓ used to be
+    // drawn over the name with the person in 7 px, and every tab doubled in height.)
+    const _num={0:1,2:2,3:3,4:4,5:5,6:6}[s.n];
+    return `<div class="stg ${active?'active':done?'done':restricted?'restricted':''}" onclick="coGoStep(${s.n})" style="position:relative;height:50px;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;${restricted?'opacity:.4;cursor:not-allowed;':''}">
+      <div style="font-size:12px;font-weight:900;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${done?'<span style="color:#12803c;">✓</span> ':''}${_num}. ${s.ico} ${s.n===6?'Handover':s.n===4?'Inspection':s.lbl}</div>
+      ${done&&stepBy?`<div style="font-size:11px;font-weight:800;margin-top:2px;color:${ovr?'var(--al)':'#12803c'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${_bx(stepBy)}</div>`:''}
     </div>`;
   }).join('');
 
@@ -2658,7 +2658,7 @@ function drawCO(){
   var _backBtn=coStep>0?'<button class="btn s" style="flex:1" onclick="coGoStep(coStep-1)">← Back</button>':'';
   // The Handover page used to have only "← Back", so staff could not find the way on to
   // Management, where the Complete Check-Out button lives.
-  var _nextBtn=coStep<6?'<button class="btn g" style="flex:2" onclick="coGoStep(coStep+1)">Next →</button>':'';
+  var _nextBtn=coStep<6?'<button class="btn g co-next" style="flex:2" onclick="coGoStep(coStep+1)">Next →</button>':'';
   document.getElementById('co-body').innerHTML=
     '<div class="chg-veh-bar">'
       +'<button onclick="coChangeVehicle()" style="padding:10px 18px;border-radius:22px;border:2px solid var(--gb);background:var(--g1);color:var(--tx);font-size:15px;font-weight:900;cursor:pointer;">← Choose another vehicle</button>'
@@ -2780,6 +2780,21 @@ function rentalDays(v){
     return d>0?d:0;
   }catch(e){return 0;}
 }
+function shortPlace(x){
+  x=String(x||'').trim();if(!x)return '—';
+  if(/airport|hkia|hosea|kutako/i.test(x))return 'Airport';
+  var p=x.split(/[,(]/)[0].trim()||x;
+  return p.length>20?p.slice(0,19)+'…':p;
+}
+// Header chips are cut short to fit: a tap on one shows the whole text
+document.addEventListener('click',function(e){
+  try{
+    var c=e.target&&e.target.closest&&e.target.closest('.fh-grid>span');
+    if(!c||c.getAttribute('onclick'))return;
+    var t=c.getAttribute('title')||c.textContent||'';t=t.trim();
+    if(t)toast(t);
+  }catch(_){}
+});
 function hdrTripChips(v){
   var chip=function(txt,alarm,title){
     return '<span'+(alarm?' class="disc-flash"':'')+' title="'+_bx(title||'')+'" style="font-size:12px;font-weight:800;padding:5px 11px;border-radius:7px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
@@ -2798,9 +2813,10 @@ function hdrTripChips(v){
   };
   var pu=eff('pickupArrangement',(v&&v.puLocation)||'');
   var dr=eff('dropoffArrangement',(v&&v.doLocation)||'');
-  var isHQ=function(x){return !x||x===GR_HQ||/^\s*windhoek\s*$/i.test(x)||/6 diehl/i.test(x);};
-  out+=chip(isHQ(pu)?'🏢 Collect: GR HQ':'📍 COLLECT: '+pu,!isHQ(pu),'Where the client collects');
-  out+=chip(isHQ(dr)?'🏢 Return: GR HQ':'📍 RETURN: '+dr,!isHQ(dr),'Where the client returns it');
+  var isHQ=function(x){return !x||x===GR_HQ||/^\s*windhoek\s*$/i.test(x)||/6 diehl/i.test(x)||/go ?rent (office|hq)/i.test(x);};
+  // short words on the chip ("Collect: Airport"); tapping it shows the full place
+  out+=chip(isHQ(pu)?'🏢 Collect: Office':'📍 Collect: '+shortPlace(pu),!isHQ(pu),'Collect: '+pu);
+  out+=chip(isHQ(dr)?'🏢 Return: Office':'📍 Return: '+shortPlace(dr),!isHQ(dr),'Return: '+dr);
   return out;
 }
 function coStep0(){
@@ -3489,7 +3505,7 @@ function coStep1(){
   <div class="step-intro">
     <div class="step-ico">📷</div>
     <div>
-      <div class="step-title">Step 5 — Client &amp; Driver Details</div>
+      <div class="step-title">Step 5a — Client &amp; Driver Details</div>
       <div class="step-sub">Photograph the passport and licence of every driver · check the name · then fill in the contract below</div>
     </div>
   </div>
@@ -4166,7 +4182,7 @@ function coStep2(){
   return `
   <div class="step-intro">
     <div class="step-ico">📋</div>
-    <div><div class="step-title">Step 5 — Rental Contract</div>
+    <div><div class="step-title">Step 5b — Rental Contract</div>
     <div class="step-sub">Fill in details, client reads contract, then signs</div></div>
   </div>
   <div class="sum-box" style="margin-bottom:12px">
@@ -9335,6 +9351,7 @@ function guideUpdate(){
   var g=null;try{g=guideNow();}catch(e){g=null;}
   _gCur=g;
   document.body.classList.toggle('guide-on',!!g);
+  document.body.classList.toggle('guide-next',!!(g&&g.done&&g.next));   // the bar's own Next button replaces the one at the foot of the step
   if(!g){bar.style.display='none';return;}
   bar.style.display='flex';
   var html='<div class="g-txt">'+(g.done?'':'👉 ')+_bx(g.text)+'</div>'
