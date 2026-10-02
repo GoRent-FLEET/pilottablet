@@ -9628,6 +9628,9 @@ function guideCI(){
 function guideNow(){
   var pg=(document.querySelector('.page.on')||{}).id;
   if(document.querySelector('#ask-box,#contract-modal,#co-missing,#co-step-left,#qty-pick,#ho-who-modal,#ct-who-modal,#pin-cancel'))return null;
+  // never over the login / lock / PIN screens — only once someone is signed in
+  var ls=['login-screen','device-login'];
+  for(var i=0;i<ls.length;i++){var o=document.getElementById(ls[i]);if(o&&getComputedStyle(o).display!=='none')return null;}
   if(pg==='page-co'&&co&&co.v&&!co._done)return guideCO();
   if(pg==='page-ci'&&ci&&ci.v&&!ci._done)return guideCI();
   return null;

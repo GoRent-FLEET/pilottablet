@@ -397,3 +397,6 @@ body.guide-on #co-body,body.guide-on #ci-body{padding-bottom:120px!important;}
 
 /* one Next button at a time: when the guide bar offers 'Next: … →', the step's own Next is hidden */
 body.guide-next .co-next{display:none!important;}
+
+/* guide bar never shows over the login / lock / PIN screens */
+#login-screen[style*="flex"] ~ #guide,#device-login[style*="flex"] ~ #guide{display:none!important;}
