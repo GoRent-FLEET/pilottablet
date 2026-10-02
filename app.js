@@ -5583,6 +5583,23 @@ function coLeftHTML(steps){
 // line with a count per step ("Cleaning 2 · Equipment 1") and a Show button. The full tappable
 // list (up to 65 rows) only opens when someone asks for it.
 var _coLeftOpen={};
+// Tap the red line: open the first step that still has something open and flash that item
+function coGoOpen(steps){
+  steps=(steps||[]).map(Number);
+  var n=steps.filter(function(st){return coStepItems(st).length+coStepMissing(st).length>0;})[0];
+  if(n===undefined)return;
+  if(!canDoStep(n)){toast('That is '+(CO_NAMES[n]||'another step')+' — not available for '+(APP_USER?APP_USER.name:'you'),'err');return;}
+  if(n!==coStep){window._coLeftSkip=true;try{coGoStep(n);}finally{window._coLeftSkip=false;}}
+  setTimeout(function(){
+    var el=null;
+    try{var it=coStepItems(n)[0];
+      if(it){var lbl=it.label;
+        el=[].slice.call(document.querySelectorAll('#cos .ci, #cos [onclick]')).filter(function(e){var l=e.querySelector('.ci-lbl');return l&&(l.childNodes[0]&&l.childNodes[0].textContent||l.textContent).trim()===lbl;})[0]||null;}
+    }catch(e){}
+    if(!el){try{var g=guideCO();el=g&&g.el;}catch(e){}}
+    flashTo(el);
+  },200);
+}
 function coLeftToggle(k){_coLeftOpen[k]=!_coLeftOpen[k];try{drawCO();}catch(e){}}
 function coLeftInline(steps,title){
   try{
@@ -5591,8 +5608,8 @@ function coLeftInline(steps,title){
     var per=steps.map(function(st){var c=coStepItems(st).length+coStepMissing(st).length;return c?(CO_NAMES[st]||('Step '+st))+' '+c:'';}).filter(Boolean).join(' · ');
     return '<div class="left-box" style="background:var(--rg);border:2px solid var(--re);border-radius:var(--rs);padding:10px 14px;margin-bottom:14px;">'
       +'<div style="display:flex;align-items:center;gap:10px;">'
-      +'<div style="flex:1;min-width:0;"><div style="font-size:15px;font-weight:900;color:var(--rl);">🔴 '+_bx(title)+' — '+n+' open</div>'
-      +'<div style="font-size:12px;font-weight:700;color:var(--g5);">'+_bx(per)+'</div></div>'
+      +'<div onclick="coGoOpen([\''+steps.join("\',\'")+'\'])" style="flex:1;min-width:0;cursor:pointer;"><div style="font-size:15px;font-weight:900;color:var(--rl);">🔴 '+_bx(title)+' — '+n+' open →</div>'
+      +'<div style="font-size:12px;font-weight:700;color:var(--g5);">'+_bx(per)+' · tap to go to the first one</div></div>'
       +'<button onclick="coLeftToggle(\''+k+'\')" style="flex-shrink:0;padding:8px 14px;border-radius:9px;border:2px solid var(--re);background:#fff;color:var(--rl);font-size:13px;font-weight:900;cursor:pointer;">'+(open?'▲ Hide':'Show ▼')+'</button>'
       +'</div>'
       +(open?'<div style="font-size:12px;color:var(--g5);margin-top:6px;">Tap OK / Issue right here, or go to the step.</div>'+coLeftHTML(steps):'')
@@ -6751,6 +6768,25 @@ function ciVehicleIssues(){
   var probs=L_CI.filter(function(x,i){return x[0]!=='__SECTION__'&&x[0]!=='__OPTIONAL__'&&ciShow(x,i)&&ciStep1Item(i)&&ci.retItems[x[1]]&&ci.retItems[x[1]].st==='prob';}).map(function(x){return x[1];});
   return {newDmg:newDmg,fuelShort:fuelShort,probs:probs,any:!!(newDmg.length||fuelShort||probs.length)};
 }
+// Tap a line in the red "client signs once these are done" box: go to that thing and flash it
+function ciGoOpen(k){
+  var open=ciOpenBeforeSign().filter(function(o){return o.s===0;});
+  var o=open[k]||open[0];if(!o)return;
+  var id=/receiving/i.test(o.t)?'ci-rcv':/WiFi/.test(o.t)?'ci-wifi-box':/USB/.test(o.t)?'ci-usb-box':/Kilometres/.test(o.t)?'ci-odo':/Fuel/.test(o.t)?'ci-fuel':'';
+  if(ciStep>1){ciStep=0;drawCI();}
+  setTimeout(function(){
+    var el=id?document.getElementById(id):null;
+    if(!el){try{var g=guideCI();el=g&&g.el;}catch(e){}}   // vehicle-check item: the first one not ticked
+    if(id==='ci-rcv'&&el&&el.parentNode)el=el.parentNode;
+    flashTo(el);
+  },120);
+}
+function flashTo(el){
+  if(!el)return;
+  try{el.scrollIntoView({behavior:'smooth',block:'center'});}catch(e){}
+  el.classList.remove('guide-hl');void el.offsetWidth;el.classList.add('guide-hl');
+  setTimeout(function(){try{el.classList.remove('guide-hl');}catch(e){}},2600);
+}
 function ciClientSignHTML(){
   var r=ci,v=r.v,x=ciVehicleIssues();
   var open=r.custSig?[]:ciOpenBeforeSign().filter(function(o){return o.s===0;});
@@ -6777,7 +6813,7 @@ function ciClientSignHTML(){
       +stmts.map(function(t){return '<div style="display:flex;gap:8px;padding:3px 0;font-size:14px;color:var(--g6)"><span style="color:var(--se)">✓</span>'+t+'</div>';}).join('')+'</div>'
     +'<div style="padding:14px 16px">'
     +(r.custSig?'<div class="signed">✅<div class="signed-name">'+_bx(v.cl||'')+' — vehicle condition signed</div><div class="signed-time">'+_bx(r.custAt||'')+'</div></div>'
-      :open.length?'<div class="left-box" style="background:var(--rg);border:2px solid var(--re);border-radius:var(--rs);padding:12px 14px;"><div style="font-size:16px;font-weight:900;color:var(--rl);margin-bottom:6px;">🔒 The client signs once these are done ('+open.length+')</div><ul style="margin:0 0 4px 18px;padding:0;font-size:15px;font-weight:700;line-height:1.7;">'+open.map(function(o){return '<li>'+_bx(o.t)+'</li>';}).join('')+'</ul></div>'
+      :open.length?'<div class="left-box" onclick="ciGoOpen(0)" style="cursor:pointer;background:var(--rg);border:2px solid var(--re);border-radius:var(--rs);padding:12px 14px;"><div style="font-size:16px;font-weight:900;color:var(--rl);margin-bottom:2px;">🔒 The client signs once these are done ('+open.length+')</div><div style="font-size:12px;font-weight:700;color:var(--g5);margin-bottom:6px;">Tap a line to go to it</div><ul style="margin:0 0 4px 18px;padding:0;font-size:15px;font-weight:700;line-height:1.9;">'+open.map(function(o,k){return '<li onclick="event.stopPropagation();ciGoOpen('+k+')" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;">'+_bx(o.t)+' →</li>';}).join('')+'</ul></div>'
       :'<div class="sig-area" style="border-color:'+(x.any?'var(--re)':'var(--gb)')+'"><div class="sig-hdr" style="background:'+(x.any?'#200505':'#15532f')+';border-bottom-color:'+(x.any?'var(--re)':'var(--gb)')+'"><span class="sig-lbl" style="color:'+(x.any?'var(--rl)':'var(--se)')+'">'+_bx(v.cl||'')+' — sign to confirm the vehicle condition</span><span><span class="sig-clr" onclick="undoSig(\'ci-c-sig\')">&#8630; Undo</span><span class="sig-clr" onclick="clrSig(\'ci-c-sig\')">Clear</span></span></div><canvas class="sig-cv" id="ci-c-sig" style="height:220px"></canvas></div>'
         +'<button class="btn '+(x.any?'r':'g')+'" style="margin-top:10px;font-size:15px;padding:18px;'+(x.any?'background:#c0392b;color:#fff':'')+'" onclick="signCustCI()">✍️ '+(x.any?'I acknowledge the issues — ':'')+'Client signs</button>')
     +'</div></div>';
