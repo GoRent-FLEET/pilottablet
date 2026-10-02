@@ -2179,9 +2179,13 @@ async function drMergePhotos(r,data,srvData){
 // Fully Kiosk on the Blackview blocks new windows ("Popups and new tabs disabled").
 function openExt(url){
   var w=null;try{w=window.open(url,'_blank');}catch(e){}
-  if(!w){try{askBox({title:'This tablet blocked the window',ok:'OK',
-    text:'Fully Kiosk is blocking new windows, so '+(/wa\.me|whatsapp/i.test(url)?'WhatsApp':'the page')+' could not open.\n\nManager: Fully → Settings → Web Browsing Settings → turn ON “Enable Popups”, then try again.'});}catch(e){toast('Window blocked — turn on popups in Fully settings','err');}}
-  return w;
+  if(w)return w;
+  // WhatsApp: hand the link to the WhatsApp app. Fully passes it on when wa.me is in
+  // Web Content Settings → "Links to Open in Other Apps" (works without the PLUS licence).
+  if(/^https:\/\/(wa\.me|api\.whatsapp\.com)\//i.test(url)){try{drTick();}catch(e){}location.href=url;return null;}
+  try{askBox({title:'This tablet blocked the window',ok:'OK',
+    text:'Fully Kiosk is blocking new windows, so the page could not open.\n\nManager: Fully → Settings → Web Content Settings → “Enable Popups” (needs the Fully PLUS licence).'});}catch(e){toast('Window blocked — turn on popups in Fully settings','err');}
+  return null;
 }
 // Links that open a new tab: photos open full screen in the app, everything else through openExt
 document.addEventListener('click',function(e){
