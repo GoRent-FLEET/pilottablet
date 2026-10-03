@@ -209,9 +209,8 @@ const STAFF_ROSTER=[
   {name:'Bonga',    role:'prep'},
   {name:'Dixon',    role:'prep'},
   {name:'Vince',    role:'prep'},
-  {name:'Joe',      role:'prep'},
+  {name:'Jo-Jo',    role:'prep'},   // was 'Joe' until 3 Oct 2026 (same PIN)
   {name:'Peter',    role:'admin'},
-  {name:'Simon',    role:'prep'},
   {name:'Christina',role:'prep'},
   {name:'Abia',     role:'prep'},
 ];
@@ -220,7 +219,9 @@ const STAFF_ROSTER=[
 //  manager = everything except deleting / resetting / override
 //  peter   = everything, incl. delete, reset and ⚡ Override
 // Handing the vehicle to the client (check-out step 7) is a manager job too, except Christina.
-const ROLE={Bonga:'staff',Dixon:'staff',Vince:'staff',Abia:'staff',Joe:'manager',Simon:'manager',Christina:'manager',Peter:'peter'};
+//  contract = the contract step (5) and the Documentation page only (Christina, since 3 Oct 2026)
+// Simon removed from the tablet 3 Oct 2026 (owner's request).
+const ROLE={Bonga:'staff',Dixon:'staff',Vince:'staff',Abia:'staff','Jo-Jo':'manager',Christina:'contract',Peter:'peter'};
 const NO_HANDOVER=['Christina'];
 function roleOf(n){return ROLE[n]||'staff';}
 function namesWithRole(){var r=[].slice.call(arguments);return STAFF_ROSTER.map(function(x){return x.name;}).filter(function(n){return r.indexOf(roleOf(n))>=0;});}
@@ -504,7 +505,7 @@ initIM();
 
 // ── NAV ──────────────────────────────────────────────────────────
 const REPORTS_ALLOWED=namesWithRole('manager','peter');  // may see On Rental, Calendar, Documentation and Reports
-const NO_OVERVIEW=namesWithRole('staff');  // check-outs only
+const NO_OVERVIEW=namesWithRole('staff','contract');  // check-outs only
 // ── Auto refresh: keep the bookings fresh without disturbing anyone mid-job ──
 var AUTO_MS=180000, _autoTimer=null, LAST_SYNC=null;
 function busyNow(){
@@ -735,13 +736,15 @@ async function backupToCloud(auto){
   }catch(e){ if(!auto)toast('Backup failed: '+(e&&e.message||e),'err'); return false; }
 }
 function canSeeOverview(){ return !!(APP_USER && NO_OVERVIEW.indexOf(APP_USER.name)<0); }
+// The Documentation page: everyone who sees the overview pages, plus the contract role
+function canSeeDocPage(){ return canSeeOverview() || !!(APP_USER && roleOf(APP_USER.name)==='contract'); }
 function canViewReports(){ return APP_USER && canSeeOverview() && (REPORTS_ALLOWED.includes(APP_USER.name) || isAdmin()); }
 // Show or hide On Rental, Calendar, Documentation and Vehicle Reports for this user
 function applyTabAccess(){
   var show=canSeeOverview();
   ['nb-office','nb-out','nb-cal','nb-doc','nb-rp'].forEach(function(id){
     var el=document.getElementById(id);
-    if(el)el.style.display=show?'':'none';
+    if(el)el.style.display=(show||((id==='nb-doc'||id==='nb-office')&&canSeeDocPage()))?'':'none';
   });
   // hide Check-In for staff who are not allowed to do check-ins
   var ciTab=document.getElementById('nb-ci');if(ciTab)ciTab.style.display=canCheckIn()?'':'none';
@@ -749,6 +752,125 @@ function applyTabAccess(){
 const MANAGEMENT=namesWithRole('manager','peter');
 function isManagement(){ return !!(APP_USER && MANAGEMENT.includes(APP_USER.name)); }
 function isAdmin(){ return !!(APP_USER && roleOf(APP_USER.name)==='peter'); }
+// ── QUOTE & BOOKING FORM (from the office Fleet Manager) — MANAGEMENT ONLY ─────────────
+// The Sage quote and the client's booking form (passport numbers, dates of birth…) are
+// attached to the booking in the Fleet Manager. The shared tablet login can NOT read them;
+// the server function tablet-booking-docs checks the person's name + PIN and that they are
+// on the management list (Supabase app_settings.tablet_doc_viewers), logs every look in
+// doc_access_log and hands back 5-minute links. The PIN is asked once and kept in memory
+// (never stored) for 10 minutes. Change who may see them in BOTH places.
+const DOC_VIEWERS=['Peter','Jo-Jo'];
+function canSeeBookingDocs(){ return !!(APP_USER&&DOC_VIEWERS.indexOf(APP_USER.name)>=0); }
+var _docPin=null;   // {name,pin,at} — memory only
+function tdBtn(bid,client){
+  if(!canSeeBookingDocs()||!bid) return '';
+  return '<button onclick="tdOpen(\''+String(bid).replace(/[\'\\"<>]/g,'')+'\',\''+String(client||'').replace(/[\'\\"<>]/g,'')+'\')" style="margin-left:10px;padding:10px 16px;border-radius:22px;border:2px solid #1d4ed8;background:#eff6ff;color:#1d4ed8;font-size:15px;font-weight:900;cursor:pointer;">📄 Quote &amp; booking form</button>';
+}
+function tdClose(){ var m=document.getElementById('td-modal'); if(m) m.remove(); }
+function tdShell(title,inner){
+  tdClose();
+  var m=document.createElement('div'); m.id='td-modal';
+  m.setAttribute('style','position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.6);display:flex;align-items:flex-start;justify-content:center;padding:20px 10px;overflow-y:auto;-webkit-overflow-scrolling:touch;');
+  m.innerHTML='<div style="background:var(--g1);border:2px solid var(--g2);border-radius:16px;width:100%;max-width:980px;padding:16px;">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;"><div style="font-size:18px;font-weight:900;color:var(--tx);">'+title+'</div>'
+    +'<button onclick="tdClose()" style="padding:8px 14px;border-radius:10px;font-size:15px;font-weight:900;border:1px solid var(--g3);background:var(--g0);color:var(--tx);">✕ Close</button></div>'
+    +'<div id="td-body">'+inner+'</div></div>';
+  document.body.appendChild(m);
+  return m;
+}
+function tdOpen(bid,client){
+  if(!canSeeBookingDocs()){ toast('Only management can view the quote and booking form','err'); return; }
+  if(_docPin&&_docPin.name===APP_USER.name&&Date.now()-_docPin.at<10*60*1000){ tdFetch(bid,client,_docPin.pin); return; }
+  tdShell('🔒 '+_bx(client||'Booking')+' — enter your PIN',
+    '<div style="font-size:14px;color:var(--g5);margin-bottom:10px;">The quote and booking form hold the client\'s personal details. '+_bx(APP_USER.name)+', type your PIN to open them.</div>'
+    +'<input id="td-pin" type="password" inputmode="numeric" autocomplete="off" style="font-size:24px;padding:10px 14px;width:200px;letter-spacing:6px;border-radius:10px;border:2px solid var(--g3);" onkeydown="if(event.key===\'Enter\')tdPinGo(\''+bid+'\',\''+String(client||'').replace(/[\'\\"<>]/g,'')+'\')">'
+    +' <button class="btn g" style="font-size:16px;padding:12px 22px;" onclick="tdPinGo(\''+bid+'\',\''+String(client||'').replace(/[\'\\"<>]/g,'')+'\')">Open</button>'
+    +'<div id="td-err" style="color:var(--rl);font-weight:800;margin-top:8px;"></div>');
+  setTimeout(function(){ var p=document.getElementById('td-pin'); if(p) p.focus(); },80);
+}
+function tdPinGo(bid,client){
+  var p=document.getElementById('td-pin'); var pin=p?String(p.value||'').trim():'';
+  if(!pin){ var e=document.getElementById('td-err'); if(e) e.textContent='Type your PIN'; return; }
+  tdFetch(bid,client,pin);
+}
+async function tdFetch(bid,client,pin){
+  var body=document.getElementById('td-body');
+  if(!body){ tdShell('📄 '+_bx(client||'Booking'),''); body=document.getElementById('td-body'); }
+  body.innerHTML='<div style="padding:14px;color:var(--g5);">Loading…</div>';
+  var res;
+  try{
+    var r=await SB.functions.invoke('tablet-booking-docs',{body:{name:APP_USER.name,pin:pin,booking_id:String(bid)}});
+    res=r.data;
+    if(r.error){
+      try{ res=await r.error.context.json(); }catch(_){ res={ok:false,error:r.error.message||'Could not reach the server'}; }
+    }
+  }catch(e){ res={ok:false,error:(e&&e.message)||'Could not reach the server'}; }
+  if(!res||!res.ok){
+    _docPin=null;
+    var wrongPin=res&&/PIN/i.test(res.error||'');
+    if(wrongPin){ tdOpen(bid,client); var er=document.getElementById('td-err'); if(er) er.textContent=res.error; return; }
+    body.innerHTML='<div style="padding:14px;color:var(--rl);font-weight:800;">'+_bx((res&&res.error)||'Could not load the documents')+'</div>';
+    return;
+  }
+  _docPin={name:APP_USER.name,pin:pin,at:Date.now()};
+  var D=res.docs||{}, K={quote:'📄 Sage quote',booking_form:'📝 Booking form & itinerary'};
+  var html='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">';
+  ['quote','booking_form'].forEach(function(k){
+    var d=D[k];
+    html+='<div style="flex:1;min-width:240px;background:var(--g0);border:1px solid var(--g3);border-radius:12px;padding:12px;">'
+      +'<div style="font-size:15px;font-weight:900;margin-bottom:6px;color:var(--tx);">'+K[k]+'</div>';
+    if(d&&d.url){
+      window['_td_'+k]=d;
+      html+='<div style="font-size:12px;color:var(--g5);word-break:break-all;margin-bottom:8px;">'+_bx(d.file_name||'')+'</div>'
+        +'<button class="btn g" style="font-size:15px;padding:10px 18px;" onclick="tdShow(\''+k+'\')">Open</button>';
+    } else if(d&&d.removed_at){
+      html+='<div style="font-size:13px;color:var(--g5);">Removed after the rental ('+_bx(d.removed_reason||'')+'). The office can open the quote in Sage.</div>';
+    } else {
+      html+='<div style="font-size:13px;color:var(--g5);">Not attached yet — the office adds it in the Fleet Manager.</div>';
+    }
+    html+='</div>';
+  });
+  html+='</div><div id="td-view"></div>';
+  tdShell('📄 '+_bx(client||'Booking')+' — quote &amp; booking form',html);
+}
+var _tdPdfP=null;
+function tdLoadPdf(){
+  if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if(_tdPdfP) return _tdPdfP;
+  _tdPdfP=new Promise(function(res,rej){
+    var s=document.createElement('script'); s.src='pdf.min.js';
+    s.onload=function(){ try{ window.pdfjsLib.GlobalWorkerOptions.workerSrc='pdf.worker.min.js'; res(window.pdfjsLib); }catch(e){ rej(e); } };
+    s.onerror=function(){ _tdPdfP=null; rej(new Error('PDF viewer did not load')); };
+    document.head.appendChild(s);
+  });
+  return _tdPdfP;
+}
+// Shown inside the app: the kiosk browser cannot open PDFs on its own
+async function tdShow(k){
+  var d=window['_td_'+k], v=document.getElementById('td-view'); if(!d||!v) return;
+  var name=String(d.file_name||'').toLowerCase(), mime=String(d.mime||'');
+  v.innerHTML='<div style="padding:10px;color:var(--g5);">Opening '+_bx(d.file_name||'')+'…</div>';
+  try{
+    if(mime==='application/pdf'||/\.pdf$/.test(name)){
+      var lib=await tdLoadPdf();
+      var buf=await (await fetch(d.url)).arrayBuffer();
+      var pdf=await lib.getDocument({data:new Uint8Array(buf)}).promise;
+      v.innerHTML='';
+      var w=Math.min(v.clientWidth||900,1400), dpr=Math.min(window.devicePixelRatio||1,2);
+      for(var p=1;p<=pdf.numPages;p++){
+        var page=await pdf.getPage(p), vp0=page.getViewport({scale:1}), scale=w/vp0.width, vp=page.getViewport({scale:scale*dpr});
+        var c=document.createElement('canvas'); c.width=vp.width; c.height=vp.height;
+        c.style.cssText='width:100%;height:auto;display:block;background:#fff;border-radius:6px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.25);';
+        v.appendChild(c);
+        await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+      }
+    } else if(/^image\//.test(mime)&&!/heic|heif/.test(mime)){
+      v.innerHTML='<img src="'+d.url+'" style="width:100%;height:auto;border-radius:6px;background:#fff;">';
+    } else {
+      v.innerHTML='<div style="padding:12px;font-size:14px;color:var(--tx);">This file type ('+_bx(name.split('.').pop()||'?')+') cannot be shown on the tablet. Ask the office to open it in the Fleet Manager.</div>';
+    }
+  }catch(e){ v.innerHTML='<div style="padding:12px;color:var(--rl);font-weight:800;">Could not open the file: '+_bx((e&&e.message)||e)+'. The link lasts 5 minutes — close and open again.</div>'; }
+}
 // Deleting anything (photos, damage marks, records) is for the admin only
 // Admin only: throw away a started check-out or check-in on this tablet and begin again
 function resetProcess(fn,ev){
@@ -884,6 +1006,7 @@ function isPrepOnly(){ return !!(APP_USER && PREP_ONLY.includes(APP_USER.name));
 // Steps: 0 Prep · 2 Mechanical · 3 Camping · 4 Inspection · 5 Contract · 6 Handover · 7 Management
 var STEP_ACCESS={};  // staff: Cleaning, Equipment, Mechanical, Pre-handover inspection
 namesWithRole('staff').forEach(function(n){STEP_ACCESS[n]=[0,2,3,4];});
+namesWithRole('contract').forEach(function(n){STEP_ACCESS[n]=[5];});   // contract only
 function allowedSteps(){return (APP_USER&&STEP_ACCESS[APP_USER.name])||null;}
 function canDoStep(n){var a=allowedSteps();return !a||a.indexOf(n)>=0;}
 function firstAllowedStep(){var a=allowedSteps();return a?a[0]:0;}
@@ -908,7 +1031,7 @@ function goPage(p,_fromBack){
   if(!APP_USER){showLogin();return;}
   try{if(p!=='ov')closeResumePanel();}catch(e){}
   try{var _cur=((document.querySelector('.page.on')||{}).id||'').replace('page-','');if(!_fromBack&&_cur&&_cur!==p&&_cur!=='login'){NAV_HIST.push(_cur);if(NAV_HIST.length>20)NAV_HIST.shift();}}catch(e){}
-  if(['out','cal','doc','rp'].indexOf(p)>=0 && !canSeeOverview()){
+  if(['out','cal','rp'].indexOf(p)>=0 && !canSeeOverview() || p==='doc' && !canSeeDocPage()){
     toast('🔒 Not available for '+(APP_USER?APP_USER.name:'you'),'err');
     return;
   }
@@ -2823,6 +2946,7 @@ function drawCO(){
   document.getElementById('co-body').innerHTML=
     '<div class="chg-veh-bar">'
       +'<button onclick="coChangeVehicle()" style="padding:10px 18px;border-radius:22px;border:2px solid var(--gb);background:var(--g1);color:var(--tx);font-size:15px;font-weight:900;cursor:pointer;">← Choose another vehicle</button>'
+      +tdBtn(_cov.bid,_cov.cl)
     +'</div>'+
     '<div class="fhdr">'+
       // fleet number, client and the check-out badge on one line
@@ -3650,8 +3774,8 @@ function signEquip(){
 
 // ── STEP 1: Client ID Documents ──────────────────────────────────
 
-// Contract step: who is doing it (mainly Christina; Simon and Joe can also do it)
-var CONTRACT_STAFF=namesWithRole('manager','peter');
+// Contract step: who is doing it (Christina, Jo-Jo or Peter)
+var CONTRACT_STAFF=namesWithRole('contract','manager','peter');
 // Ask who is doing the contract as soon as Step 5 opens — before any photos are taken
 function ctWhoModal(){
   if(document.getElementById('ct-who-modal'))return;
@@ -5643,7 +5767,7 @@ function coReleaseBox(){
   var ready=handoverClosed();
   var me=(APP_USER&&APP_USER.name)||'';
   if(!ready)return '<div style="text-align:center;font-size:13px;color:var(--g5);margin:6px 0 10px;">When the client has signed, <b>Release vehicle</b> appears here.</div>';
-  if(!canViewReports())return '<div class="al warn" style="text-align:center;">👔 A manager releases the vehicle — ask Joe, Simon or Peter</div>';
+  if(!canViewReports())return '<div class="al warn" style="text-align:center;">👔 A manager releases the vehicle — ask Jo-Jo or Peter</div>';
   return '<div style="background:var(--g1);border:3px solid var(--gb);border-radius:var(--r);padding:14px;margin-bottom:10px;">'
     +'<button class="btn g" style="font-size:18px;padding:18px;" onclick="coRelease()">✅ Release vehicle</button>'
     +'<div style="font-size:12px;color:var(--g5);margin-top:6px;text-align:center;">Released by '+_bx(me)+' · anything still open is shown before it goes</div></div>';
@@ -6447,7 +6571,7 @@ function drawCI(){
 
   document.getElementById('ci-body').innerHTML=`
     <div class="chg-veh-bar">
-      <button onclick="ciChangeVehicle()" style="padding:10px 18px;border-radius:22px;border:2px solid var(--gb);background:var(--g1);color:var(--tx);font-size:15px;font-weight:900;cursor:pointer;">← Choose another vehicle</button>
+      <button onclick="ciChangeVehicle()" style="padding:10px 18px;border-radius:22px;border:2px solid var(--gb);background:var(--g1);color:var(--tx);font-size:15px;font-weight:900;cursor:pointer;">← Choose another vehicle</button>${tdBtn(ci.v&&ci.v.bid,ci.v&&ci.v.cl)}
     </div>
     <div class="fhdr">
       <div class="fh-top">
@@ -7858,7 +7982,7 @@ async function completeCI(){
   // Read-only tablet: Fleet Manager data (vehicles/bookings) is never changed from here
   const hasIssues=newDmg.length||((!!ci.fuelIn&&ci.fuelIn!==ci.v.fuelOut))||missing.length||damaged.length;
   document.getElementById('ci-body').innerHTML=`
-    <div class="chg-veh-bar"><button onclick="ciChangeVehicle()" style="padding:10px 18px;border-radius:22px;border:2px solid var(--gb);background:var(--g1);color:var(--tx);font-size:15px;font-weight:900;cursor:pointer;">← Choose another vehicle</button></div>
+    <div class="chg-veh-bar"><button onclick="ciChangeVehicle()" style="padding:10px 18px;border-radius:22px;border:2px solid var(--gb);background:var(--g1);color:var(--tx);font-size:15px;font-weight:900;cursor:pointer;">← Choose another vehicle</button>${tdBtn(ci.v&&ci.v.bid,ci.v&&ci.v.cl)}</div>
     <div class="done"><div class="done-ico">${hasIssues?'⚠️':'✅'}</div>
       <div class="done-title">Return Complete</div>
       <div class="done-sub">${ci.fn} · ${ci.v.cl}<br>${(+ci.odoIn&&+ci.v.odo)?((+ci.odoIn)-(+ci.v.odo)).toLocaleString()+' km · ':''}Received by ${ci.receivedBy||'—'}${ci.forceClosedBy?'<br><b style="color:var(--al)">Closed off by '+_bx(ci.forceClosedBy)+' with checks missing</b>':''}</div>
@@ -9763,6 +9887,7 @@ function lsDel() {
 
 function debugGo() { showLoginScreen(); } // old emergency bypass removed — log in with a PIN
 function showLoginScreen() {
+  _docPin=null; tdClose();
   try{closeResumePanel();}catch(e){}
   APP_USER = null;
   LS_PIN = ''; LS_WHO = '';
