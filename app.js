@@ -2592,13 +2592,9 @@ async function startCO(fn){
   }
   // Opening a finished check-out used to build a blank one and push that empty draft over the
   // saved work — the screen came up with nothing on it. The saved record is the real thing.
+  // No question first (it was irritating): tapping a finished check-out opens its rental file.
   if(coIsDone(v)){
-    if(confirm(fn+' has already been checked out to '+(v.cl||'this client')+'.\n\n'
-      +'Everything signed is saved in the rental file.\n\n'
-      +'OK  =  open the rental file (contract, ID scans, photos, signatures)\n'
-      +'Cancel  =  go back')){
-      try{openRentalFile(bkKey(v),v.fn,v.cl||'');}catch(e){toast('Could not open the rental file','err');}
-    }
+    try{openRentalFile(bkKey(v),v.fn,v.cl||'');}catch(e){toast('Could not open the rental file','err');}
     return;
   }
   // Returning to a vehicle you left earlier: carry on where you stopped
