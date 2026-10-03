@@ -260,7 +260,8 @@ let APP_USER = null; // {name, code, role} - set on login
 function initAppUser(){
   try{
     const saved=localStorage.getItem('gorent_user');
-    if(saved){APP_USER=JSON.parse(saved);if(APP_USER&&APP_USER.code){delete APP_USER.code;localStorage.setItem('gorent_user',JSON.stringify(APP_USER));}}
+    if(saved){APP_USER=JSON.parse(saved);if(APP_USER&&APP_USER.code){delete APP_USER.code;localStorage.setItem('gorent_user',JSON.stringify(APP_USER));}
+      if(APP_USER&&APP_USER.name==='Joe'){APP_USER.name='Jo-Jo';localStorage.setItem('gorent_user',JSON.stringify(APP_USER));}}   // renamed 3 Oct 2026
   }catch(e){}
 }
 function loginUser(code){
@@ -766,6 +767,13 @@ function tdBtn(bid,client){
   if(!canSeeBookingDocs()||!bid) return '';
   return '<button onclick="tdOpen(\''+String(bid).replace(/[\'\\"<>]/g,'')+'\',\''+String(client||'').replace(/[\'\\"<>]/g,'')+'\')" style="margin-left:10px;padding:10px 16px;border-radius:22px;border:2px solid #1d4ed8;background:#eff6ff;color:#1d4ed8;font-size:15px;font-weight:900;cursor:pointer;">📄 Quote &amp; booking form</button>';
 }
+// Tapping the client's name (check-out / check-in header, booking detail, Documentation) opens the
+// same box: Peter and Jo-Jo choose View quote or View booking form. Everyone else sees plain text.
+function custLink(v,html){
+  if(!v||!v.bid||!canSeeBookingDocs())return html;
+  var cl=String(v.cl||'').replace(/[\'\\"<>]/g,'');
+  return '<span onclick="event.stopPropagation();tdOpen(\''+String(v.bid).replace(/[\'\\"<>]/g,'')+'\',\''+cl+'\')" title="View quote / booking form" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:4px;">'+html+' <span style="font-size:.7em;">📄</span></span>';
+}
 function tdClose(){ var m=document.getElementById('td-modal'); if(m) m.remove(); }
 function tdShell(title,inner){
   tdClose();
@@ -822,7 +830,7 @@ async function tdFetch(bid,client,pin){
     if(d&&d.url){
       window['_td_'+k]=d;
       html+='<div style="font-size:12px;color:var(--g5);word-break:break-all;margin-bottom:8px;">'+_bx(d.file_name||'')+'</div>'
-        +'<button class="btn g" style="font-size:15px;padding:10px 18px;" onclick="tdShow(\''+k+'\')">Open</button>';
+        +'<button class="btn g" style="font-size:15px;padding:10px 18px;" onclick="tdShow(\''+k+'\')">'+(k==='quote'?'View quote':'View booking form')+'</button>';
     } else if(d&&d.removed_at){
       html+='<div style="font-size:13px;color:var(--g5);">Removed after the rental ('+_bx(d.removed_reason||'')+'). The office can open the quote in Sage.</div>';
     } else {
@@ -1343,7 +1351,7 @@ function docVehPanel(){
     var state=b.rt&&b.rt<today?'past':(b.pu&&b.pu<=today&&b.rt>=today?'now':'coming');
     return '<div '+(d?'onclick="docOpenBooking(\''+_bx(key)+'\')" style="cursor:pointer;':'style="')
       +'border:2px solid '+(state==='now'?'var(--gb)':'var(--g3)')+';border-radius:10px;padding:10px 12px;margin-bottom:6px;background:var(--g0);display:flex;justify-content:space-between;gap:10px;align-items:center;">'
-      +'<div style="min-width:0;"><div style="font-size:14px;font-weight:800;color:var(--tx);">'+_bx(b.cl||'—')+(waChip(b)?' · '+waChip(b):'')+'</div>'
+      +'<div style="min-width:0;"><div style="font-size:14px;font-weight:800;color:var(--tx);">'+custLink(b,_bx(b.cl||'—'))+(waChip(b)?' · '+waChip(b):'')+'</div>'
       +'<div style="font-size:12px;color:var(--g5);margin-top:2px;">📅 '+(b.pu||'?')+' → '+(b.rt||'?')+(b.quote?' · Quote '+_bx(String(b.quote)):'')+(b.camping?' · Camping':'')+'</div></div>'
       +'<div style="font-size:11px;font-weight:900;white-space:nowrap;color:'+(d?'var(--bl)':'var(--g4)')+';">'
         +(state==='now'?'🚙 OUT NOW':state==='past'?'✔ PAST':'📅 UPCOMING')+(d?' · Open 📁':'')+'</div></div>';
@@ -1759,7 +1767,7 @@ function showBookingDetail(v){
       +'<div style="font-size:24px;">⚠</div><div><div style="font-weight:800;font-size:15px;">REMOTE ARRANGEMENTS REQUIRED</div>'
       +'<div style="font-size:14px;">Pickup/drop-off outside Windhoek — arrange vehicle transfer in advance.</div></div></div>';
   }
-  h+=row(cell('Client',_bx(v.cl)),cell('Quote #',col(_bx(b.quote||v.quote||'—'),'#d97706')));
+  h+=row(cell('Client',custLink(v,_bx(v.cl))),cell('Quote #',col(_bx(b.quote||v.quote||'—'),'#d97706')));
   h+=row(cell('Fleet / Vehicle','<span style="font-family:Menlo,monospace;color:#d97706;">'+_bx(v.fn)+(model?' · '+model:'')+'</span>'),cell('Nationality',_bx(b.nationality||'—')));
   h+=row(cell('Pickup date',col(_dmy(v.pu),'#2a9d5c')),cell('Return date',col(_dmy(v.rt),'#2563eb')));
   h+=row(cell('Camping / PAX',_bx(b.camping||'—')),'');
@@ -2952,7 +2960,7 @@ function drawCO(){
       // fleet number, client and the check-out badge on one line
       '<div class="fh-top">'+
         '<span class="fhdr-fn">'+co.fn+' <span>'+_cov.reg+'</span></span>'+
-        '<span style="font-size:20px;font-weight:900;color:#000000;letter-spacing:-.2px;">'+_bx(mainRenter()||_cov.cl||'No booking')+(bookedByName()?'<span style="font-size:14px;font-weight:700;color:#444;"> (booked by '+_bx(bookedByName())+')</span>':'')+'</span>'+
+        '<span style="font-size:20px;font-weight:900;color:#000000;letter-spacing:-.2px;">'+custLink(_cov,_bx(mainRenter()||_cov.cl||'No booking'))+(bookedByName()?'<span style="font-size:14px;font-weight:700;color:#444;"> (booked by '+_bx(bookedByName())+')</span>':'')+'</span>'+
         '<span style="margin-left:auto;font-size:13px;font-weight:800;padding:4px 10px;border-radius:8px;background:#1d4ed8;color:#ffffff;">CHECK-OUT ▶</span>'+
       '</div>'+
       (function(){
@@ -6576,7 +6584,7 @@ function drawCI(){
     <div class="fhdr">
       <div class="fh-top">
         <span class="fhdr-fn">${r.fn} <span>${v.reg}</span></span>
-        <span style="font-size:20px;font-weight:900;color:#000000;letter-spacing:-.2px;">${_bx(v.cl||'')}</span>
+        <span style="font-size:20px;font-weight:900;color:#000000;letter-spacing:-.2px;">${custLink(v,_bx(v.cl||''))}</span>
         <span style="margin-left:auto;font-size:13px;font-weight:800;padding:4px 10px;border-radius:8px;background:#b91c1c;color:#ffffff;">◀ CHECK-IN</span>
         ${isAdmin()?`<button onclick="resetProcess('${_bx(r.fn)}',event)" style="background:var(--rg);border:2px solid var(--re);color:var(--rl);border-radius:8px;font-size:13px;font-weight:900;padding:4px 10px;cursor:pointer;">🗑 Reset check-in</button>`:''}
       </div>
