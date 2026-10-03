@@ -698,12 +698,12 @@ async function backupNow(auto){
     var data=await backupData();
     if(!data)throw new Error('could not read the records');
     try{await backupToCloud(true);}catch(e){}     // keep the off-tablet copy current as well
-    var name='gorent-backup-'+new Date().toISOString().split('T')[0]+'.json';
+    var name='gorent-backup-'+localYMD()+'.json';
     var blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
     var url=URL.createObjectURL(blob);
     var a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();
     setTimeout(function(){URL.revokeObjectURL(url);a.remove();},2000);
-    try{localStorage.setItem('gorent_backup_day',new Date().toISOString().split('T')[0]);}catch(e){}
+    try{localStorage.setItem('gorent_backup_day',localYMD());}catch(e){}
     var n=(data.checkouts||[]).length+(data.checkins||[]).length+(data.rental_contracts||[]).length;
     toast('💾 Backup saved to this computer — '+n+' records','ok');
     return true;
@@ -713,7 +713,7 @@ function backupOnOpen(){
   try{
     // This used to give up on any tablet, and the tablets are all this app runs on — so no
     // backup was ever taken. The daily one now goes to storage, which every device can do.
-    var today=new Date().toISOString().split('T')[0];
+    var today=localYMD();
     if(localStorage.getItem('gorent_backup_day')===today)return;
     setTimeout(function(){backupToCloud(true);},4000);
   }catch(e){}
@@ -723,7 +723,7 @@ async function backupToCloud(auto){
   try{
     var data=await backupData();
     if(!data)return false;
-    var day=new Date().toISOString().split('T')[0];
+    var day=localYMD();
     var path='backups/gorent-backup-'+day+'.json';
     var blob=new Blob([JSON.stringify(data)],{type:'application/json'});
     var up=await SB.storage.from('client-docs').upload(path,blob,{contentType:'application/json',upsert:true});
@@ -910,6 +910,10 @@ function goPage(p,_fromBack){
   try{var _cur=((document.querySelector('.page.on')||{}).id||'').replace('page-','');if(!_fromBack&&_cur&&_cur!==p&&_cur!=='login'){NAV_HIST.push(_cur);if(NAV_HIST.length>20)NAV_HIST.shift();}}catch(e){}
   if(['out','cal','doc','rp'].indexOf(p)>=0 && !canSeeOverview()){
     toast('🔒 Not available for '+(APP_USER?APP_USER.name:'you'),'err');
+    return;
+  }
+  if(p==='ci' && !canCheckIn()){   // the tab is hidden for them; Back / shortcuts must not open it either
+    toast('🔒 Check-in is not available for '+(APP_USER?APP_USER.name:'you'),'err');
     return;
   }
   if(p==='rp' && !canViewReports()){
@@ -1186,7 +1190,7 @@ function docVehPanel(){
   if(!DOC_FN)return '';
   var v=FLEET.filter(function(x){return x.fn===DOC_FN;})[0];
   var bookings=FLEET.filter(function(x){return x.fn===DOC_FN&&x.cl;}).sort(function(a,b){return (a.pu||'')>(b.pu||'')?1:-1;});
-  var today=new Date().toISOString().split('T')[0];
+  var today=localYMD();
   var lic=(v&&(v._licExpiry||(v.lic&&v.lic.expiry)))||'';
   var licDays=lic?Math.round((new Date(lic)-new Date())/86400000):null;
   var head=v?('<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:center;">'
@@ -1243,7 +1247,7 @@ function outVeh(row){
 function outDue(row,v){return row.return_date_new||v.rt||'';}
 function drawOut(){
   var body=document.getElementById('out-body');if(!body)return;
-  var today=new Date().toISOString().split('T')[0];
+  var today=localYMD();
   var fmt=function(d){return d?new Date(d+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}):'—';};
   var q=(OUT_FIND||'').toLowerCase();
   var list=OUT_ROWS.map(function(r,i){return {r:r,i:i,v:outVeh(r)};}).filter(function(o){return !q||(o.v.fn+' '+(o.v.cl||o.r.customer_name||'')+' '+(o.v.reg||'')).toLowerCase().indexOf(q)>=0;})
@@ -1264,7 +1268,7 @@ function drawOut(){
     if(open){
       h+='<div style="border-top:1px solid var(--g2);padding:14px 16px;">'
         +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
-        +'<div class="fi"><label>Return date'+(v.rt?' (booked: '+fmt(v.rt)+')':'')+'</label><input type="date" id="out-date" min="'+new Date().toISOString().split('T')[0]+'" value="'+_bx(due)+'" style="color-scheme:light;"></div>'
+        +'<div class="fi"><label>Return date'+(v.rt?' (booked: '+fmt(v.rt)+')':'')+'</label><input type="date" id="out-date" min="'+localYMD()+'" value="'+_bx(due)+'" style="color-scheme:light;"></div>'
         +'<div class="fi"><label>Expected return time</label>'+timePickers('out-time',r.return_time||'',"")+'</div></div>'
         +'<div style="font-size:12px;font-weight:800;color:var(--g5);text-transform:uppercase;letter-spacing:.4px;margin:10px 0 6px;">📝 Notes</div>'
         +((r.out_notes||[]).map(function(n){return '<div style="background:var(--g0);border:1px solid var(--g2);border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:14px;"><div style="font-size:11px;color:var(--g5);font-weight:800;">'+_bx(n.by||'')+' · '+_bx(new Date(n.at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))+'</div>'+_bx(n.text)+'</div>';}).join('')||'<div style="font-size:13px;color:var(--g5);margin-bottom:6px;">No notes yet.</div>')
@@ -1302,15 +1306,24 @@ function renderCIPicker(){
   var body=document.getElementById('ci-body');
   if(!body)return;
   if(ci&&ci.v){drawCI();return;}
-  var today=new Date().toISOString().split('T')[0];
+  var today=localYMD();
   var dd=function(v){return Math.round((new Date(v.rt+'T00:00:00')-new Date(today+'T00:00:00'))/86400000);};
   var returning=FLEET.filter(function(v){var d=dd(v);return d>=0&&d<=7;}).sort(function(a,b){return a.rt>b.rt?1:-1;});
   // vehicles out on rental now that are due back later (early returns)
-  var outNow=FLEET.filter(function(v){return v.pu&&v.rt&&v.pu<=today&&dd(v)>7;}).sort(function(a,b){return a.rt>b.rt?1:-1;});
+  // only vehicles that really left (checked out on the tablet, or OUT in the Fleet Manager) —
+  // a booking that was never collected is not "out on rental" and cannot come back early
+  // "Out" = checked out on the tablet. (v.st is 'rented' for every booking whose dates cover
+  // today, collected or not, so it cannot tell.) Bookings never checked out on the tablet stay
+  // listed — a vehicle may have gone out before the tablets — but last, and labelled.
+  var _isOut=function(v){try{return coIsDone(v);}catch(e){return false;}};
+  var outNow=FLEET.filter(function(v){return v.pu&&v.rt&&v.pu<=today&&dd(v)>7&&!ciIsDone(v);})
+    .sort(function(a,b){var oa=_isOut(a)?0:1,ob=_isOut(b)?0:1;if(oa!==ob)return oa-ob;return a.rt>b.rt?1:-1;});
+  function _ciD(x){return x?new Date(x+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}):'?';}
   function row(v,early){
     var isToday=v.rt===today,d=dd(v);
     var dt=new Date(v.rt+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
-    var badge=early?'<span style="background:rgba(245,166,35,.2);color:var(--al);border:1px solid var(--am);font-size:11px;font-weight:800;padding:3px 10px;border-radius:8px;">OUT · due in '+d+' days</span>'
+    var badge=early?(_isOut(v)?'<span style="background:rgba(245,166,35,.2);color:var(--al);border:1px solid var(--am);font-size:11px;font-weight:800;padding:3px 10px;border-radius:8px;">OUT · due in '+d+' days</span>'
+        :'<span style="background:var(--g2);color:var(--g5);font-size:11px;font-weight:800;padding:3px 10px;border-radius:8px;">No tablet check-out · due in '+d+' days</span>')
       :isToday?'<span style="background:#2a9d5c;color:#fff;font-size:11px;font-weight:800;padding:3px 10px;border-radius:8px;">TODAY</span>'
       :'<span style="background:var(--g2);color:var(--g5);font-size:11px;font-weight:800;padding:3px 10px;border-radius:8px;">'+dt+'</span>';
     var col=early?'var(--am)':isToday?'#2a9d5c':'var(--g3)';
@@ -1326,7 +1339,8 @@ function renderCIPicker(){
       +'<div style="display:flex;justify-content:space-between;align-items:center;">'
       +'<div><div style="font-size:16px;font-weight:900;color:var(--se);">'+v.fn+'</div>'
       +'<div style="font-size:13px;font-weight:700;color:var(--tx);margin-top:2px;">'+_bx(v.cl||'')+(waChip(v)?' · '+waChip(v):'')+'</div>'
-      +'<div style="font-size:11px;color:var(--g5);margin-top:3px;">'+_bx(v.reg||'')+' &middot; '+(v.pu||'?')+' → '+(v.rt||'?')+' <b class="ci-rt" style="color:#7db8ff;margin-left:6px;"></b></div>'+_ipLine+'</div>'
+      +'<div style="font-size:11px;color:var(--g5);margin-top:3px;">'+_bx(v.reg||'')+' &middot; '+_ciD(v.pu)+' → '+_ciD(v.rt)+' <b class="ci-rt" style="color:#7db8ff;margin-left:6px;"></b></div>'
+      +((!_fin&&!early&&!_isOut(v))?'<div style="font-size:12px;font-weight:800;color:var(--g5);margin-top:4px;">⏸ No tablet check-out on file</div>':'')+_ipLine+'</div>'
       +'<div>'+badge+'</div></div></div>';
   }
   var rows=returning.map(function(v){return row(v,false);}).join('')||'<div style="padding:24px;text-align:center;color:var(--g5);font-size:13px;">No check-ins in the next 7 days</div>';
@@ -1353,6 +1367,9 @@ function ciFilterPicker(q){
 }
 
 
+// Today's date on the tablet's own clock. toISOString() gives the UTC date, which in Namibia
+// (UTC+2) is still yesterday between midnight and 02:00.
+function localYMD(d){d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function toast(msg,t=''){
   const el=document.getElementById('toast');
   el.textContent=msg;el.className='toast show'+(t?' '+t:'');
@@ -1506,7 +1523,7 @@ async function loadBookings(){
   try{
     var s=await SB.auth.getSession();
     if(!(s&&s.data&&s.data.session))return false;
-    var today=new Date().toISOString().split('T')[0];
+    var today=localYMD();
     var from=_addDays(today,-120),to=_addDays(today,365);  // wide enough for the 14-day dashboard and the calendar
     var r=await SB.from('bookings').select('id,quote,fleet_no,client,email,phone,nationality,driver_age,drivers,camping,pax,pickup_date,return_date,pickup_loc,dropoff_loc,cross_border,satphone,baby_seat,extra_fuel,itinerary,notes,arrival_flight,arrival_flight_date,departure_flight,departure_flight_date,airport_transfer').lte('pickup_date',to).gte('return_date',from);
     if(r.error){toast('Could not load bookings: '+r.error.message,'err');return false;}
@@ -1553,7 +1570,7 @@ function pickVeh(fn,mode){
   if(window._forceBid){var f=FLEET.filter(function(x){return x.bid===window._forceBid&&x.fn===fn;})[0];window._forceBid=null;if(f)return f;}
   var list=FLEET.filter(function(x){return x.fn===fn;});
   if(list.length<2)return list[0];
-  var today=new Date().toISOString().split('T')[0];
+  var today=localYMD();
   var key=mode==='in'?'rt':'pu';
   list.sort(function(a,b){
     var da=Math.abs(new Date(a[key]+'T00:00:00')-new Date(today+'T00:00:00'));
@@ -1654,7 +1671,7 @@ function ovExpand(fn){window._ovExpanded=window._ovExpanded===fn?null:fn;renderO
 
 function renderOV(){ try{ _renderOV(); } finally { try{showDepositBanner();}catch(e){} } }
 function _renderOV(){
-  const TODAY=new Date().toISOString().split('T')[0];
+  const TODAY=localYMD();
   const todayD=new Date(TODAY);
   const daysFrom=d=>Math.round((new Date(d+'T00:00:00')-todayD)/86400000);
   const view=window._ovView||'week';
@@ -2667,7 +2684,7 @@ function askCollectionDate(){
   try{
     if(!co||!co.v||!co.v.pu)return;
     if(co.collectedOn||co._collectAsked)return;
-    var today=new Date().toISOString().split('T')[0];
+    var today=localYMD();
     if(co.v.pu>=today)return;                       // booked for today or later: nothing to ask
     co._collectAsked=true;
     function pretty(d){return new Date(d+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});}
@@ -3242,6 +3259,50 @@ function secBtn(which,idx){
     +(all?'border:2px solid var(--gb);background:var(--sg);color:var(--se);':'border:2px solid var(--se);background:var(--se);color:#052010;')
     +'">'+(all?'✓ All good':'✓ All good ('+(labels.length-done)+')')+'</button>';
 }
+// ── Finished sections fold into one line ──────────────────────────────────
+// The Equipment step is six iPad screens long. Once every item under a heading is answered
+// (and none is a problem), that heading folds to one green line: "✓ Box 1 — Dinner Set ·
+// 5/5 · tap to show". Tap it to open it again. Sections with a problem never fold, so a
+// fault is always on screen. Only the screen changes; nothing saved is touched.
+var CO_FOLD_OPEN={};
+function coFoldSections(){
+  try{
+    if(typeof co==='undefined'||!co||!co.v||[0,2,3].indexOf(coStep)<0)return;
+    var root=document.getElementById('cos');if(!root)return;
+    var btns=root.querySelectorAll('button[onclick^="secAllGood("]');
+    for(var i=0;i<btns.length;i++){
+      var b=btns[i],hdr=b.parentElement;if(!hdr||hdr._foldDone)continue;
+      var m=/secAllGood\('(\w+)',(\d+)/.exec(b.getAttribute('onclick')||'');if(!m)continue;
+      var key=m[1]+m[2];
+      var rows=[],n=hdr.nextElementSibling;
+      while(n&&!n.querySelector('button[onclick^="secAllGood("]')){rows.push(n);n=n.nextElementSibling;}
+      if(!rows.length)continue;
+      var allDone=!/\(\d+\)/.test(b.textContent);
+      var prob=rows.some(function(r){return r.classList.contains('prob')||/⚠ Issue/.test(r.textContent);});
+      hdr._foldDone=1;
+      if(!allDone||prob)continue;
+      var open=!!CO_FOLD_OPEN[key];
+      rows.forEach(function(r){r.style.display=open?'':'none';});
+      var tag=document.createElement('span');
+      tag.className='fold-tag';
+      tag.textContent=open?'▲ hide':('✓ '+rows.length+' done · tap to show ▼');
+      tag.setAttribute('style','font-size:12px;font-weight:900;color:var(--se);white-space:nowrap;margin-left:8px;');
+      b.parentNode.insertBefore(tag,b);
+      hdr.style.cursor='pointer';
+      hdr.setAttribute('data-fold',key);
+      hdr.addEventListener('click',function(ev){
+        if(ev.target&&ev.target.closest&&ev.target.closest('button'))return;
+        var k=this.getAttribute('data-fold');CO_FOLD_OPEN[k]=!CO_FOLD_OPEN[k];
+        var s=document.getElementById('cos');if(s){s.innerHTML=coStep===0?coStep0():coStep===2?coStep1_equip():coStepMech();}
+      });
+    }
+  }catch(e){console.warn('coFoldSections',e);}
+}
+(function(){
+  var t=null;
+  try{new MutationObserver(function(){if(t)return;t=requestAnimationFrame(function(){t=null;coFoldSections();});})
+    .observe(document.documentElement,{childList:true,subtree:true});}catch(e){}
+})();
 function faultsOnlyNote(what){
   return '';
   var who=(APP_USER&&APP_USER.name)||'you';
@@ -3609,6 +3670,9 @@ function coBookingContact(){
 function coFillFromBooking(){
   if(!co||!co.v)return;
   var bc=coBookingContact(),v=co.v;
+  // undo the old automatic copy of the transfer text into the collection place (see coStep1)
+  try{ if(co&&co.v&&co.v.transfer&&co._pickupArrangementOther===1&&co.pickupArrangement===co.v.transfer&&!co._puTyped){
+    delete co._pickupArrangementOther;co.pickupArrangement=''; } }catch(e){}
   if(!co._emailTyped&&!co.clientEmail&&bc.email)co.clientEmail=bc.email;
   if(!co._phoneTyped&&!co.clientPhone&&bc.phone)co.clientPhone=bc.phone;
   // a collection / return somewhere other than Windhoek is already in the booking
@@ -3709,9 +3773,12 @@ function coContactField(kind){
 }
 function coStep1(){
   try{coFillFromBooking();}catch(e){}
-  // the booking already says an airport transfer was arranged: start on 'somewhere else'
-  try{ if(co&&co.v&&co.v.transfer&&!co.pickupArrangement&&co._pickupArrangementOther===undefined){
-    co.pickupArrangement=co.v.transfer;co._pickupArrangementOther=1;} }catch(e){}
+  // An airport transfer ("Transfer on US" / "Client to pay for transfer") is how the CLIENT gets
+  // to us — it is not a place. It used to be copied into the collection place, which then
+  // flashed red as "Collect: Transfer on US" and went onto the contract as the pickup
+  // location. The transfer shows in its own line below; the collection place stays the office
+  // unless someone chooses otherwise. Undo only that automatic copy (never anything typed).
+  // (done in coFillFromBooking, which runs on every redraw)
   if(!co||!co.v){return '<div style="padding:20px;color:red;">Error: co.v undefined in coStep1</div>';}
   // Office staff fill this in during prep — all client + driver details
   if(!co.drivers||co.drivers.length===0){
@@ -3928,7 +3995,7 @@ function setPlaceMode(field,other){
   try{coRedrawDrivers();}catch(e){}
 }
 function setPlaceText(field,v){
-  co[field]=v;
+  co[field]=v;if(field==='pickupArrangement')co._puTyped=1;
   try{saveCOProgress();}catch(e){}
   var w=document.getElementById('pl-warn-'+field);
   if(w)w.style.display=v?'none':'';
@@ -4437,6 +4504,9 @@ function ctDetailsForm(){
     +(c.insurance_option&&CT_INS[c.insurance_option]?'<div style="font-size:13px;color:var(--se);margin-top:4px;font-weight:700;">Security deposit: '+(CT_INS[c.insurance_option].dep?ctMoney(CT_INS[c.insurance_option].dep):'none (zero excess)')+'</div>':'')
     +'</div>';
   var OFFICE='Go Rent Office, 6 Diehl Str, Windhoek';
+  // follow the Collection / Return choice on this screen straight away (gatherContract does the
+  // same when the contract opens) — the remote-return box used to appear only after a preview
+  try{var _pv=placeValue('pickupArrangement'),_rv=placeValue('dropoffArrangement');if(_pv)c.pickup_location=_pv;if(_rv)c.return_location=_rv;}catch(e){}
   if(c.pickup_location===undefined)c.pickup_location=OFFICE;
   if(c.return_location===undefined)c.return_location=OFFICE;
   var remote=(c.return_location||OFFICE)!==OFFICE;
@@ -4446,7 +4516,7 @@ function ctDetailsForm(){
       +'<textarea id="ct-raddr" placeholder="Lodge name, street, GPS or directions" oninput="(co.contract=co.contract||{}).return_address=this.value" '
       +'style="width:100%;min-height:62px;padding:10px 12px;border-radius:var(--rs);border:2px solid '+(c.return_address?'var(--gb)':'var(--re)')+';background:var(--g0);color:var(--tx);font-size:15px;">'+_bx(c.return_address||'')+'</textarea></div>'
       +'<div class="fi" style="margin-bottom:0;"><label>Time to collect there *</label>'
-      +timePickers('ct-rtime',c.return_place_time||'',"var _t=timePickValue('ct-rtime');if(_t){(co.contract=co.contract||{}).return_place_time=_t;drawCO();}")
+      +timePickers('ct-rptime',c.return_place_time||'',"var _t=timePickValue('ct-rptime');if(_t){(co.contract=co.contract||{}).return_place_time=_t;drawCO();}")
       +'</div></div>'):'';
   var h='<div style="font-size:13px;color:var(--g5);margin-bottom:10px;">Rental period: <b style="color:var(--tx);">'+days+' days</b> · rental rates are on the separate invoice</div>'
     +remoteBox
@@ -4883,12 +4953,16 @@ async function submitContractSig(){
   const nameOk=ctNameOk(typedName);
 
   if(!typedName){
+    // the name box can be off screen: bring it up and say so, instead of nothing happening
+    try{nameInput.scrollIntoView({behavior:'smooth',block:'center'});nameInput.focus();}catch(e){}
+    toast('Type your full name first (as on your passport)','err');
     nameInput.style.border='2px solid #e74c3c';
     nameInput.placeholder='⚠ Please type your full name first';
     setTimeout(()=>{nameInput.style.border='2px solid #1e8449';nameInput.placeholder='Type it as on your passport';},2500);
     return;
   }
   if(!nameOk){
+    try{nameInput.scrollIntoView({behavior:'smooth',block:'center'});}catch(e){}
     nameInput.style.border='2px solid #e74c3c';
     document.getElementById('ct-name-match').textContent='⚠ That does not look like the name on the passport — check it, or tap "Use passport name" ('+expectedName+')';
     document.getElementById('ct-name-match').style.color='#c0392b';
@@ -4897,7 +4971,8 @@ async function submitContractSig(){
   }
   if(!window._ctHasSig||!window._ctHasSig()){
     const cv=document.getElementById('ct-sig-canvas');
-    if(cv){cv.style.outline='3px solid #e74c3c';setTimeout(()=>cv.style.outline='',1200);}
+    if(cv){try{cv.scrollIntoView({behavior:'smooth',block:'center'});}catch(e){}cv.style.outline='3px solid #e74c3c';setTimeout(()=>cv.style.outline='',1200);}
+    toast('Please sign in the white box first','err');
     const btn=document.getElementById('ct-sign-btn');
     if(btn){const orig=btn.textContent;btn.textContent='⚠ Please sign above first';btn.style.background='#e74c3c';btn.style.color='#fff';setTimeout(()=>{btn.textContent=orig;btn.style.background='#3ddc84';btn.style.color='#052010';},2000);}
     return;
@@ -5020,10 +5095,26 @@ function inspSetItem(kind,lbl,v){
   if(kind==='qty'){co.prepItems[lbl]=String(v);}
   else if(kind==='prep'){co.prepItems[lbl]={st:v==='ok'?'ok':'prob',by:who+' (quick check)',at:t};}
   else{co.mechItems[lbl]=v==='ok'?'ok':'issue';if(!co.mechWho)co.mechWho={};co.mechWho[lbl]=who+' (quick check) · '+t;}
+  if(window._inspBatch)return;   // inspSetMany saves and redraws once at the end
   saveCOProgress();drawCO();
   try{if(document.getElementById('co-missing'))coFinishCheck(true);}catch(e){}   // refresh the "still outstanding" popup
   try{if(document.getElementById('co-step-left'))coLeftRefresh();}catch(e){}
 }
+// "✓ All OK" on one step's group in the red list: every item in it (not the counts) as OK,
+// exactly as if each had been tapped — then one save and one redraw.
+function inspSetMany(list,v){
+  var arr=String(list||'').split(',').map(Number).filter(function(x){return !isNaN(x);});
+  if(!arr.length)return;
+  window._inspBatch=true;
+  try{arr.forEach(function(n){var it=(window._inspItems||[])[n];if(it&&!it.qty)inspSetItem(it.kind,it.label,v||'ok');});}
+  finally{window._inspBatch=false;}
+  saveCOProgress();drawCO();
+  toast('✓ '+arr.length+' item'+(arr.length===1?'':'s')+' checked OK — '+((co.inspBy||(APP_USER&&APP_USER.name))||''),'ok');
+  try{if(document.getElementById('co-missing'))coFinishCheck(true);}catch(e){}
+  try{if(document.getElementById('co-step-left'))coLeftRefresh();}catch(e){}
+}
+var QC_OPEN={};
+function qcToggle(k){QC_OPEN[k]=!QC_OPEN[k];try{drawCO();}catch(e){}try{if(document.getElementById('co-missing'))coFinishCheck(true);}catch(e){}try{if(document.getElementById('co-step-left'))coLeftRefresh();}catch(e){}}
 function inspSetIdx(n,v){var it=(window._inspItems||[])[n];if(it)inspSetItem(it.qty?'qty':it.kind,it.label,v);}
 // Max count for a quantity item (third column of its L_PREP row)
 function qcMaxQty(real){var r=L_PREP.filter(function(x){return x&&x[1]==='__QTY__'+real;})[0];return (r&&parseInt(r[2]))||5;}
@@ -5037,7 +5128,7 @@ function qcUncheckedHTML(title,only){
   unchecked.forEach(function(i){window._inspItems.push(i);});
   if(!unchecked.length)return '';
   var base='padding:10px 14px;border-radius:8px;font-size:14px;font-weight:900;cursor:pointer;touch-action:manipulation;min-width:70px;border:2px solid var(--g3);background:var(--g0);';
-  var rows=unchecked.map(function(i,n){
+  var rowOf=function(i,n){
     var ctl;
     if(i.qty){
       var mx=qcMaxQty(i.label),o='<option value="">Count…</option>';
@@ -5049,10 +5140,28 @@ function qcUncheckedHTML(title,only){
     }
     return '<div class="insp-flash" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;margin-bottom:6px;border:2px solid var(--re);">'
       +'<div style="flex:1;min-width:0;overflow-wrap:anywhere;"><div style="font-size:11px;font-weight:800;opacity:.8;">'+i.step+'</div><div style="font-size:14px;font-weight:900;">'+_bx(i.label)+'</div></div>'+ctl+'</div>';
+  };
+  // One group per step, each with one "✓ All OK" button. A long group (e.g. 45 equipment items)
+  // stays closed until "Show" is tapped, so the list is no longer a wall of red rows.
+  var groups=[],gi={};
+  unchecked.forEach(function(i,n){var k=i.step||'';if(gi[k]===undefined){gi[k]=groups.length;groups.push({k:k,items:[]});}groups[gi[k]].items.push({i:i,n:n});});
+  var rows=groups.map(function(g){
+    var plain=g.items.filter(function(x){return !x.i.qty;});
+    var open=g.items.length<=5||QC_OPEN[g.k];
+    var shown=open?g.items:g.items.filter(function(x){return x.i.qty;});
+    var gb='padding:9px 14px;border-radius:9px;font-size:14px;font-weight:900;cursor:pointer;touch-action:manipulation;';
+    return '<div style="margin:10px 0 6px;">'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--g3);margin-bottom:6px;">'
+      +'<div style="flex:1;min-width:140px;font-size:14px;font-weight:900;color:var(--tx);">'+_bx(g.k)+' <span style="color:var(--rl);">· '+g.items.length+' open</span></div>'
+      +(g.items.length>5?'<button style="'+gb+'border:2px solid var(--g3);background:var(--g0);color:var(--g5);" onclick="qcToggle(\''+_bx(g.k).replace(/'/g,'')+'\')">'+(open?'Hide ▲':'Show ▼')+'</button>':'')
+      +(plain.length?'<button style="'+gb+'border:2px solid var(--gb);background:var(--se);color:#fff;" onclick="inspSetMany(\''+plain.map(function(x){return _base+x.n;}).join(',')+'\',\'ok\')">✓ All OK ('+plain.length+')</button>':'')
+      +'</div>'
+      +shown.map(function(x){return rowOf(x.i,x.n);}).join('')
+      +'</div>';
   }).join('');
   return '<div style="background:var(--g1);border:2px solid var(--re);border-radius:var(--rs);padding:12px 14px;margin-bottom:12px;">'
     +'<div style="font-size:14px;font-weight:900;color:var(--rl);margin-bottom:2px;">🔴 '+(title||'Not checked yet')+' ('+unchecked.length+')</div>'
-    +'<div style="font-size:12px;color:var(--g5);margin-bottom:8px;">Tap OK or Issue right here — no need to go back to the step</div>'+rows+'</div>';
+    +'<div style="font-size:12px;color:var(--g5);margin-bottom:8px;">Check them now: ✓ All OK for a whole step, or OK / Issue one by one — no need to go back to the step</div>'+rows+'</div>';
 }
 function coStep4_dmg(){
   if(!co||!co.v){return '<div style="padding:20px;color:red;">Error: co.v undefined in coStep4</div>';}
@@ -6234,7 +6343,7 @@ async function startCI(fn){
   }
   if(!v.fuelOut) v.fuelOut='Full'; // no fuel-out on record = went out full (stops false 'fuel short' warnings)
   // Accept if vehicle is rented OR has a return date in the past/today (may not have been updated)
-  const today=new Date().toISOString().split('T')[0];
+  const today=localYMD();
   const daysToReturn=v.rt?Math.round((new Date(v.rt+'T00:00:00')-new Date(today+'T00:00:00'))/86400000):99;
   var _early=false;
   if(daysToReturn>1){
@@ -6754,7 +6863,7 @@ function showDepositBanner(){
   var ov=document.getElementById('ov-body');if(!ov)return;
   var old=document.getElementById('dep-banner');if(old)old.remove();
   if(!DEP_PENDING.length||typeof canViewReports!=='function'||!canViewReports())return;
-  var today=new Date().toISOString().split('T')[0];
+  var today=localYMD();
   var due=DEP_PENDING.filter(function(d){return d.deposit_due&&d.deposit_due<=today;}).length;
   var b=document.createElement('div');b.id='dep-banner';
   b.setAttribute('style','margin:8px 10px 0;padding:12px 16px;border-radius:12px;border:2px solid '+(due?'var(--re)':'var(--am)')+';background:'+(due?'var(--rg)':'var(--ag)')+';color:'+(due?'var(--rl)':'var(--al)')+';font-weight:900;font-size:15px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-shrink:0;');
@@ -6770,7 +6879,7 @@ async function loadDeposits(){
   var r=await SB.from('checkins').select('id,booking_id,fleet_no,client,received_by,created_at,km_driven,fuel_in,fuel_out,fuel_short,new_damage_panels,missing_items,damaged_items,client_notes,manager_notes,report_link,deposit_due').eq('deposit_status','pending').order('deposit_due',{ascending:true});
   if(r.error){el.innerHTML='<div class="al warn">Could not load: '+_bx(r.error.message)+'</div>';return;}
   DEP_PENDING=r.data||[];
-  var today=new Date().toISOString().split('T')[0];
+  var today=localYMD();
   showDepositBanner();
   if(!DEP_PENDING.length){el.innerHTML='<div class="al ok" style="text-align:center;">✅ No deposit decisions waiting</div>';return;}
   el.innerHTML=DEP_PENDING.map(function(c){
@@ -7900,7 +8009,7 @@ async function rpLicSave(fn){
 }
 function rpPickVeh(fn){window._rpVeh=fn||null;var b=document.getElementById('rp-vehicles');if(b)b.innerHTML=rpFleet();window.scrollTo(0,0);}
 function rpVehGrid(){
-  var _today=new Date().toISOString().split('T')[0];
+  var _today=localYMD();
   var seen={},list=[];
   FLEET.slice().sort(function(a,b){return fnNum(a.fn)-fnNum(b.fn);}).forEach(function(v){if(seen[v.fn])return;seen[v.fn]=1;list.push(v);});
   var tiles=list.map(function(v){
@@ -7922,7 +8031,7 @@ function rpVehGrid(){
     +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;">'+tiles+'</div>';
 }
 function rpFleet(){
-  const _today=new Date().toISOString().split('T')[0];
+  const _today=localYMD();
   if(!window._rpVeh)return rpVehGrid();
   const _pick=window._rpVeh;
   return '<button class="btn s" style="margin-bottom:10px;" onclick="rpPickVeh(null)">← All vehicles</button>'
@@ -8083,7 +8192,7 @@ async function saveNewTyres(fn){
       interval_km:intKm,
       prev_fitted_at_km:(prev&&prev.lastKm)||null,
       prev_km_done:prev?km-prev.lastKm:null,
-      fitted_date:new Date().toISOString().split('T')[0],
+      fitted_date:localYMD(),
       notes:'New tyres logged via Fleet report'
     });
     // Update vehicles table
@@ -8611,7 +8720,7 @@ function dtPickChange(id,i,field,mode){
     if(val){
       var p=dtParse(val),iso=p.y+'-'+p.m+'-'+p.d;
       var due=(co&&co.v&&co.v.rt)||'';
-      if(iso<new Date().toISOString().split('T')[0])msg='⚠ This date has already passed';
+      if(iso<localYMD())msg='⚠ This date has already passed';
       else if(due&&iso<due)msg='⚠ Expires before the vehicle is due back on '+_dmy(due);
     }
     w.innerHTML=msg;w.style.display=msg?'':'none';w.style.color='var(--rl)';
@@ -8648,7 +8757,7 @@ function discPickValue(id){
 }
 function discPickChange(id,obj,context){
   var val=discPickValue(id);
-  if(val){var today=new Date().toISOString().split('T')[0];if(val<today)toast('That date has already passed — check the disc','err');}
+  if(val){var today=localYMD();if(val<today)toast('That date has already passed — check the disc','err');}
   var o=(obj==='co.v')?(typeof co!=='undefined'&&co.v):(typeof ci!=='undefined'&&ci.v);
   if(o)o._licExpiry=val;
   var b=document.getElementById('lic-banner-'+context);
@@ -8759,7 +8868,7 @@ function redraw(){
 async function uploadPhotos(arr,fn,client,stage){
   if(!(arr&&arr.length))return;
   const cln=(client||'unknown').replace(/[^a-zA-Z0-9]/g,'_');
-  const date=new Date().toISOString().split('T')[0];
+  const date=localYMD();
   banner(`Uploading ${arr.length} photo(s) — ${fn}/${client}/${stage}`);
   for(let i=0;i<arr.length;i++){
     if(arr[i].startsWith('http'))continue;
@@ -9759,6 +9868,7 @@ function closeResumePanel() {
 // thing to do next, with "Show me" (scrolls to it and highlights it). When the step is
 // finished it becomes one big "Next step →" button. Worked out from what is saved, not guessed.
 function gFind(root,sel,test){var l=root?root.querySelectorAll(sel):[];for(var i=0;i<l.length;i++){if(!test||test(l[i]))return l[i];}return null;}
+function n5edf(){try{var c=co.contract||{};return extraDriverCount()>0&&c.extra_driver_paid!==true;}catch(e){return false;}}
 function gTxt(el,t){return el&&(el.textContent||'').indexOf(t)>=0;}
 function gAllGood(root){return gFind(root,'button',function(b){return /✓ All good \(\d+\)/.test(b.textContent)&&b.offsetParent;});}
 var CO_NAMES={0:'Cleaning',2:'Equipment',3:'Mechanical',4:'Inspection',5:'Contract',6:'Handover & release'};
@@ -9777,6 +9887,8 @@ function guideCO(){
   }else if(st===4){
     if(!(co.docItems&&co.docItems.veh)){b=gFind(R,'div',function(x){return x.classList.contains('insp-flash')&&gTxt(x,'Vehicle docs');});return t('Check the licence disc and insurance papers are in the vehicle, then tap OK.',b);}
     if(co.v.xb&&!co.docItems.xb){b=gFind(R,'div',function(x){return x.classList.contains('insp-flash')&&gTxt(x,'Cross-border');});return t('Check the cross-border papers, then tap OK.',b);}
+    b=gFind(R,'button',function(x){return /✓ All OK \(\d+\)/.test(x.textContent)&&x.offsetParent;});
+    if(b)return t('Not checked in the earlier steps: check them, then tap ✓ All OK (tap Show to see them, Issue on anything wrong).',b);
     b=gFind(R,'.insp-flash',function(x){return gTxt(x,'OK')||x.querySelector('select');});
     if(b){var nm=(b.querySelector('div div:nth-child(2)')||{}).textContent||'';return t('Not ticked yet: '+nm+' — check it and tap OK (or Issue).',b);}
   }else if(st===5){
@@ -9803,6 +9915,15 @@ function guideCO(){
       if(!c.fuel_deposit_received){b=gFind(R,'label,div',function(x){return /Fuel & Admin deposit/.test(x.textContent)&&x.querySelector('input[type=checkbox]')&&x.textContent.length<200;});return t('Take the Fuel & Admin deposit, then tick it.',b);}
       if(co.v.xb&&!c.cross_border_deposit){b=gFind(R,'label,div',function(x){return /Cross-border\/Damage deposit/.test(x.textContent)&&x.querySelector('input[type=checkbox]')&&x.textContent.length<200;});return t('Take the Cross-border deposit, then tick it.',b);}
       b=gFind(R,'select',function(x){return /how the deposit was paid/.test(x.textContent)&&!x.value;});if(b)return t('Choose how the deposit was paid.',b);
+      // the same list the contract itself checks (ctMissing): the guide used to send staff to
+      // "Preview & Sign" while e.g. the extra driver fee was still open, and the contract
+      // then only said "cannot be signed yet"
+      if(n5edf()){b=document.getElementById('ct-edf');return t('Take the extra driver fee ('+ctMoney(extraDriverFee())+'), then tick it.',b&&(b.closest('label,div')||b));}
+      var _rl=(function(){try{return placeValue('dropoffArrangement')||c.return_location;}catch(e){return c.return_location;}})();
+      if(_rl&&_rl!==GR_HQ&&(!c.return_address||!c.return_place_time))return t(!c.return_address?'Remote return: type the exact address / directions where the vehicle is collected.':'Remote return: set the time to collect the vehicle there.',document.getElementById(!c.return_address?'ct-raddr':'ct-rptime-box')||document.getElementById('ct-raddr'));
+      var _cm=ctMissing(c);if(_cm.length){var _c0=_cm[0];
+        var _ce=/Camping Equipment/.test(_c0)?document.getElementById('ct-aeq'):/Windscreen/.test(_c0)?document.getElementById('ct-aws'):/Insurance/.test(_c0)?document.getElementById('ct-ins'):/Deposit method/.test(_c0)?gFind(R,'select',function(x){return /how the deposit was paid/.test(x.textContent);}):/Cross-border/.test(_c0)?document.getElementById('ct-xbd'):/Fuel/.test(_c0)?document.getElementById('ct-fdr'):null;
+        return t('Before the contract: '+_c0.replace(/^\S+\s/,''),_ce);}
       if(coLeftCount(CO_BEFORE_CONTRACT)){var _l5=coLeftList(CO_BEFORE_CONTRACT);return t(_l5.length===1?'Contract locked until staff finish: '+_l5[0]:'Contract locked — '+_l5.length+' staff checks still open. Tap Show on the red line to tick them.',gFind(R,'.left-box'));}
       b=gFind(R,'button',function(x){return gTxt(x,'Preview Full Contract');});
       return t('Tap 📋 Preview Full Contract & Sign — the client reads it and signs.',b);
@@ -9845,6 +9966,8 @@ function guideCI(){
     if(!retSt['WiFi device'])return t('Is the WiFi device back? Tap Returned or Not returned.',document.getElementById('ci-wifi-box'));
     if(!retSt['USB charger'])return t('Is the USB charger back? Tap Returned or Not returned.',document.getElementById('ci-usb-box'));
     if(!ci.odoIn)return t('Type the kilometres from the dashboard.',document.getElementById('ci-odo'));
+    var _oo0=ci.odometerOut||(ci.v&&ci.v.odo)||0;
+    if(_oo0&&+ci.odoIn<_oo0)return t('The km ('+ci.odoIn+') are LOWER than at check-out ('+_oo0+') — check the dashboard and type it again.',document.getElementById('ci-odo'));
     if(!ci.fuelIn)return t('Look at the fuel gauge and choose the level.',document.getElementById('ci-fuel'));
     var items=L_CI.filter(function(x,i){return x[0]!=='__SECTION__'&&x[0]!=='__OPTIONAL__'&&ciShow(x,i)&&ciStep1Item(i);});
     for(var j=0;j<items.length;j++){var l=items[j][1],x=ci.retItems[l];if(!(x&&(x.st!==undefined?x.st:x))){
@@ -9862,6 +9985,8 @@ function guideCI(){
   if(!ci.custSig)return {done:true,text:'The client signs at the end of Step 1 (vehicle condition)',next:'← Step 1 · Client signs',go:function(){ciStep=0;drawCI();setTimeout(function(){var e=document.getElementById('ci-client-sign');if(e)e.scrollIntoView({block:'center'});},150);}};
   var _eqo=ciOpenBeforeSign().filter(function(o){return o.s===2;});
   if(_eqo.length)return {done:true,text:'Equipment first: '+_eqo[0].t,next:'← Step 2 · Equipment',go:function(){ciStep=2;drawCI();window.scrollTo(0,0);}};
+  var _oo3=ci.odometerOut||(ci.v&&ci.v.odo)||0;
+  if(!ci.retSig&&_oo3&&+ci.odoIn<_oo3)return {done:true,text:'The km ('+ci.odoIn+') are lower than at check-out ('+_oo3+') — fix it in Step 1',next:'← Step 1 · km',go:function(){ciStep=0;drawCI();setTimeout(function(){var e=document.getElementById('ci-odo');if(e){e.scrollIntoView({block:'center'});e.focus();}},150);}};
   if(!ci.retSig)return t('Check the report, then YOU sign to confirm you received the vehicle.',document.getElementById('ci-staff-sign'));
   var x2=ciIssues();
   if(x2.fuelShort&&!(ci.fuelPhotos&&ci.fuelPhotos.length))return t('Fuel is short: take a photo of the fuel receipt.',gFind(R,'div',function(e){return /Fuel receipt/.test(e.textContent)&&e.querySelector('input[type=file]')&&e.textContent.length<400;}));

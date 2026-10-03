@@ -399,7 +399,10 @@ body.guide-on #co-body,body.guide-on #ci-body{padding-bottom:120px!important;}
 body.guide-next .co-next{display:none!important;}
 
 /* guide bar never shows over the login / lock / PIN screens */
-#login-screen[style*="flex"] ~ #guide,#device-login[style*="flex"] ~ #guide{display:none!important;}
+/* (was [style*="flex"], which also matched "flex-direction" on #device-login and hid the bar — and
+   with it the step's Next button — all the time. guideNow() checks these screens as well.) */
+#login-screen[style*="display:flex"] ~ #guide,#login-screen[style*="display: flex"] ~ #guide,
+#device-login[style*="display:flex"] ~ #guide,#device-login[style*="display: flex"] ~ #guide{display:none!important;}
 
 /* Step 5a sections: each its own colour so staff can find them while scrolling */
 .sum-box.sec-dep{background:#fff8e6;border-color:#e0b44a;border-left:8px solid #d49a12;}
