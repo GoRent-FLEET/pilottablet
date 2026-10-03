@@ -936,9 +936,15 @@ function goPage(p,_fromBack){
 // How far back the check-out list reaches. A client who lands late often collects the next
 // day, and the booking still carries the original date, so that vehicle must stay reachable.
 var CO_LOOKBACK=7;
-function setCOLookback(n){CO_LOOKBACK=n;try{localStorage.setItem('gorent_co_lookback',String(n));}catch(e){}renderCOPicker();
+// "Next 7 days": the coming departures go straight under today, so a check-out can be started
+// a day or two before the client arrives. The earlier days then sit at the bottom.
+var CO_AHEAD=false;
+function setCOLookback(n){CO_AHEAD=false;CO_LOOKBACK=n;try{localStorage.setItem('gorent_co_lookback',String(n));localStorage.setItem('gorent_co_ahead','0');}catch(e){}renderCOPicker();
   // show what the button brought up
   setTimeout(function(){try{var el=document.getElementById('co-earlier');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}catch(e){}},60);}
+function setCOAhead(){CO_AHEAD=true;try{localStorage.setItem('gorent_co_ahead','1');}catch(e){}renderCOPicker();
+  setTimeout(function(){try{var el=document.getElementById('co-coming');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}catch(e){}},60);}
+try{CO_AHEAD=localStorage.getItem('gorent_co_ahead')==='1';}catch(e){}
 try{var _cl=parseInt(localStorage.getItem('gorent_co_lookback'),10);if(_cl===1||_cl===7||_cl===30)CO_LOOKBACK=_cl;}catch(e){}
 function renderCOPicker(){
   var body=document.getElementById('co-body');
@@ -949,6 +955,7 @@ function renderCOPicker(){
   // yesterday, so earlier departures stay on this list until the vehicle actually goes out.
   function puDiff(v){return Math.round((new Date(v.pu+'T00:00:00')-new Date(today+'T00:00:00'))/86400000);}
   function coGrp(v){var d=puDiff(v);return d===0?0:d<0?1:2;}   // 0 today · 1 earlier days · 2 coming up
+  function grpOrd(g){return CO_AHEAD?[0,2,1][g]:g;}   // Next 7 days: today, coming up, then earlier
   var upcoming=FLEET.filter(function(v){
     var diff=puDiff(v);
     return diff>=-CO_LOOKBACK&&diff<=7;
@@ -957,7 +964,7 @@ function renderCOPicker(){
     // first), then the coming days. Earlier days used to sit under the whole coming-up list,
     // so "Last 7 days" looked as if it showed nothing.
     var ga=coGrp(a), gb=coGrp(b);
-    if(ga!==gb)return ga-gb;
+    if(ga!==gb)return grpOrd(ga)-grpOrd(gb);
     if(ga===0){var fa=coIsDone(a)?1:0,fb=coIsDone(b)?1:0;if(fa!==fb)return fa-fb;}
     if(ga===1){var na=coIsDone(a)?1:0,nb=coIsDone(b)?1:0;if(na!==nb)return na-nb;return a.pu<b.pu?1:-1;}   // not collected first, then most recent
     return a.pu>b.pu?1:-1;
@@ -994,15 +1001,15 @@ function renderCOPicker(){
       _grp=_g;
       var _lb=CO_LOOKBACK===1?'yesterday':'last '+CO_LOOKBACK+' days';
       var _h=_g===0?['🚙 GOING OUT TODAY — '+_cnt[0]+(_todo<_cnt[0]?' ('+_todo+' still to do)':''),'#4a6fa5']
-            :_g===2?['📅 COMING UP — next 7 days','var(--g5)']
+            :_g===2?['📅 COMING UP — next 7 days — '+_cnt[2]+' · a check-out can be started early','var(--g5)']
             :(lateN?['⚠ EARLIER DAYS ('+_lb+') — '+_cnt[1]+' · '+lateN+' not collected yet','var(--rl)']:['🕘 EARLIER DAYS ('+_lb+') — '+_cnt[1],'var(--g5)']);
-      rows+='<div'+(_g===1?' id="co-earlier"':'')+' style="font-size:13px;font-weight:900;letter-spacing:.4px;color:'+_h[1]+';margin:'+(rows?'18px':'0')+' 0 8px;">'+_h[0]+'</div>';
+      rows+='<div'+(_g===1?' id="co-earlier"':_g===2?' id="co-coming"':'')+' style="font-size:13px;font-weight:900;letter-spacing:.4px;color:'+_h[1]+';margin:'+(rows?'18px':'0')+' 0 8px;">'+_h[0]+'</div>';
     }
     var isToday=v.pu===today;
     var dDiff=puDiff(v),late=dDiff<0,lateTxt=Math.abs(dDiff)+' day'+(Math.abs(dDiff)===1?'':'s')+' ago';
     var ip=coIsDone(v)?null:ipInfo(v.fn,v.bid);
     var fin=coIsDone(v);
-    var badge=isToday?'<span style="background:#4a6fa5;color:#fff;font-size:11px;font-weight:800;padding:3px 10px;border-radius:8px;">TODAY</span>':'<span style="background:var(--g2);color:var(--g5);font-size:11px;font-weight:800;padding:3px 10px;border-radius:8px;">UPCOMING</span>';
+    var badge=isToday?'<span style="background:#4a6fa5;color:#fff;font-size:11px;font-weight:800;padding:3px 10px;border-radius:8px;">TODAY</span>':'<span style="background:var(--g2);color:var(--g5);font-size:11px;font-weight:800;padding:3px 10px;border-radius:8px;">'+(dDiff===1?'TOMORROW':dDiff>1?'IN '+dDiff+' DAYS':'UPCOMING')+'</span>';
     var dt=new Date(v.pu+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
     if(ip)badge='<span style="background:var(--ag);color:var(--al);border:1px solid var(--am);font-size:11px;font-weight:900;padding:3px 10px;border-radius:8px;">IN PROGRESS</span>';
     if(late&&!fin)badge='<span style="background:var(--re);color:#fff;font-size:11px;font-weight:900;padding:3px 10px;border-radius:8px;">NOT COLLECTED</span>'+(ip?'<div style="margin-top:4px;">'+badge+'</div>':'');
@@ -1011,7 +1018,7 @@ function renderCOPicker(){
       :'<span style="background:var(--se);color:#fff;font-size:11px;font-weight:900;padding:3px 10px;border-radius:8px;">\u2705 COMPLETED</span>';
     if(late&&!fin)dt='⚠ Was due '+dt+' — '+lateTxt;
     var col=fin?'var(--gb)':late?'var(--re)':ip?'var(--am)':isToday?'#4a6fa5':'var(--g3)';
-    rows+='<div data-fn="'+v.fn+'" class="picker-row" ontouchend="if(!tapOK(event))return;event.preventDefault();startCO(this.dataset.fn);" style="background:'+(fin?'var(--gr)':late?'var(--rg)':ip?'var(--ag)':'var(--g1)')+';border:2px solid '+col+';border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;">'
+    rows+='<div data-fn="'+v.fn+'" data-bid="'+_bx(v.bid||'')+'" class="picker-row" ontouchend="if(!tapOK(event))return;event.preventDefault();window._forceBid=this.dataset.bid||null;startCO(this.dataset.fn);" style="background:'+(fin?'var(--gr)':late?'var(--rg)':ip?'var(--ag)':'var(--g1)')+';border:2px solid '+col+';border-radius:12px;padding:14px 16px;margin-bottom:10px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;">'
       +'<div><div style="font-size:16px;font-weight:900;color:var(--se);">'+v.fn+'</div>'
       +'<div style="font-size:13px;font-weight:700;color:var(--tx);margin-top:2px;">'+_bx(renterName(v))+'</div>'
@@ -1029,23 +1036,30 @@ function renderCOPicker(){
       +'<div>'+badge+'</div></div></div>';
   });
   if(!upcoming.length) rows='<div style="padding:40px;text-align:center;color:var(--g5);font-size:13px;">No check-outs due in this period</div>';
+  if(upcoming.length&&!_cnt[2]&&CO_AHEAD){
+    var _n2='<div id="co-coming" style="padding:10px 14px;margin:14px 0 4px;border-radius:10px;border:2px dashed var(--g3);font-size:13px;font-weight:800;color:var(--g5);text-align:center;">Nothing going out in the next 7 days</div>';
+    var _ie=rows.indexOf('id="co-earlier"');
+    if(_ie>-1){var _se=rows.lastIndexOf('<div',_ie);rows=rows.slice(0,_se)+_n2+rows.slice(_se);}else rows+=_n2;
+  }
   if(upcoming.length&&!_cnt[1]){   // say so, instead of the list just looking unchanged
     var _note='<div id="co-earlier" style="padding:10px 14px;margin:14px 0 4px;border-radius:10px;border:2px dashed var(--g3);font-size:13px;font-weight:800;color:var(--g5);text-align:center;">No departures from '+(CO_LOOKBACK===1?'yesterday':'the last '+CO_LOOKBACK+' days')+'</div>';
-    var _ix=rows.indexOf('📅 COMING UP');
+    var _ix=CO_AHEAD?-1:rows.indexOf('📅 COMING UP');
     if(_ix>-1){var _st=rows.lastIndexOf('<div',_ix);rows=rows.slice(0,_st)+_note+rows.slice(_st);}else rows+=_note;
   }
   var back='<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:12px;">'
-    +'<span style="font-size:12px;font-weight:800;color:var(--g5);">Also show departures from:</span>'
+    +'<span style="font-size:12px;font-weight:800;color:var(--g5);">Show departures from:</span>'
     +[[1,'Yesterday'],[7,'Last 7 days'],[30,'Last 30 days']].map(function(o){
-        var on=CO_LOOKBACK===o[0];
+        var on=!CO_AHEAD&&CO_LOOKBACK===o[0];
         return '<button onclick="setCOLookback('+o[0]+')" style="padding:7px 12px;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer;'
           +'border:2px solid '+(on?'var(--gb)':'var(--g3)')+';background:'+(on?'var(--se)':'#ffffff')+';color:'+(on?'#ffffff':'var(--tx)')+';">'+o[1]+'</button>';
       }).join('')
+    +'<button onclick="setCOAhead()" style="padding:7px 12px;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer;'
+      +'border:2px solid '+(CO_AHEAD?'var(--gb)':'#4a6fa5')+';background:'+(CO_AHEAD?'var(--se)':'#ffffff')+';color:'+(CO_AHEAD?'#ffffff':'#4a6fa5')+';">📅 Next 7 days</button>'
     +'</div>'
     +(false&&lateN?'<div style="background:var(--rg);border:2px solid var(--re);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;font-weight:800;color:var(--rl);">⚠ '+lateN+' vehicle'+(lateN===1?'':'s')+' still to go out from an earlier day — tap to finish the check-out</div>':'');
   body.innerHTML='<div style="padding:16px;"><div style="font-size:13px;font-weight:800;color:var(--g5);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;">&#9654; Select Vehicle to Check Out</div>'+back+rows+'</div>';
   body.querySelectorAll('.picker-row').forEach(function(el){
-    el.addEventListener('click',function(){ startCO(this.dataset.fn); });
+    el.addEventListener('click',function(){ window._forceBid=this.dataset.bid||null; startCO(this.dataset.fn); });
   });
 }
 
