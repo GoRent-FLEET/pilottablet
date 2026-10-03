@@ -932,7 +932,9 @@ function goPage(p,_fromBack){
 // How far back the check-out list reaches. A client who lands late often collects the next
 // day, and the booking still carries the original date, so that vehicle must stay reachable.
 var CO_LOOKBACK=7;
-function setCOLookback(n){CO_LOOKBACK=n;try{localStorage.setItem('gorent_co_lookback',String(n));}catch(e){}renderCOPicker();}
+function setCOLookback(n){CO_LOOKBACK=n;try{localStorage.setItem('gorent_co_lookback',String(n));}catch(e){}renderCOPicker();
+  // show what the button brought up
+  setTimeout(function(){try{var el=document.getElementById('co-earlier');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}catch(e){}},60);}
 try{var _cl=parseInt(localStorage.getItem('gorent_co_lookback'),10);if(_cl===1||_cl===7||_cl===30)CO_LOOKBACK=_cl;}catch(e){}
 function renderCOPicker(){
   var body=document.getElementById('co-body');
@@ -942,16 +944,18 @@ function renderCOPicker(){
   // A client whose flight lands late often only collects the next day. The booking still says
   // yesterday, so earlier departures stay on this list until the vehicle actually goes out.
   function puDiff(v){return Math.round((new Date(v.pu+'T00:00:00')-new Date(today+'T00:00:00'))/86400000);}
+  function coGrp(v){var d=puDiff(v);return d===0?0:d<0?1:2;}   // 0 today · 1 earlier days · 2 coming up
   var upcoming=FLEET.filter(function(v){
     var diff=puDiff(v);
     return diff>=-CO_LOOKBACK&&diff<=7;
   }).sort(function(a,b){
-    // TODAY's departures first (still to do before finished), then the coming days, and the ones
-    // from earlier days that were never collected at the bottom under their own heading
-    var ga=puDiff(a)===0?0:puDiff(a)>0?1:2, gb=puDiff(b)===0?0:puDiff(b)>0?1:2;
+    // TODAY's departures first, then the EARLIER days chosen with the buttons (not collected
+    // first), then the coming days. Earlier days used to sit under the whole coming-up list,
+    // so "Last 7 days" looked as if it showed nothing.
+    var ga=coGrp(a), gb=coGrp(b);
     if(ga!==gb)return ga-gb;
     if(ga===0){var fa=coIsDone(a)?1:0,fb=coIsDone(b)?1:0;if(fa!==fb)return fa-fb;}
-    if(ga===2){var na=coIsDone(a)?1:0,nb=coIsDone(b)?1:0;if(na!==nb)return na-nb;return a.pu<b.pu?1:-1;}   // not collected first, then most recent
+    if(ga===1){var na=coIsDone(a)?1:0,nb=coIsDone(b)?1:0;if(na!==nb)return na-nb;return a.pu<b.pu?1:-1;}   // not collected first, then most recent
     return a.pu>b.pu?1:-1;
   });
   function ipInfo(fn,bid){
@@ -977,17 +981,18 @@ function renderCOPicker(){
   }
   var lateN=upcoming.filter(function(v){return puDiff(v)<0&&!coIsDone(v);}).length;
   var rows='',_grp=-1;
-  var _cnt=[0,0,0];upcoming.forEach(function(v){var d=puDiff(v);_cnt[d===0?0:d>0?1:2]++;});
+  var _cnt=[0,0,0];upcoming.forEach(function(v){_cnt[coGrp(v)]++;});
   var _todo=upcoming.filter(function(v){return puDiff(v)===0&&!coIsDone(v);}).length;
   upcoming.forEach(function(v){
-    var _g=puDiff(v)===0?0:puDiff(v)>0?1:2;
+    var _g=coGrp(v);
     if(_g!==_grp){
       if(_grp===-1&&_g!==0)rows+='<div style="padding:14px 16px;margin-bottom:12px;border-radius:10px;background:var(--g1);border:2px dashed var(--g3);font-size:14px;font-weight:800;color:var(--g5);text-align:center;">Nothing going out today</div>';
       _grp=_g;
+      var _lb=CO_LOOKBACK===1?'yesterday':'last '+CO_LOOKBACK+' days';
       var _h=_g===0?['🚙 GOING OUT TODAY — '+_cnt[0]+(_todo<_cnt[0]?' ('+_todo+' still to do)':''),'#4a6fa5']
-            :_g===1?['📅 COMING UP — next 7 days','var(--g5)']
-            :(lateN?['⚠ EARLIER DAYS — '+lateN+' not collected yet','var(--rl)']:['EARLIER DAYS','var(--g5)']);
-      rows+='<div style="font-size:13px;font-weight:900;letter-spacing:.4px;color:'+_h[1]+';margin:'+(rows?'18px':'0')+' 0 8px;">'+_h[0]+'</div>';
+            :_g===2?['📅 COMING UP — next 7 days','var(--g5)']
+            :(lateN?['⚠ EARLIER DAYS ('+_lb+') — '+_cnt[1]+' · '+lateN+' not collected yet','var(--rl)']:['🕘 EARLIER DAYS ('+_lb+') — '+_cnt[1],'var(--g5)']);
+      rows+='<div'+(_g===1?' id="co-earlier"':'')+' style="font-size:13px;font-weight:900;letter-spacing:.4px;color:'+_h[1]+';margin:'+(rows?'18px':'0')+' 0 8px;">'+_h[0]+'</div>';
     }
     var isToday=v.pu===today;
     var dDiff=puDiff(v),late=dDiff<0,lateTxt=Math.abs(dDiff)+' day'+(Math.abs(dDiff)===1?'':'s')+' ago';
@@ -1020,6 +1025,11 @@ function renderCOPicker(){
       +'<div>'+badge+'</div></div></div>';
   });
   if(!upcoming.length) rows='<div style="padding:40px;text-align:center;color:var(--g5);font-size:13px;">No check-outs due in this period</div>';
+  if(upcoming.length&&!_cnt[1]){   // say so, instead of the list just looking unchanged
+    var _note='<div id="co-earlier" style="padding:10px 14px;margin:14px 0 4px;border-radius:10px;border:2px dashed var(--g3);font-size:13px;font-weight:800;color:var(--g5);text-align:center;">No departures from '+(CO_LOOKBACK===1?'yesterday':'the last '+CO_LOOKBACK+' days')+'</div>';
+    var _ix=rows.indexOf('📅 COMING UP');
+    if(_ix>-1){var _st=rows.lastIndexOf('<div',_ix);rows=rows.slice(0,_st)+_note+rows.slice(_st);}else rows+=_note;
+  }
   var back='<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:12px;">'
     +'<span style="font-size:12px;font-weight:800;color:var(--g5);">Also show departures from:</span>'
     +[[1,'Yesterday'],[7,'Last 7 days'],[30,'Last 30 days']].map(function(o){
