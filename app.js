@@ -2891,6 +2891,7 @@ function drawCO(){
     if(b) b.innerHTML='<div style="padding:30px;text-align:center;color:var(--g5);">No vehicle selected — go back and tap a vehicle</div>';
     return;
   }
+  if(co._done){coDoneScreen();return;}
   if(typeof coStep==='undefined') coStep=0;
   // Step progress bar
   const bar=CO_STEPS.filter(function(s){return s.n!==1&&s.n!==7;}).map(s=>{
@@ -6313,8 +6314,22 @@ async function completeCO(){
   </div>
   </body></html>`;
 
-  // Show send options screen
-  document.getElementById('co-body').innerHTML=`
+  co._unc={p:uncPrep,m:uncMech};
+  coDoneScreen();
+
+  // Store handover HTML for sending: add checklist, damage diagram and the full signed contract, save it as a link
+  var _hFull=handoverHTML.replace('<div class="logo">Go Rent <span>4×4</span> Namibia</div>','<img src="'+GR_LOGO+'" alt="Go Rent Namibia" style="width:150px;">').replace('</body>',coHandoverExtras()+'</body>');
+  window._handoverHTML=_hFull;
+  co._handoverLink='';
+  saveHandoverLink(_hFull).then(function(l){co._handoverLink=l||false;coDoneStatus();});
+  renderOV();
+}
+// The finished check-out screen. Also shown whenever a finished check-out is opened again
+// (Overview → Check-Out), instead of the Handover step with nothing left to tap.
+function coDoneScreen(){
+  var uncPrep=(co._unc&&co._unc.p)||[],uncMech=(co._unc&&co._unc.m)||[];
+  var body=document.getElementById('co-body');if(!body)return;
+  body.innerHTML=`
     <div style="padding:20px;">
       <div class="done"><div class="done-ico">✅</div>
         <div class="done-title">Check-Out Complete</div>
@@ -6361,13 +6376,12 @@ async function completeCO(){
         <button class="btn g" style="flex:2;min-width:220px;" onclick="coCloseCheckout()">✅ Done — close and go to Dashboard</button>
       </div>
     </div>`;
-
-  // Store handover HTML for sending: add checklist, damage diagram and the full signed contract, save it as a link
-  var _hFull=handoverHTML.replace('<div class="logo">Go Rent <span>4×4</span> Namibia</div>','<img src="'+GR_LOGO+'" alt="Go Rent Namibia" style="width:150px;">').replace('</body>',coHandoverExtras()+'</body>');
-  window._handoverHTML=_hFull;
-  co._handoverLink='';
-  saveHandoverLink(_hFull).then(function(l){co._handoverLink=l;var st=document.getElementById('send-status');if(st)st.innerHTML=l?'<div class="al ok">✅ Handover report ready to send on WhatsApp</div>':'<div class="al warn">⚠ Could not save the handover report link (no connection?)</div>';});
-  renderOV();
+  coDoneStatus();
+}
+function coDoneStatus(){
+  var st=document.getElementById('send-status');if(!st||co._handoverLink===undefined)return;
+  if(co._handoverLink)st.innerHTML='<div class="al ok">✅ Handover report ready to send on WhatsApp</div>';
+  else if(co._handoverLink===false)st.innerHTML='<div class="al warn">⚠ Could not save the handover report link (no connection?)</div>';
 }
 
 // ── Client handover report (sent on WhatsApp): checklist, damage diagram + photos, full signed contract ──
