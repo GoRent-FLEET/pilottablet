@@ -2369,6 +2369,47 @@ document.addEventListener('click',function(e){
   }catch(err){}
 },true);
 // Saved handover / return report: shown inside the app (no new window)
+// Rental file: send the saved handover document to the client again (e.g. the first WhatsApp failed)
+function rfResendBox(){
+  var R=window._rfData||{};
+  setTimeout(rfResendFill,0);
+  return '<div id="rf-resend" style="margin:8px 0 4px;padding:10px 12px;border-radius:10px;border:2px solid #128c7e;background:var(--g0);">'
+    +'<div style="font-size:14px;font-weight:900;color:var(--tx);margin-bottom:6px;">💬 Resend handover document on WhatsApp</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+    +'<input id="rf-wa" type="tel" placeholder="+264 81 123 4567" style="color-scheme:light;flex:1;min-width:180px;padding:10px 12px;border-radius:var(--rs);border:2px solid var(--g3);background:#fff;color:#111;font-size:16px;">'
+    +'<button onclick="rfResendWA()" style="padding:10px 16px;background:#25d366;border:2px solid #128c7e;border-radius:var(--rs);color:#fff;font-size:15px;font-weight:800;cursor:pointer;white-space:nowrap;">💬 Send again</button>'
+    +'</div>'
+    +'<label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;font-weight:700;color:var(--g5);"><input id="rf-wa-guide" type="checkbox" checked style="width:20px;height:20px;"> Add the Namibia driving guide</label>'
+    +'<div id="rf-wa-note" style="font-size:12px;color:var(--g5);margin-top:4px;">Number from the booking — change it if needed.</div></div>';
+}
+async function rfResendFill(){
+  var R=window._rfData||{},inp=document.getElementById('rf-wa');if(!inp||inp.value)return;
+  var ph=(R.cko&&R.cko.client_phone)||'';
+  if(!ph){try{
+    var k=bkNorm(R.key||''),i=k.lastIndexOf('_'),f=k.slice(0,i),d=k.slice(i+1),fs=[f];var a=bkAltKey(k);if(a)fs.push(a.slice(0,a.lastIndexOf('_')));
+    var q=await SB.from('bookings').select('phone').in('fleet_no',fs).eq('pickup_date',d).limit(1);
+    ph=(q&&q.data&&q.data[0]&&q.data[0].phone)||'';
+  }catch(e){}}
+  inp=document.getElementById('rf-wa');if(inp&&!inp.value&&ph)inp.value=ph;
+  if(!ph){var n=document.getElementById('rf-wa-note');if(n)n.textContent='No number in the booking — type the client\'s WhatsApp number.';}
+}
+async function rfResendWA(){
+  var R=window._rfData||{},phone=((document.getElementById('rf-wa')||{}).value||'').trim();
+  if(!phone){toast('Enter the WhatsApp number','err');return;}
+  if(!R.handoverPath){toast('No handover document saved for this rental','err');return;}
+  if(!drOnline()){toast('No internet — try again when connected','err');return;}
+  banner('Preparing link…');
+  var link='';
+  try{var su=await SB.storage.from('client-docs').createSignedUrl(R.handoverPath,60*60*24*REPORT_LINK_DAYS);link=clientDocLink(su&&su.data&&su.data.signedUrl);}catch(e){}
+  hideBanner();
+  if(!link){toast('Could not make the link — check the connection and try again','err');return;}
+  var first=firstNameOf(R.client||'')||'there';
+  var guide=(document.getElementById('rf-wa-guide')||{}).checked;
+  var msg='Hi '+first+',\n\nHere is your Go Rent 4x4 Namibia handover document again - handover checklist, vehicle condition and damage, photos, equipment issued and your full signed rental contract'+(R.fn?' (vehicle '+R.fn+')':'')+':\n'+link
+    +(guide?'\n\nYour Namibia driving guide - road rules, what to do after an accident or breakdown, emergency numbers:\n'+guideLink():'')
+    +'\n\nSafe travels! WhatsApp us anytime: +264 81 861 8085\n- Go Rent 4x4 Team';
+  openExt('https://wa.me/'+waNumber(phone)+'?text='+encodeURIComponent(msg));
+}
 async function rfOpenSaved(which){
   var R=window._rfData||{},u=which==='ret'?R.ret:R.handover;if(!u)return;
   banner('Opening…');
@@ -7622,12 +7663,13 @@ async function openRentalFile(key,fn,client,alsoKeys,part){
     var idDocs=docs.filter(function(p){return p.indexOf('/id-docs/')>0;});
     var repDocs=docs.filter(function(p){return /\.html$/.test(p);}).sort();
     var sigDocs=docs.filter(function(p){return p.indexOf('/id-docs/')<0&&!/\.html$/.test(p);});
-    window._rfData={key:key,fn:fn,client:client,contract:contract,cko:cko,cki:cki,ids:idDocs.map(function(p){return {url:signed[p],label:rfLabel(p)};}).filter(function(x){return x.url;}),pics:picUrls,sigs:sigDocs.map(function(p){return {url:signed[p],label:rfLabel(p)};}).filter(function(x){return x.url;}),handover:repDocs.filter(function(p){return p.indexOf('handover-report_')>=0;}).map(function(p){return signed[p];}).filter(Boolean).pop()||'',ret:repDocs.filter(function(p){return p.indexOf('return-report_')>=0;}).map(function(p){return signed[p];}).filter(Boolean).pop()||''};
+    window._rfData={key:key,fn:fn,client:client,contract:contract,cko:cko,cki:cki,ids:idDocs.map(function(p){return {url:signed[p],label:rfLabel(p)};}).filter(function(x){return x.url;}),pics:picUrls,sigs:sigDocs.map(function(p){return {url:signed[p],label:rfLabel(p)};}).filter(function(x){return x.url;}),handover:repDocs.filter(function(p){return p.indexOf('handover-report_')>=0;}).map(function(p){return signed[p];}).filter(Boolean).pop()||'',handoverPath:repDocs.filter(function(p){return p.indexOf('handover-report_')>=0&&signed[p];}).pop()||'',ret:repDocs.filter(function(p){return p.indexOf('return-report_')>=0;}).map(function(p){return signed[p];}).filter(Boolean).pop()||''};
     var h='';
     var RD=window._rfData;
     h+='<button class="btn g" style="width:100%;margin-bottom:6px;" onclick="rfPrintPicker()">🖨 Print / save documents (choose what)</button>'
       +'<div style="font-size:12px;color:var(--g5);margin-bottom:6px;">Pick what you need — contract, passports, equipment &amp; vehicle checks, damage, photos, return report — then print it or save it as a PDF.</div>'
       +(((RD.handover&&part!=='in')||(RD.ret&&part!=='out'))?'<div style="display:flex;gap:8px;flex-wrap:wrap;">'+((RD.handover&&part!=='in')?'<button class="btn s" style="flex:1;text-align:center;" onclick="rfOpenSaved(\'handover\')">🤝 Open handover document</button>':'')+((RD.ret&&part!=='out')?'<button class="btn s" style="flex:1;text-align:center;" onclick="rfOpenSaved(\'ret\')">🏠 Open return report</button>':'')+'</div>':'');
+    if(RD.handoverPath&&part!=='in')h+=rfResendBox();
     h+=sec('📝 Signed contract',contract?(line('Signed by client',_bx(contract.client_name||'')+(contract.client_signed_at?' · '+new Date(contract.client_signed_at).toLocaleString('en-GB'):''))+line('Staff',_bx(contract.staff_signed_by||contract.created_by||'—'))+line('Deposit',contract.deposit_amount?('N$ '+Number(contract.deposit_amount).toLocaleString()):'—')
       +(window._rfContractHTML?'<button class="btn g" style="margin-top:8px;width:auto;padding:10px 16px;" onclick="rfShowContract()">📄 Open full signed contract</button>':'')):'<div style="font-size:13px;color:var(--g5);">No signed contract saved for this booking yet.</div>');
     h+=sec('🪪 Passport, ID & licence scans',idDocs.length?idDocs.map(function(p){return signed[p]?thumb(signed[p],rfLabel(p)+(_from[p]&&_from[p]!==key?' · from '+_from[p]:''),p,'client-docs'):'';}).join(''):'<div style="font-size:13px;color:var(--g5);">No scans saved for this booking yet.</div>');
