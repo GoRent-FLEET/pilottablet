@@ -4097,6 +4097,7 @@ function coStep1(){
     </div>
   </div>
   ${coContractWho()}
+  ${ctOpenLine()}
   ${ctDepositsHTML()}
   ${ctInsuranceHTML()}
   <div class="sum-box sec-contact" style="margin-bottom:12px"><div class="sum-title" style="margin-bottom:10px">📇 Client contact · transfer · collection &amp; return</div>
@@ -4677,7 +4678,7 @@ async function captureDriverDoc(event,driverIdx,field){
 var CT_INS={'1':{t:'Option 1 — Basic Cover',rate:230,dep:45000},'2':{t:'Option 2 — Extended Cover',rate:362,dep:30000},'3':{t:'Option 3 — Premium Cover (zero excess)',rate:546,dep:0}};
 function ctMoney(n){return 'N$ '+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function ctDays(){var _pu=coPickupDate();return _pu&&co.v.rt?Math.max(1,Math.round((new Date(co.v.rt)-new Date(_pu))/86400000)):0;}
-function ctSet(k,v){(co.contract=co.contract||{})[k]=v;if(k==='insurance_option'){var o=CT_INS[v];co.contract.deposit_amount=o?o.dep:null;}drawCO();}
+function ctSet(k,v){(co.contract=co.contract||{})[k]=v;if(k==='insurance_option'){var o=CT_INS[v];co.contract.deposit_amount=o?o.dep:null;}drawCO();try{ctAskRefresh();}catch(e){}}
 // ── EXTRA DRIVER FEE ───────────────────────────────────────────────────────
 // N$280 once-off per additional driver, taken at collection. Counted from the drivers
 // actually captured, so nobody has to remember to add it up — and it is flagged red
@@ -4687,6 +4688,88 @@ function extraDriverCount(){
   try{ return (co.drivers||[]).slice(1).filter(function(d){return d&&d.name;}).length; }catch(e){ return 0; }
 }
 function extraDriverFee(){ return extraDriverCount()*EXTRA_DRIVER_FEE; }
+
+// ── Contract questions as big buttons ──
+// Staff kept getting stuck at the contract: the insurance and deposit-method dropdowns were easy
+// to miss, and what was missing only showed once the contract preview was open. Every question is
+// now a row of buttons, the same rows appear in the "before the client signs" box, and that box
+// lets staff answer what is open right there — the contract opens by itself when all is answered.
+var CT_METHODS=['Adumo','Swipe (card machine)','Cash','EFT / bank transfer','Paid online','Other (see notes)'];
+function ctBtn(on,html,js,tone){
+  var bg=on?(tone==='no'?'var(--g5)':'var(--gb)'):'var(--g0)',bd=on?bg:'var(--g3)';
+  return '<button type="button" onclick="'+js+'" style="flex:1 1 auto;min-height:48px;padding:9px 12px;border-radius:9px;font-size:14px;font-weight:900;line-height:1.25;cursor:pointer;border:2px solid '+bd+';background:'+bg+';color:'+(on?'#fff':'var(--tx)')+';">'+html+'</button>';
+}
+function ctInsButtons(c){
+  return '<div style="display:flex;flex-wrap:wrap;gap:6px;">'+Object.keys(CT_INS).map(function(k){var o=CT_INS[k],on=c.insurance_option===k;
+    var nm=o.t.replace(/^Option \d+ — /,'').replace(' (zero excess)','');
+    return ctBtn(on,(on?'✓ ':'')+nm+'<div style="font-size:12px;font-weight:700;opacity:.85;margin-top:2px;">N$'+o.rate+'/day · '+(o.dep?'deposit N$'+o.dep.toLocaleString('en-US'):'zero excess')+'</div>',"ctSet('insurance_option','"+k+"')");}).join('')+'</div>';
+}
+function ctMethodButtons(c){
+  return '<div style="display:flex;flex-wrap:wrap;gap:6px;">'+CT_METHODS.map(function(m){var on=(c.deposit_method||'')===m;
+    return ctBtn(on,(on?'✓ ':'')+_bx(m.replace(' (see notes)','')),"ctSet('deposit_method','"+m.replace(/'/g,"\\'")+"')");}).join('')+'</div>';
+}
+function ctYesNo(c,key){
+  var v=c[key];
+  return '<div style="display:flex;gap:6px;">'+ctBtn(v===true,'✓ Taken',"ctSet('"+key+"',true)")+ctBtn(v===false,'✕ Declined',"ctSet('"+key+"',false)",'no')+'</div>';
+}
+function ctGot(c,key){
+  var v=c[key]===true;
+  return '<div style="display:flex;gap:6px;">'+ctBtn(v,v?'✓ Received':'Tap when received',"ctSet('"+key+"',"+(v?'false':'true')+")")+'</div>';
+}
+// The open contract questions, each with its own buttons (for the box below)
+function ctOpenQuestions(){
+  var c=co.contract=co.contract||{},q=[],days=ctDays();
+  var rl=(function(){try{return placeValue('dropoffArrangement')||c.return_location;}catch(e){return c.return_location;}})();
+  if(!c.insurance_option)q.push({s:'Insurance',t:'📋 Which insurance does the client take?',h:ctInsButtons(c)});
+  if(c.addon_windscreen!==true&&c.addon_windscreen!==false)q.push({s:'Windscreen cover',t:'🛞 Windscreen & Tyre cover — N$184/day × '+days+' = '+ctMoney(184*days),h:ctYesNo(c,'addon_windscreen')});
+  if(ctCampingBooked()&&c.addon_equipment!==true&&c.addon_equipment!==false)q.push({s:'Camping cover',t:'🏕 Camping Equipment cover — N$103.50/day × '+days+' = '+ctMoney(103.5*days),h:ctYesNo(c,'addon_equipment')});
+  if(!c.fuel_deposit_received)q.push({s:'Fuel deposit',t:'⛽ Fuel & Admin deposit N$7,500 (every rental)',h:ctGot(c,'fuel_deposit_received')});
+  if((co.v.xb||c.cross_border)&&c.cross_border_deposit!==true)q.push({s:'Cross-border deposit',t:'🌍 Cross-border deposit N$30,000 ('+_bx(co.v.xb||c.cross_border)+')',h:ctGot(c,'cross_border_deposit')});
+  var n=extraDriverCount();if(n&&c.extra_driver_paid!==true)q.push({s:'Extra driver fee',t:'👤 Extra driver fee '+ctMoney(extraDriverFee())+' ('+n+' × N$280)',h:ctGot(c,'extra_driver_paid')});
+  if(!c.deposit_method)q.push({s:'Deposit method',t:'💳 How was the deposit paid?',h:ctMethodButtons(c)});
+  if(rl&&rl!==GR_HQ&&(!c.return_address||!c.return_place_time))q.push({s:'Return place & time',t:'📍 Vehicle returned at '+_bx(rl)+' — exact place and time',
+    h:'<textarea placeholder="Lodge name, street, GPS or directions" oninput="(co.contract=co.contract||{}).return_address=this.value" style="width:100%;min-height:56px;padding:9px 11px;border-radius:9px;border:2px solid '+(c.return_address?'var(--gb)':'var(--re)')+';background:var(--g0);color:var(--tx);font-size:15px;margin-bottom:6px;">'+_bx(c.return_address||'')+'</textarea>'
+      +'<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:13px;font-weight:800;color:var(--g5);">Time:</span>'+timePickers('ct-ask-rt',c.return_place_time||'',"var _t=timePickValue('ct-ask-rt');if(_t){(co.contract=co.contract||{}).return_place_time=_t;}")+'</div>',
+    manual:true});
+  return q;
+}
+var _ctAsk=null;
+function ctAskBox(onDone){
+  _ctAsk={onDone:onDone};
+  var q=ctOpenQuestions();
+  if(!q.length){ctAskClose();if(onDone)onDone();return;}
+  var old=document.getElementById('ct-ask'),keep=old?((old.firstChild||{}).scrollTop||0):0;if(old)old.remove();
+  var box=document.createElement('div');box.id='ct-ask';
+  box.setAttribute('style','position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:14px;');
+  box.innerHTML='<div style="background:var(--g1);border:2px solid var(--am);border-radius:16px;max-width:620px;width:100%;padding:16px;max-height:90vh;overflow:auto;">'
+    +'<div style="font-size:19px;font-weight:900;color:var(--tx);margin-bottom:2px;">📋 Before the client signs — '+q.length+' question'+(q.length===1?'':'s')+' left</div>'
+    +'<div style="font-size:13px;color:var(--g5);margin-bottom:10px;">Ask the client and tap the answer. The contract opens by itself when everything is answered.</div>'
+    +q.map(function(x,i){return '<div style="border:2px solid var(--re);background:var(--rg);border-radius:12px;padding:10px 12px;margin-bottom:8px;">'
+      +'<div style="font-size:15px;font-weight:900;color:var(--tx);margin-bottom:7px;">'+(i+1)+'. '+x.t+'</div>'+x.h+'</div>';}).join('')
+    +'<div style="display:flex;gap:8px;margin-top:10px;position:sticky;bottom:-16px;background:var(--g1);padding:10px 0 4px;flex-wrap:wrap;">'
+    +(q.some(function(x){return x.manual;})?'<button class="btn g" style="flex:2 1 200px;" onclick="ctAskRefresh(true)">✓ Done — check again</button>':'')
+    +'<button class="btn s" style="flex:1 1 140px;" onclick="ctAskClose()">← Back</button>'
+    +((isAdmin()&&onDone)?'<button class="btn s" style="flex:1 1 160px;border-style:dashed;" onclick="ctAskClose();_previewAndSignContractSafe()">Peter: open anyway</button>':'')
+    +'</div></div>';
+  document.body.appendChild(box);
+  try{box.firstChild.scrollTop=keep;}catch(e){}
+}
+function ctAskClose(){var b=document.getElementById('ct-ask');if(b)b.remove();_ctAsk=null;try{drawCO();}catch(e){}}
+function ctAskRefresh(manual){
+  var a=_ctAsk;if(!a||!document.getElementById('ct-ask'))return;
+  if(!ctOpenQuestions().length){var d=a.onDone;var b=document.getElementById('ct-ask');if(b)b.remove();_ctAsk=null;try{drawCO();}catch(e){}toast('✅ Contract details complete','ok');if(d)setTimeout(d,150);return;}
+  if(manual)toast('Still open — see the red boxes','err');
+  ctAskBox(a.onDone);
+}
+// Status line at the top of the contract questions on the page
+function ctOpenLine(){
+  if(co.contractSigned)return '';
+  var q=ctOpenQuestions();
+  if(!q.length)return '<div style="padding:10px 12px;border-radius:10px;border:2px solid var(--gb);background:var(--sg);font-size:14px;font-weight:900;color:var(--se);margin-bottom:10px;">✅ All contract questions answered</div>';
+  return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:2px solid var(--re);background:var(--rg);margin-bottom:10px;">'
+    +'<div style="flex:1;font-size:14px;font-weight:900;color:var(--tx);">⚠ '+q.length+' contract question'+(q.length===1?'':'s')+' still open<div style="font-size:12px;font-weight:700;color:var(--g5);margin-top:2px;">'+q.map(function(x){return _bx(x.s);}).join(' · ')+'</div></div>'
+    +'<button class="btn g" style="width:auto;padding:10px 16px;margin:0;" onclick="ctAskBox(null)">Answer now</button></div>';
+}
 function ctDetailsForm(){
   var c=co.contract=co.contract||{},days=ctDays();c.total_days=days;
   var need=!!(co.v.xb||c.cross_border);
@@ -4709,11 +4792,9 @@ function ctDetailsForm(){
       +'<div style="font-size:13px;font-weight:800;margin-top:3px;color:'+(v===true?'var(--se)':done?'var(--g5)':'var(--re)')+';">'+(v===true?'✓ Taken · '+totTxt:v===false?'Declined by client':'Required: choose Taken or Declined · '+rateTxt)+'</div></div>'
       +'<div style="display:flex;gap:6px;">'+btn(true,'✓ Taken')+btn(false,'✕ Declined')+'</div></div>';
   }
-  var insSel='<div class="fi"><label>Insurance option *</label><select id="ct-ins" onchange="ctSet(\'insurance_option\',this.value)" style="color-scheme:light;border-color:'+(c.insurance_option?'var(--gb)':'var(--am)')+';">'
-    +'<option value="">— select insurance —</option>'
-    +Object.keys(CT_INS).map(function(k){var o=CT_INS[k];return '<option value="'+k+'"'+(c.insurance_option===k?' selected':'')+'>'+o.t+' | N$'+o.rate+'/day'+(o.dep?' | security deposit N$'+o.dep.toLocaleString('en-US'):'')+'</option>';}).join('')
-    +'</select>'
-    +(c.insurance_option&&CT_INS[c.insurance_option]?'<div style="font-size:13px;color:var(--se);margin-top:4px;font-weight:700;">Security deposit: '+(CT_INS[c.insurance_option].dep?ctMoney(CT_INS[c.insurance_option].dep):'none (zero excess)')+'</div>':'')
+  var insSel='<div class="fi" id="ct-ins" style="padding:10px 12px;border-radius:10px;border:2px solid '+(c.insurance_option?'var(--gb)':'var(--re)')+';background:'+(c.insurance_option?'var(--sg)':'var(--rg)')+';"><label style="font-size:15px;font-weight:900;color:var(--tx);">Insurance option *</label>'
+    +ctInsButtons(c)
+    +(c.insurance_option&&CT_INS[c.insurance_option]?'<div style="font-size:13px;color:var(--se);margin-top:6px;font-weight:700;">Security deposit: '+(CT_INS[c.insurance_option].dep?ctMoney(CT_INS[c.insurance_option].dep):'none (zero excess)')+'</div>':'')
     +'</div>';
   var OFFICE='Go Rent Office, 6 Diehl Str, Windhoek';
   // follow the Collection / Return choice on this screen straight away (gatherContract does the
@@ -4758,9 +4839,9 @@ function ctDepositsHTML(){
     +tick('ct-fdr',!!c.fuel_deposit_received,'⛽ Fuel &amp; Admin deposit — N$7,500.00','Required for every rental · refunded within 7 days after return',c.fuel_deposit_received?'✓ Received':'Required','req')
     +tick('ct-xbd',c.cross_border_deposit===true,'🌍 Cross-border/Damage deposit — N$30,000.00',need?'Required: this booking goes cross-border ('+_bx(co.v.xb||c.cross_border)+')':'Only for travel outside Namibia',c.cross_border_deposit===true?'✓ Received':(need?'Required':'Not needed'),need?'req':'opt')
     +((function(){var n=extraDriverCount();if(!n)return '';return tick('ct-edf',c.extra_driver_paid===true,'\uD83D\uDC64 Extra driver fee \u2014 '+ctMoney(extraDriverFee()),n+' extra driver'+(n===1?'':'s')+' \u00d7 N$280 once-off \u00b7 take this at collection',c.extra_driver_paid?'\u2713 Received':'TAKE PAYMENT','req');})())
-    +'<div class="fi" style="margin-bottom:8px;"><label for="ct-dmethod">💳 Deposit method *</label><select id="ct-dmethod" onchange="ctSet(\'deposit_method\',this.value)" style="color-scheme:light;font-size:16px;font-weight:700;border:2px solid '+(c.deposit_method?'var(--gb)':'var(--am)')+';">'
-      +['','Adumo','Swipe (card machine)','Cash','EFT / bank transfer','Paid online','Other (see notes)'].map(function(o){return '<option value="'+o+'"'+((c.deposit_method||'')===o?' selected':'')+'>'+(o||'— select how the deposit was paid —')+'</option>';}).join('')
-    +'</select></div>';
+    +'<div class="fi" id="ct-dmethod" style="margin-bottom:8px;padding:10px 12px;border-radius:10px;border:2px solid '+(c.deposit_method?'var(--gb)':'var(--re)')+';background:'+(c.deposit_method?'var(--sg)':'var(--rg)')+';"><label style="font-size:15px;font-weight:900;color:var(--tx);">💳 How was the deposit paid? *</label>'
+      +ctMethodButtons(c)
+    +'</div>';
   setTimeout(function(){
     [['ct-fdr','fuel_deposit_received'],['ct-xbd','cross_border_deposit'],['ct-edf','extra_driver_paid']].forEach(function(p){var e=document.getElementById(p[0]);if(e)e.onchange=function(){ctSet(p[1],this.checked);};});
   },0);
@@ -4908,6 +4989,13 @@ function previewAndSignContract(){
     });
     return;
   }
+  // Contract questions still open (insurance, cover, deposits, method…): answer them in one box,
+  // the contract then opens by itself. (Peter's waiver keeps working as before.)
+  try{gatherContract();}catch(e){}
+  if(!co.contractSigned&&!co._ctOverride&&ctOpenQuestions().length){ctAskBox(function(){_previewAndSignContractSafe();});return;}
+  _previewAndSignContractSafe();
+}
+function _previewAndSignContractSafe(){
   // If anything in here throws, the button used to do nothing at all and there was no
   // way to tell why. Now it says so on screen and writes the detail to the console.
   try{ _previewAndSignContract(); }
@@ -10201,7 +10289,7 @@ function guideCO(){
       var c0=co.contract||{};
       if(!c0.fuel_deposit_received){b=gFind(R,'label,div',function(x){return /Fuel & Admin deposit/.test(x.textContent)&&x.querySelector('input[type=checkbox]')&&x.textContent.length<200;});return t('Take the Fuel & Admin deposit, then tick it.',b);}
       if(co.v.xb&&!c0.cross_border_deposit){b=gFind(R,'label,div',function(x){return /Cross-border\/Damage deposit/.test(x.textContent)&&x.querySelector('input[type=checkbox]')&&x.textContent.length<200;});return t('Take the Cross-border deposit, then tick it.',b);}
-      b=gFind(R,'select',function(x){return /how the deposit was paid/.test(x.textContent)&&!x.value;});if(b)return t('Choose how the deposit was paid.',b);
+      if(!(co.contract||{}).deposit_method){b=document.getElementById('ct-dmethod');if(b)return t('Tap how the deposit was paid (Adumo, Swipe, Cash…).',b);}
     }
     if(!co.returnTime)return t('Ask the client what time they will bring it back, and set the time.',document.getElementById('ct-rtime-box'));
     if(!(co.docItems&&co.docItems.wifi))return t('WiFi device: tap Handed over (or Not available).',document.getElementById('ct-wifi-box'));
@@ -10213,12 +10301,12 @@ function guideCO(){
     }
     if(!co.contractSigned){
       var c=co.contract||{};
-      if(!c.insurance_option){b=gFind(R,'select',function(x){return /select insurance/.test(x.textContent)&&!x.value;});return t('Choose the insurance the client takes.',b);}
+      if(!c.insurance_option){b=document.getElementById('ct-ins');return t('Ask the client which insurance they take, then tap it.',b);}
       if(c.addon_windscreen!==true&&c.addon_windscreen!==false)return t('Ask the client: Windscreen & Tyre cover? Tap Taken or Declined.',document.getElementById('ct-aws'));
       if(co.v.camping&&c.addon_equipment!==true&&c.addon_equipment!==false&&document.getElementById('ct-aeq'))return t('Ask the client: Camping Equipment cover? Tap Taken or Declined.',document.getElementById('ct-aeq'));
       if(!c.fuel_deposit_received){b=gFind(R,'label,div',function(x){return /Fuel & Admin deposit/.test(x.textContent)&&x.querySelector('input[type=checkbox]')&&x.textContent.length<200;});return t('Take the Fuel & Admin deposit, then tick it.',b);}
       if(co.v.xb&&!c.cross_border_deposit){b=gFind(R,'label,div',function(x){return /Cross-border\/Damage deposit/.test(x.textContent)&&x.querySelector('input[type=checkbox]')&&x.textContent.length<200;});return t('Take the Cross-border deposit, then tick it.',b);}
-      b=gFind(R,'select',function(x){return /how the deposit was paid/.test(x.textContent)&&!x.value;});if(b)return t('Choose how the deposit was paid.',b);
+      if(!(co.contract||{}).deposit_method){b=document.getElementById('ct-dmethod');if(b)return t('Tap how the deposit was paid (Adumo, Swipe, Cash…).',b);}
       // the same list the contract itself checks (ctMissing): the guide used to send staff to
       // "Preview & Sign" while e.g. the extra driver fee was still open, and the contract
       // then only said "cannot be signed yet"
@@ -10226,7 +10314,7 @@ function guideCO(){
       var _rl=(function(){try{return placeValue('dropoffArrangement')||c.return_location;}catch(e){return c.return_location;}})();
       if(_rl&&_rl!==GR_HQ&&(!c.return_address||!c.return_place_time))return t(!c.return_address?'Remote return: type the exact address / directions where the vehicle is collected.':'Remote return: set the time to collect the vehicle there.',document.getElementById(!c.return_address?'ct-raddr':'ct-rptime-box')||document.getElementById('ct-raddr'));
       var _cm=ctMissing(c);if(_cm.length){var _c0=_cm[0];
-        var _ce=/Camping Equipment/.test(_c0)?document.getElementById('ct-aeq'):/Windscreen/.test(_c0)?document.getElementById('ct-aws'):/Insurance/.test(_c0)?document.getElementById('ct-ins'):/Deposit method/.test(_c0)?gFind(R,'select',function(x){return /how the deposit was paid/.test(x.textContent);}):/Cross-border/.test(_c0)?document.getElementById('ct-xbd'):/Fuel/.test(_c0)?document.getElementById('ct-fdr'):null;
+        var _ce=/Camping Equipment/.test(_c0)?document.getElementById('ct-aeq'):/Windscreen/.test(_c0)?document.getElementById('ct-aws'):/Insurance/.test(_c0)?document.getElementById('ct-ins'):/Deposit method/.test(_c0)?document.getElementById('ct-dmethod'):/Cross-border/.test(_c0)?document.getElementById('ct-xbd'):/Fuel/.test(_c0)?document.getElementById('ct-fdr'):null;
         return t('Before the contract: '+_c0.replace(/^\S+\s/,''),_ce);}
       if(coLeftCount(CO_BEFORE_CONTRACT)){var _l5=coLeftList(CO_BEFORE_CONTRACT);return t(_l5.length===1?'Contract locked until staff finish: '+_l5[0]:'Contract locked — '+_l5.length+' staff checks still open. Tap Show on the red line to tick them.',gFind(R,'.left-box'));}
       b=gFind(R,'button',function(x){return gTxt(x,'Preview Full Contract');});
