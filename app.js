@@ -2222,15 +2222,32 @@ function drDB(){
 function _drTx(mode,fn){return drDB().then(function(db){return new Promise(function(res,rej){var t=db.transaction('d',mode),s=t.objectStore('d'),out;var q=fn(s);if(q)q.onsuccess=function(){out=q.result;};t.oncomplete=function(){res(out);};t.onerror=function(){rej(t.error);};});});}
 function drGet(k){return _drTx('readonly',function(s){return s.get(k);}).catch(function(){return null;});}
 var _drDirty=true;   // something on this device may not be on the server yet
-function drPut(k,v){_drDirty=true;return _drTx('readwrite',function(s){return s.put(v,k);}).catch(function(){});}
-function drDel(k){return _drTx('readwrite',function(s){return s.delete(k);}).catch(function(){});}
+// Which drafts still need sending (so a send no longer reads every draft on the tablet, photos
+// and all, after every single change) and each draft's server version (so the 2-second save no
+// longer reads the whole saved draft back first).
+var _drPend={},_drSeq=0,_drScanned=false,DR_BASEC={};
+function drPut(k,v){_drDirty=true;
+  if(v&&v.deleted){delete DR_BASEC[k];_drPend[k]=++_drSeq;}
+  else if(v){DR_BASEC[k]=v.base||null;if(!v.pushed)_drPend[k]=++_drSeq;}
+  return _drTx('readwrite',function(s){return s.put(v,k);}).catch(function(){});}
+function drDel(k){delete DR_BASEC[k];return _drTx('readwrite',function(s){return s.delete(k);}).catch(function(){});}
 function drAll(){return _drTx('readonly',function(s){return s.getAll();}).then(function(a){return a||[];}).catch(function(){return [];});}
 
 function drKeyOf(obj){return (obj&&obj.v&&obj.v.bid)||(obj&&obj.fn)||'';}
 function drId(kind,obj){return kind+':'+drKeyOf(obj);}
 function drPageOn(p){var e=document.getElementById('page-'+p);return !!(e&&e.classList.contains('on'));}
 function drOnline(){return navigator.onLine!==false;}
-function drHash(s){var h1=5381,h2=52711,i;for(i=0;i<s.length;i++){var c=s.charCodeAt(i);h1=(h1*33)^c;h2=(h2*33)^c;}return (h1>>>0).toString(36)+(h2>>>0).toString(36)+s.length.toString(36);}
+// drHash of a photo ran a character loop over every photo (~1 MB each) on every save, twice.
+// Photos never change, so the answer is remembered (keyed on length + the end of the data).
+var _DRH={},_DRHN=0;
+function drHash(s){
+  if(s.length<60000)return _drHash(s);
+  var k=s.length+':'+s.slice(-128),n=s.length,st=Math.floor(n/24);for(var i=1;i<24;i++)k+=s.substr(i*st,48);
+  var h=_DRH[k];if(h)return h;
+  if(_DRHN>2000){_DRH={};_DRHN=0;}
+  h=_DRH[k]=_drHash(s);_DRHN++;return h;
+}
+function _drHash(s){var h1=5381,h2=52711,i;for(i=0;i<s.length;i++){var c=s.charCodeAt(i);h1=(h1*33)^c;h2=(h2*33)^c;}return (h1>>>0).toString(36)+(h2>>>0).toString(36)+s.length.toString(36);}
 
 // ── take a snapshot of what is open on this device ──
 // Cheap fingerprint of a draft: big photo/signature strings count only by length + tail, so the
@@ -2275,11 +2292,13 @@ async function drTick(){
   try{
   for(var i=0;i<snaps.length;i++){
     var s=snaps[i];
-    var prev=await drGet(s.id);
+    var base;
+    if(Object.prototype.hasOwnProperty.call(DR_BASEC,s.id))base=DR_BASEC[s.id];
+    else{var prev=await drGet(s.id);base=(prev&&!prev.deleted&&prev.base)||null;}
     DR_LAST[s.id]={sig:s.sig,im:s.im};
     await drPut(s.id,{id:s.id,kind:s.kind,fn:s.obj.fn,cl:s.obj.clientName||(s.obj.v&&s.obj.v.cl)||'',
       staff:drStaffOf(s.kind,s.obj),sum:drSummary(s.kind,s.obj),step:(s.kind==='checkout'?coStep:ciStep),
-      json:s.json,at:new Date().toISOString(),pushed:false,base:(prev&&!prev.deleted&&prev.base)||null,by:APP_USER.name});
+      json:s.json,at:new Date().toISOString(),pushed:false,base:base,by:APP_USER.name});
   }
   }catch(e){}
   _drTicking=false;
@@ -2445,15 +2464,19 @@ async function drPush(){
   _drPushing=true;_drDirty=false;
   var _ok=false;
   try{
-    var all=await drAll();
+    var all=[],seen={};
+    if(!_drScanned){all=await drAll();_drScanned=true;all.forEach(function(x){if(x.deleted||!x.pushed){if(!_drPend[x.id])_drPend[x.id]=++_drSeq;}else if(!Object.prototype.hasOwnProperty.call(DR_BASEC,x.id))DR_BASEC[x.id]=x.base||null;});}
+    else{var pk=Object.keys(_drPend);for(var j=0;j<pk.length;j++){var x=await drGet(pk[j]);if(x)all.push(x);else delete _drPend[pk[j]];}}
+    all.forEach(function(x){seen[x.id]=_drPend[x.id];});
+    function sent(id){if(_drPend[id]===seen[id])delete _drPend[id];}
     for(var i=0;i<all.length;i++){
       var r=all[i];
       if(r.deleted){
         var d=await SB.from('work_drafts').delete().eq('id',r.id);
-        if(!d.error)await drDel(r.id);else _drDirty=true;
+        if(!d.error){await drDel(r.id);sent(r.id);}else _drDirty=true;
         continue;
       }
-      if(r.pushed)continue;
+      if(r.pushed){sent(r.id);continue;}
       // Someone else changed it since this device last synced? Ask once.
       var chk=await SB.from('work_drafts').select('updated_at,updated_by,device,summary,data').eq('id',r.id).maybeSingle();
       if(chk.error){_drDirty=true;break;}
@@ -2473,8 +2496,9 @@ async function drPush(){
         data:data,updated_by:r.by||(APP_USER&&APP_USER.name),device:DR_DEV},{onConflict:'id'}).select('updated_at,started_at').single();
       if(up.error){_drDirty=true;break;}
       var now=await drGet(r.id);
-      if(now&&!now.deleted){now.base=up.data.updated_at;if(now.json===r.json)now.pushed=true;else _drDirty=true;
-        await _drTx('readwrite',function(s){return s.put(now,r.id);}).catch(function(){_drDirty=true;});}
+      if(now&&!now.deleted){now.base=up.data.updated_at;DR_BASEC[r.id]=now.base;if(now.json===r.json)now.pushed=true;else _drDirty=true;
+        var _okPut=true;await _drTx('readwrite',function(s){return s.put(now,r.id);}).catch(function(){_drDirty=true;_okPut=false;});
+        if(_okPut&&now.pushed)sent(r.id);}
       DR_SRV[r.id]=Object.assign(DR_SRV[r.id]||{},{id:r.id,kind:r.kind,fleet_no:r.fn,client:r.cl,staff:r.staff,step:r.step,updated_at:up.data.updated_at,updated_by:r.by,device:DR_DEV,started_at:up.data.started_at});
       drMarkLocal(r.kind,r.fn,r.cl,r.staff,true);
     }
@@ -2516,6 +2540,11 @@ async function drPull(){
     var open=[];if(co&&co.v&&!co._done)open.push(drId('checkout',co));if(ci&&ci.v&&!ci._done)open.push(drId('checkin',ci));
     for(var i=0;i<open.length;i++){
       var id=open[i],row=DR_SRV[id];if(!row||row.device===DR_DEV)continue;
+      if(_drScanned&&Object.prototype.hasOwnProperty.call(DR_BASEC,id)){   // known here: no need to read the whole saved draft
+        if(_drPend[id])continue;
+        if(!DR_BASEC[id]||row.updated_at>DR_BASEC[id])await drApplyServer(id,false);
+        continue;
+      }
       var loc=await drGet(id);
       if(loc&&!loc.pushed)continue;
       if(!loc||!loc.base||row.updated_at>loc.base)await drApplyServer(id,false);
@@ -4155,7 +4184,7 @@ function driverDocSlot(di,field,ico,lbl,val){
   const tint=field==='passportImg'?'background:#eaf1f8;border-color:#8fa3b8;':'background:#f6edfb;border-color:#a693c2;';
   return `<div class="doc-slot ${val?'captured':''}" onclick="document.getElementById('${inputId}').click()" style="aspect-ratio:1.9;${val?'':tint}">
     ${val
-      ? `<img src="${val}"><div class="doc-slot-overlay"><div class="doc-slot-lbl" style="font-size:13px;">✅ ${lbl}</div><div class="doc-slot-sub" style="font-size:12px;">Tap to retake</div></div>`
+      ? `<img ${thumbAttr(val)} decoding="async"><div class="doc-slot-overlay"><div class="doc-slot-lbl" style="font-size:13px;">✅ ${lbl}</div><div class="doc-slot-sub" style="font-size:12px;">Tap to retake</div></div>`
         + ((field==='passportImg'||field==='licFront')
             ? `<button onclick="event.stopPropagation();rereadDoc(${di},'${field}')" style="position:absolute;bottom:6px;right:6px;padding:7px 11px;border-radius:8px;border:2px solid #fff;background:#145c30;color:#fff;font-size:12px;font-weight:900;cursor:pointer;box-shadow:0 1px 5px rgba(0,0,0,.35);">&#128260; Read again</button>`
             : '')
@@ -4604,14 +4633,11 @@ If a field is not visible, use an empty string. Return only the JSON.` }
 async function captureDriverDoc(event,driverIdx,field){
   const file=event.target.files[0];if(!file)return;
   banner('Processing photo...');
-  const img=new Image();const url=URL.createObjectURL(file);
-  img.onload=async()=>{
-    const scale=Math.min(1400/img.width,1);
-    const cv=document.createElement('canvas');
-    cv.width=img.width*scale;cv.height=img.height*scale;
-    cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
-    const b64=cv.toDataURL('image/jpeg',0.90);
-    URL.revokeObjectURL(url);
+  let b64=null;
+  try{const _sb=await compressImg(file,1400,0.9,true);if(_sb)b64=await drBlobToData(_sb);}catch(e){}
+  try{event.target.value='';}catch(e){}
+  if(!b64){hideBanner();toast('Could not read image','err');return;}
+  {
     co.drivers[driverIdx][field]=b64;
     // Keep legacy top-level refs for primary driver
     if(driverIdx===0){
@@ -4639,9 +4665,7 @@ async function captureDriverDoc(event,driverIdx,field){
     } else {
       coRedrawDrivers();
     }
-  };
-  img.onerror=()=>{hideBanner();toast('Could not read image','err');};
-  img.src=url;
+  }
 }
 
 
@@ -9018,13 +9042,45 @@ function getPA(key){
   if(key==='ci.fuelPhotos')return(ci.fuelPhotos=ci.fuelPhotos||[]);
   return[];
 }
+// ── Small thumbnails ──
+// The photo tiles showed every photo at its full 1920 px size, inside the page HTML. Each tap
+// redraws the step, so a step with 15 photos re-read ~15 MB of text and decoded ~150 MB of
+// pictures every time: the tablets crawled and hung while taking more. Tiles now show a small
+// copy (made once, in the background); the full photo is still what is saved and uploaded.
+var _TH={},_THQ=[],_THBusy=false,_THN=0;
+var TH_BLANK='data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
+function _thKey(s){var n=s.length;return 't'+n.toString(36)+(s.slice(-32)+s.substr(n>>1,24)+s.substr(n>>2,24)).replace(/[^A-Za-z0-9]/g,'');}
+function thumbAttr(src){
+  if(typeof src!=='string'||src.indexOf('data:image')!==0||src.length<60000)return 'src="'+(src||'')+'"';
+  var k=_thKey(src),t=_TH[k];
+  if(t&&t.url)return 'src="'+t.url+'" data-th="'+k+'"';
+  if(!t){
+    if(_THN>400){for(var o in _TH){try{if(_TH[o].url&&_TH[o].url.indexOf('blob:')===0)URL.revokeObjectURL(_TH[o].url);}catch(e){}}_TH={};_THN=0;}
+    _TH[k]={src:src};_THN++;_THQ.push(k);setTimeout(_thRun,60);
+  }
+  return 'src="'+TH_BLANK+'" data-th="'+k+'" style="background:#cbd5e1"';
+}
+async function _thRun(){
+  if(_THBusy)return;_THBusy=true;
+  try{
+    while(_THQ.length){
+      if(photoBusy()){await new Promise(function(r){setTimeout(r,400);});continue;}   // camera / shrinking first
+      var k=_THQ.shift(),t=_TH[k];if(!t||t.url||!t.src)continue;
+      var u='';
+      try{var b=drDataToBlob(t.src),sm=b&&await compressImg(b,480,0.7);if(sm)u=URL.createObjectURL(sm);}catch(e){}
+      t.url=u||t.src;t.src=null;
+      document.querySelectorAll('img[data-th="'+k+'"]').forEach(function(im){im.src=t.url;im.style.background='';});
+      await new Promise(function(r){setTimeout(r,25);});
+    }
+  }finally{_THBusy=false;}
+}
 function photoHTML(key,title,sub,max){
   const arr=getPA(key);const safe=key.replace(/[^a-z]/gi,'_');
   return `<div class="photo-sec">
     <div class="photo-title">${title}</div>
     <div class="photo-sub">${sub}</div>
     <div class="photo-grid">
-      ${arr.map((src,i)=>`<div class="p-thumb"><img src="${src}"><button class="p-del" onclick="delPhoto('${key}',${i})">✕</button></div>`).join('')}
+      ${arr.map((src,i)=>`<div class="p-thumb"><img ${thumbAttr(src)} decoding="async"><button class="p-del" onclick="delPhoto('${key}',${i})">✕</button></div>`).join('')}
       ${arr.length<max?`<div class="p-add" onclick="window._photoAt=Date.now();document.getElementById('fi-${safe}').click()">
         <input type="file" id="fi-${safe}" accept="image/*" capture="environment" multiple onchange="handlePhotos(event,'${key}',${max})">
         <div class="p-add-ico">📷</div><div class="p-add-lbl">${arr.length?'Add more':'Take photo'}</div>
@@ -9086,13 +9142,54 @@ async function uploadPhotos(arr,fn,client,stage){
   }
   hideBanner();
 }
-async function compressImg(file,maxW,q){
-  return new Promise(res=>{
-    const img=new Image();const url=URL.createObjectURL(file);
-    img.onload=()=>{try{const r=Math.min(maxW/Math.max(img.width,img.height),1);const cv=document.createElement('canvas');
-      cv.width=Math.round(img.width*r);cv.height=Math.round(img.height*r);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
-      cv.toBlob(b=>{URL.revokeObjectURL(url);res(b);},'image/jpeg',q);}catch(err){URL.revokeObjectURL(url);res(null);}};
-    img.onerror=()=>{URL.revokeObjectURL(url);res(null);};
+// Read width/height from a JPEG header without decoding the picture (first 256 KB is plenty).
+async function jpegSize(file){
+  try{
+    var buf=new Uint8Array(await file.slice(0,262144).arrayBuffer());
+    if(buf[0]!==0xFF||buf[1]!==0xD8)return null;
+    var i=2;
+    while(i+9<buf.length){
+      if(buf[i]!==0xFF){i++;continue;}
+      var m=buf[i+1];
+      if(m===0xD8||m===0x01||(m>=0xD0&&m<=0xD7)){i+=2;continue;}
+      var len=(buf[i+2]<<8)|buf[i+3];
+      if(m>=0xC0&&m<=0xCF&&m!==0xC4&&m!==0xC8&&m!==0xCC)return {h:(buf[i+5]<<8)|buf[i+6],w:(buf[i+7]<<8)|buf[i+8]};
+      i+=2+len;
+    }
+  }catch(e){}
+  return null;
+}
+// Shrink a camera photo. byW: limit the width only (passport/licence, for the text reader).
+// The Blackview camera takes very large pictures: decoding one at full size (≈200 MB in memory)
+// froze the tablet for seconds and could crash it. Where the browser can, the picture is now
+// decoded straight at the smaller size, and the canvas memory is handed back right away.
+async function compressImg(file,maxW,q,byW){
+  function lim(w,h){return byW?w:Math.max(w,h);}
+  function toJpeg(src,w,h){
+    return new Promise(function(res){
+      try{
+        var r=Math.min(maxW/lim(w,h),1),cv=document.createElement('canvas');
+        cv.width=Math.round(w*r);cv.height=Math.round(h*r);
+        cv.getContext('2d').drawImage(src,0,0,cv.width,cv.height);
+        cv.toBlob(function(b){cv.width=cv.height=0;res(b);},'image/jpeg',q);
+      }catch(err){res(null);}
+    });
+  }
+  if(typeof createImageBitmap==='function'){
+    try{
+      var sz=await jpegSize(file),opt={imageOrientation:'from-image'};
+      // decode at about twice the target (EXIF rotation can swap width and height); the canvas does the rest
+      if(sz&&lim(sz.w,sz.h)>maxW*1.3){opt.resizeWidth=Math.max(1,Math.round(sz.w*Math.min(1,(maxW*1.4)/Math.min(sz.w,sz.h))));opt.resizeQuality='high';}
+      var bmp=await createImageBitmap(file,opt);
+      var out=await toJpeg(bmp,bmp.width,bmp.height);
+      try{bmp.close();}catch(e){}
+      if(out)return out;
+    }catch(e){}
+  }
+  return new Promise(function(res){
+    var img=new Image(),url=URL.createObjectURL(file);
+    img.onload=function(){toJpeg(img,img.naturalWidth||img.width,img.naturalHeight||img.height).then(function(b){URL.revokeObjectURL(url);img.src='';res(b);});};
+    img.onerror=function(){URL.revokeObjectURL(url);res(null);};
     img.src=url;
   });
 }
