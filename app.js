@@ -2400,7 +2400,7 @@ async function rfResendWA(){
   if(!drOnline()){toast('No internet — try again when connected','err');return;}
   banner('Preparing link…');
   var link='';
-  try{var su=await SB.storage.from('client-docs').createSignedUrl(R.handoverPath,60*60*24*REPORT_LINK_DAYS);link=clientDocLink(su&&su.data&&su.data.signedUrl);}catch(e){}
+  try{var su=await SB.storage.from('client-docs').createSignedUrl(R.handoverPath,60*60*24*RESEND_LINK_DAYS);link=clientDocLink(su&&su.data&&su.data.signedUrl);}catch(e){}
   hideBanner();
   if(!link){toast('Could not make the link — check the connection and try again','err');return;}
   var first=firstNameOf(R.client||'')||'there';
@@ -7779,6 +7779,7 @@ async function loadRentalFiles(q){
 // phone on holiday data sees their document in a second and never meets the tablet
 // sign-in screen. Links sent by the older version (#r=…) still work, see showSharedReport.
 var REPORT_LINK_DAYS=365;
+var RESEND_LINK_DAYS=21;   // rental file "Send again" link: valid 3 weeks
 async function saveCIReportLink(){
   try{
     // the client opens this on a phone, so it goes out as a proper mobile web page
