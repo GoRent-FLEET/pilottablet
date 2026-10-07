@@ -4725,7 +4725,7 @@ function ctOpenQuestions(){
   if(!c.insurance_option)q.push({s:'Insurance',t:'📋 Which insurance does the client take?',h:ctInsButtons(c)});
   if(c.addon_windscreen!==true&&c.addon_windscreen!==false)q.push({s:'Windscreen cover',t:'🛞 Windscreen & Tyre cover — N$184/day × '+days+' = '+ctMoney(184*days),h:ctYesNo(c,'addon_windscreen')});
   if(ctCampingBooked()&&c.addon_equipment!==true&&c.addon_equipment!==false)q.push({s:'Camping cover',t:'🏕 Camping Equipment cover — N$103.50/day × '+days+' = '+ctMoney(103.5*days),h:ctYesNo(c,'addon_equipment')});
-  if(!c.fuel_deposit_received)q.push({s:'Fuel deposit',t:'⛽ Fuel & Admin deposit N$7,500 (every rental)',h:ctGot(c,'fuel_deposit_received')});
+  if(!c.fuel_deposit_received)q.push({s:'Fuel deposit',t:'⛽ Fuel & Admin deposit N$2,500 (every rental)',h:ctGot(c,'fuel_deposit_received')});
   if((co.v.xb||c.cross_border)&&c.cross_border_deposit!==true)q.push({s:'Cross-border deposit',t:'🌍 Cross-border deposit N$30,000 ('+_bx(co.v.xb||c.cross_border)+')',h:ctGot(c,'cross_border_deposit')});
   var n=extraDriverCount();if(n&&c.extra_driver_paid!==true)q.push({s:'Extra driver fee',t:'👤 Extra driver fee '+ctMoney(extraDriverFee())+' ('+n+' × N$280)',h:ctGot(c,'extra_driver_paid')});
   if(!c.deposit_method)q.push({s:'Deposit method',t:'💳 How was the deposit paid?',h:ctMethodButtons(c)});
@@ -4838,7 +4838,7 @@ function ctDepositsHTML(){
   }
   var h=''
 
-    +tick('ct-fdr',!!c.fuel_deposit_received,'⛽ Fuel &amp; Admin deposit — N$7,500.00','Required for every rental · refunded within 7 days after return',c.fuel_deposit_received?'✓ Received':'Required','req')
+    +tick('ct-fdr',!!c.fuel_deposit_received,'⛽ Fuel &amp; Admin deposit — N$2,500.00','Required for every rental · refunded within 7 days after return',c.fuel_deposit_received?'✓ Received':'Required','req')
     +tick('ct-xbd',c.cross_border_deposit===true,'🌍 Cross-border/Damage deposit — N$30,000.00',need?'Required: this booking goes cross-border ('+_bx(co.v.xb||c.cross_border)+')':'Only for travel outside Namibia',c.cross_border_deposit===true?'✓ Received':(need?'Required':'Not needed'),need?'req':'opt')
     +((function(){var n=extraDriverCount();if(!n)return '';return tick('ct-edf',c.extra_driver_paid===true,'\uD83D\uDC64 Extra driver fee \u2014 '+ctMoney(extraDriverFee()),n+' extra driver'+(n===1?'':'s')+' \u00d7 N$280 once-off \u00b7 take this at collection',c.extra_driver_paid?'\u2713 Received':'TAKE PAYMENT','req');})())
     +'<div class="fi" id="ct-dmethod" style="margin-bottom:8px;padding:10px 12px;border-radius:10px;border:2px solid '+(c.deposit_method?'var(--gb)':'var(--re)')+';background:'+(c.deposit_method?'var(--sg)':'var(--rg)')+';"><label style="font-size:15px;font-weight:900;color:var(--tx);">💳 How was the deposit paid? *</label>'
@@ -4948,7 +4948,7 @@ function gatherContract(){
   co.contract.deposit_amount=+(function(){var _e=document.getElementById('ct-dep');return _e?_e.value:undefined;})()||co.contract.deposit_amount;
   co.contract.quote_number=(function(){var _e=document.getElementById('ct-quote');return _e?_e.value:undefined;})()||co.contract.quote_number||co.v.quote||'';
   co.contract.deposit_amount=+(function(){var _e=document.getElementById('ct-dep');return _e?_e.value:undefined;})()||co.contract.deposit_amount;
-  co.contract.fuel_deposit=+(function(){var _e=document.getElementById('ct-fdep');return _e?_e.value:undefined;})()||co.contract.fuel_deposit||7500;
+  co.contract.fuel_deposit=+(function(){var _e=document.getElementById('ct-fdep');return _e?_e.value:undefined;})()||2500;
   co.contract.insurance_option=(function(){var _e=document.getElementById('ct-ins');return _e?_e.value:undefined;})()||co.contract.insurance_option;
   (function(){var _e=document.getElementById('ct-xbd');if(_e)co.contract.cross_border_deposit=_e.checked;})();
   (function(){var _e=document.getElementById('ct-edf');if(_e)co.contract.extra_driver_paid=_e.checked;})();
@@ -4972,7 +4972,7 @@ function ctMissing(c){
   if(!c.insurance_option)m.push('📋 Insurance option not selected');
   if(c.addon_windscreen!==true&&c.addon_windscreen!==false)m.push('🛞 Windscreen & Tyre cover: Taken or Declined?');
   if(ctCampingBooked()&&c.addon_equipment!==true&&c.addon_equipment!==false)m.push('🏕 Camping Equipment cover: Taken or Declined?');
-  if(!c.fuel_deposit_received)m.push('⛽ N$7,500 Fuel & Admin deposit not ticked (compulsory)');
+  if(!c.fuel_deposit_received)m.push('⛽ N$2,500 Fuel & Admin deposit not ticked (compulsory)');
   if(!c.deposit_method)m.push('💳 Deposit method not selected (Adumo, Swipe, Cash…)');
   if((co.v.xb||c.cross_border)&&c.cross_border_deposit!==true)m.push('🌍 N$30,000 Cross-border deposit not ticked (travel to '+(co.v.xb||c.cross_border)+')');
   (function(){var n=extraDriverCount();
@@ -9880,7 +9880,7 @@ function buildContractHTML(c,sigUrl){
       <!-- Fuel deposit -->
       <div style="display:flex;align-items:flex-start;gap:6px;padding:7px 8px;border:1px solid #ccc;border-radius:4px;background:#fff;margin-bottom:5px;">
         ${chkBox(!!c.fuel_deposit_received)}
-        <div style="font-size:10.5px;line-height:1.5;"><strong>Fuel &amp; Admin Deposit (N$7,500.00) received</strong>${c.deposit_method?' — paid by <strong>'+c.deposit_method+'</strong>':''}<br>
+        <div style="font-size:10.5px;line-height:1.5;"><strong>Fuel &amp; Admin Deposit (N$2,500.00) received</strong>${c.deposit_method?' — paid by <strong>'+c.deposit_method+'</strong>':''}<br>
         <span style="font-size:9.5px;color:#555;">Refunded within 7 days of the vehicle's return. Any fuel shortage (fill-up cost) and admin costs will be deducted from this deposit before the balance is refunded.</span></div>
       </div>
     </div>
@@ -9998,7 +9998,7 @@ function buildContractHTML(c,sigUrl){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;">
       ${[
         ['Rental period', days?days+' days':'—'],
-        ['Fuel & admin deposit', 'N$ 7,500.00'],
+        ['Fuel & admin deposit', 'N$ 2,500.00'],
         ['Cross-border deposit', c.cross_border_deposit?'N$ 30,000.00 received':(c.cross_border?'Not received':'N/A')],
         ['Windscreen & Tyre add-on', c.addon_windscreen?'Selected':'Not selected'],
         ['Camping Equipment cover', !ctCampingBooked()?'N/A — no camping':(c.addon_equipment?'Selected':'Not selected')],
