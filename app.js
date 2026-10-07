@@ -1018,7 +1018,9 @@ namesWithRole('contract').forEach(function(n){STEP_ACCESS[n]=[5];});   // contra
 function allowedSteps(){return (APP_USER&&STEP_ACCESS[APP_USER.name])||null;}
 function canDoStep(n){var a=allowedSteps();return !a||a.indexOf(n)>=0;}
 function firstAllowedStep(){var a=allowedSteps();return a?a[0]:0;}
-function canCheckIn(){return !allowedSteps();}
+// Staff who may also do check-ins (deposit decisions still go to management)
+const CHECKIN_STAFF=['Vince'];
+function canCheckIn(){return !allowedSteps()||!!(APP_USER&&CHECKIN_STAFF.indexOf(APP_USER.name)>=0);}
 function canSeeContracts(){ return !!(APP_USER && !PREP_ONLY.includes(APP_USER.name)); }
 // Admin overrides: Peter sees everything management + reports + all client info
 function canSeeClientInfo(){ return !!(APP_USER && !PREP_ONLY.includes(APP_USER.name)); }
@@ -7136,6 +7138,12 @@ function ciCloseSection(){
 // Clean return → full deposit released now. Issues → decide the deposit now, or leave it for the
 // Deposits list (due the next working day). Only people who may do check-ins (managers, Peter) get here.
 function ciFinishBox(hasIssues){
+  if(!isManagement())return '<div style="background:var(--g1);border:3px solid '+(hasIssues?'var(--re)':'var(--gb)')+';border-radius:var(--r);padding:14px;">'
+    +'<div style="font-weight:800;margin-bottom:8px;">Deposit: '+(hasIssues?'⏳ management decides (by '+fmtDay(nextWorkingDay())+')':'✅ Full deposit returned')+'</div>'
+    +'<div class="fi"><label>Notes for management (optional)</label><textarea id="ci-hnotes" oninput="ci.mgmtNotes=this.value" placeholder="What happened, what the client said, quotes needed..." style="min-height:56px">'+_bx(ci.mgmtNotes||'')+'</textarea></div>'
+    +'<button class="btn '+(hasIssues?'r':'g')+'" style="font-size:17px;padding:18px;'+(hasIssues?'background:#c0392b;color:#fff;':'')+'" onclick="ciFinish()">✅ Finish return</button>'
+    +'<div style="font-size:12px;color:var(--g5);margin-top:6px;text-align:center;">Closed by '+_bx((APP_USER&&APP_USER.name)||'')+' · the client gets the return report on WhatsApp next</div>'
+    +'</div>';
   var sel=ci.finishDep||(hasIssues?'':'Full deposit returned');
   var opts=(hasIssues?[['','⏳ Decide later — goes to the Deposits list (by '+fmtDay(nextWorkingDay())+')']]:[])
     .concat(DEP_REASONS.map(function(o){return [o,o];}));
@@ -7153,6 +7161,7 @@ async function ciFinish(){
   if(open.length&&!(await ciPeterOverride(open)))return;
   if(!ci.forceClosedBy&&!!ci.fuelIn&&ci.fuelIn!==ci.v.fuelOut&&!(ci.fuelPhotos&&ci.fuelPhotos.length)){toast('Fuel is short — take a photo of the fuel receipt first','err');return;}
   var el=document.getElementById('ci-dep');var dec=el?el.value:(ci.finishDep||'');
+  if(!isManagement())dec='';   // staff: clean return = full deposit (below), issues = pending for management
   var n=document.getElementById('ci-hnotes');if(n)ci.mgmtNotes=n.value;
   var x=ciIssues();
   if(!x.any&&!dec)dec='Full deposit returned';
