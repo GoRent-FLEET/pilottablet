@@ -2450,7 +2450,22 @@ async function drMergePhotos(r,data,srvData){
   try{if(drPageOn(kind==='checkout'?'co':'ci'))redraw();}catch(e){}
 }
 // Fully Kiosk on the Blackview blocks new windows ("Popups and new tabs disabled").
+// Our own report links (view.html#<signed link> or #r=<signed link>) open inside the app, so Fully's
+// popup block never stops them (the Deposits tab's "Open the check-in report" could not open on the Blackview).
+function docLinkTarget(url){
+  try{var m=/(?:view\.html#|#r=)(.+)$/.exec(String(url||''));if(!m)return '';var u=decodeURIComponent(m[1]);return /^https:\/\//.test(u)?u:'';}catch(e){return '';}
+}
+async function openDocLink(url){
+  var u=docLinkTarget(url);if(!u)return false;
+  banner('Opening…');
+  var t='';try{var r=await fetch(u);t=r.ok?await r.text():'';}catch(e){}
+  hideBanner();
+  if(!t){toast('Could not open the report — check the internet and try again','err');return true;}
+  openDoc(t,/return|check-?in/i.test(u)?'Return report':'Report');
+  return true;
+}
 function openExt(url){
+  if(docLinkTarget(url)){openDocLink(url);return null;}
   var w=null;try{w=window.open(url,'_blank');}catch(e){}
   if(w)return w;
   // WhatsApp: hand the link to the WhatsApp app. Fully passes it on when wa.me is in
