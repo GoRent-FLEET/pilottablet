@@ -1814,6 +1814,13 @@ function ovExpandTo(m,key){
 function doAction(fn,isOut){if(isOut)startCO(fn);else startCI(fn);}
 function ovSetMode(m){window._ovMode=window._ovMode===m?null:m;window._ovExpanded=null;renderOV();}
 function ovSetView(v){window._ovView=v;window._ovMode=null;window._ovExpanded=null;renderOV();}
+// ── SIMPLE DASHBOARD (8 Oct 2026) ──
+// The 3-column dashboard (movements · flights landing · departures, plus discs/staff/remote strips)
+// was too busy. Default is now two lists — Going out · Coming back — with the flight time on the
+// vehicle's own card, and the extra strips folded into one line. "Full view" brings the old one back.
+function ovFull(){try{return localStorage.getItem('gorent_dash_full')==='1';}catch(e){return false;}}
+function ovSetFull(on){try{localStorage.setItem('gorent_dash_full',on?'1':'0');}catch(e){}window._ovInfoOpen=false;renderOV();}
+function ovInfoToggle(){window._ovInfoOpen=!window._ovInfoOpen;renderOV();}
 function ovExpand(fn){window._ovExpanded=window._ovExpanded===fn?null:fn;renderOV();}
 
 function renderOV(){ try{ _renderOV(); } finally { try{showDepositBanner();}catch(e){} } }
@@ -2099,6 +2106,78 @@ function _renderOV(){
     }).join('');
     return '<span style="font-size:11px;font-weight:900;color:#92400e;letter-spacing:.3px;white-space:nowrap;"><span class="disc-ico" style="width:1.8em;height:1.8em;vertical-align:-0.6em;"></span> LICENCE DISCS DUE:</span>'+chips;
   })();
+  var _ovRemote=(function(){
+      var list=(window.REMOTE_RETURNS||[]).filter(function(x){
+        var due=x.return_date_new||x.rt;if(!due)return false;
+        var d=daysFrom(due);return d>=-1&&d<=7;
+      }).sort(function(a,b){return (a.return_date_new||a.rt)>(b.return_date_new||b.rt)?1:-1;});
+      return list;
+  })();
+  if(!ovFull()){ body.innerHTML=_ovSimpleHTML(); return; }
+  function _ovSimpleHTML(){
+    var discN=0;try{discN=Object.keys(DISCS).filter(function(fn){var d=discDaysLeft(DISCS[fn]);return d!==null&&d<=DISC_WARN_DAYS;}).length;}catch(e){}
+    var staffN=0;try{var _a=getActiveStaff(),_n={};_a.forEach(function(x){_n[x.staffName]=1;});staffN=Object.keys(_n).length;}catch(e){}
+    var remN=_ovRemote.length;
+    var bits=[];
+    if(discN)bits.push('<b style="color:#92400e;">'+discN+' licence disc'+(discN>1?'s':'')+' due</b>');
+    if(remN)bits.push('<b style="color:#c53030;">'+remN+' remote collection'+(remN>1?'s':'')+'</b>');
+    if(staffN)bits.push(staffN+' working now');
+    var open=!!window._ovInfoOpen;
+    var info=bits.length?'<div style="background:#fffbeb;border-bottom:1px solid #f6cf7a;padding:6px 14px;flex-shrink:0;">'
+      +'<button onclick="ovInfoToggle()" style="background:none;border:0;padding:4px 0;font-size:13px;color:#555;cursor:pointer;touch-action:manipulation;">ℹ️ '+bits.join(' · ')+' &nbsp;<span style="color:#4a6fa5;font-weight:800;">'+(open?'Hide ▲':'Show ▼')+'</span></button>'
+      +(open?'<div style="display:flex;flex-direction:column;gap:6px;padding:4px 0 6px;">'
+        +(_ovDisc?'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">'+_ovDisc+'</div>':'')
+        +(remN?'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;"><span style="font-size:11px;font-weight:900;color:#92400e;">🚩 REMOTE COLLECTION:</span>'+_ovRemote.map(function(x){var due=x.return_date_new||x.rt;return '<span onclick="openVehReport(\''+_bx(x.fleet_no)+'\')" style="cursor:pointer;font-size:11px;font-weight:800;padding:3px 9px;border-radius:12px;background:#fff3cd;color:#92400e;border:1px solid #f6ad55;">'+_bx(x.fleet_no)+' · '+_bx(x.return_place)+(x.return_place_time?' · '+_bx(x.return_place_time):'')+' · '+_dmy(due)+'</span>';}).join(' ')+'</div>':'')
+        +(_ovStaff?'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">'+_ovStaff+'</div>':'')
+        +'</div>':'')
+      +'</div>':'';
+    function ftime(f){if(!f)return '';var p=String(f).split('·');return (p[1]||'').trim()||String(f).trim();}
+    function sCard(v,isOut){
+      var fin=isOut?coIsDone(v):ciIsDone(v),ip=null;
+      try{var r=localStorage.getItem(ipKey(v.fn));if(r)ip=JSON.parse(r);}catch(e){}
+      var isIP=!fin&&ip&&(ip.type===(isOut?'checkout':'checkin'));
+      var isRemote=v.special&&v.special.some(function(x){x=x.toLowerCase();return x.indexOf('remote')>=0||x.indexOf('vic falls')>=0;});
+      var t=ftime(isOut?v.flightIn:v.flightOut);
+      var st=fin?'<span style="background:#dcfce7;color:#12803c;">✓ Done</span>'
+        :isIP?'<span style="background:#fee2e2;color:#c53030;">● Started</span>'
+        :'<span style="background:#f1f5f9;color:#475569;">To do</span>';
+      st=st.replace('<span style="','<span style="font-size:12px;font-weight:900;padding:4px 10px;border-radius:12px;white-space:nowrap;');
+      var sub=[];
+      if(t)sub.push((isOut?'✈ lands ':'✈ flies ')+_bx(t));
+      sub.push(v.camping?'Camping '+v.pax:'No camping');
+      if(v.transfer)sub.push('Transfer');
+      return '<div onclick="ovExpandTo(\''+(isOut?'out':'in')+'\',\''+(v.bid||v.fn)+'\')" style="background:#fff;border:1px solid '+(fin?'#bfe5cc':isIP?'#f5a3a3':'#e5e7eb')+';border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;touch-action:manipulation;display:flex;align-items:center;gap:12px;'+(fin?'opacity:.6;':'')+'">'
+        +'<div style="font-size:17px;font-weight:900;color:#1a1a1a;min-width:52px;">'+_bx(v.fn)+'</div>'
+        +'<div style="flex:1;min-width:0;">'
+        +'<div style="font-size:15px;font-weight:800;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+_bx(renterName(v))+'</div>'
+        +'<div style="font-size:12px;color:#666;margin-top:2px;">'+sub.join(' · ')+(isRemote?' · <b style="color:#c53030;">⚠ Remote</b>':'')+'</div>'
+        +'</div>'+st+'</div>';
+    }
+    var oG={},iG={};
+    outList.forEach(function(v){(oG[v.pu]=oG[v.pu]||[]).push(v);});
+    inList.forEach(function(v){(iG[v.rt]=iG[v.rt]||[]).push(v);});
+    function col(title,icon,colr,groups,isOut,none){
+      var n=(groups[TODAY]||[]).length;
+      return '<div style="display:flex;flex-direction:column;overflow:hidden;'+(isOut?'border-right:1px solid #e0e0e0;':'')+'">'
+        +'<div style="padding:12px 16px;background:#fff;border-bottom:1px solid #e0e0e0;display:flex;align-items:center;gap:8px;flex-shrink:0;">'
+        +'<span style="width:30px;height:30px;border-radius:8px;background:'+colr+';color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;">'+icon+'</span>'
+        +'<span style="font-size:17px;font-weight:900;color:#1a1a1a;">'+title+'</span>'
+        +'<span style="margin-left:auto;font-size:12px;font-weight:800;color:#666;">'+n+' today</span></div>'
+        +'<div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px;">'+dayList(groups,function(v){return sCard(v,isOut);},isOut?'GOING OUT':'COMING BACK',isOut?'GOING OUT':'COMING BACK',none)+'</div></div>';
+    }
+    function vbtn(k,lbl){var on=view===k;return '<button onclick="ovSetView(\''+k+'\')" style="padding:6px 14px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:2px solid '+(on?'#f6ad55':'#e0e0e0')+';background:'+(on?'#fffbf0':'#fff')+';color:#1a1a1a;">'+lbl+'</button>';}
+    return '<div style="background:#fff;border-bottom:1px solid #e0e0e0;padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0;">'
+      +'<div id="ov-clock" style="font-size:15px;font-weight:900;color:#2a9d5c;font-variant-numeric:tabular-nums;">'+timeStr+'</div>'
+      +(view==='week'?_ovToday:'')
+      +'<div style="margin-left:auto;display:flex;gap:8px;align-items:center;">'+vbtn('week','Next 14 days')+vbtn('past','Past 14 days')
+      +'<button onclick="ovSetFull(true)" style="padding:6px 12px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:1px solid #cbd5e1;background:#f8fafc;color:#475569;">Full view</button></div>'
+      +'</div>'
+      +info
+      +'<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);flex:1;overflow:hidden;background:#f5f5f7;">'
+      +col('Going out','↗','#4a6fa5',oG,true,'nothing going out')
+      +col('Coming back','↙','#2a9d5c',iG,false,'nothing coming back')
+      +'</div>';
+  }
   body.innerHTML =
     // Top bar: date + clock + tabs
     '<div style="background:#fff;border-bottom:1px solid #e0e0e0;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">'
@@ -2111,6 +2190,7 @@ function _renderOV(){
     +'<div style="display:flex;align-items:center;gap:8px;">'
     +'<button ontouchend="if(!tapOK(event))return;event.preventDefault();ovSetView(\'week\')" onclick="ovSetView(\'week\')" style="padding:6px 14px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:2px solid '+(view==='week'?'#f6ad55':'#e0e0e0')+';background:'+(view==='week'?'#fffbf0':'#fff')+';color:'+(view==='week'?'#c07a00':'#888')+';">📅 Next 14 Days</button>'
     +'<button ontouchend="if(!tapOK(event))return;event.preventDefault();ovSetView(\'past\')" onclick="ovSetView(\'past\')" style="padding:6px 14px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:2px solid '+(view==='past'?'#68d391':'#e0e0e0')+';background:'+(view==='past'?'#f0fff4':'#fff')+';color:'+(view==='past'?'#276749':'#888')+';">📋 Past 14 Days</button>'
+    +'<button onclick="ovSetFull(false)" style="padding:6px 12px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:1px solid #cbd5e1;background:#f8fafc;color:#475569;">Simple view</button>'
     +'</div>'
     +'</div>'
     // Licence discs and Staff Active share one line
