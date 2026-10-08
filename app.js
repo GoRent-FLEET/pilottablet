@@ -4775,7 +4775,7 @@ async function captureDriverDoc(event,driverIdx,field){
 var CT_INS={'1':{t:'Option 1 — Basic Cover',rate:230,dep:45000},'2':{t:'Option 2 — Extended Cover',rate:362,dep:30000},'3':{t:'Option 3 — Premium Cover (zero excess)',rate:546,dep:0}};
 function ctMoney(n){return 'N$ '+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function ctDays(){var _pu=coPickupDate();return _pu&&co.v.rt?Math.max(1,Math.round((new Date(co.v.rt)-new Date(_pu))/86400000)):0;}
-function ctSet(k,v){(co.contract=co.contract||{})[k]=v;if(k==='insurance_option'){var o=CT_INS[v];co.contract.deposit_amount=o?o.dep:null;}drawCO();try{ctAskRefresh();}catch(e){}}
+function ctSet(k,v){(co.contract=co.contract||{})[k]=v;if(k==='country_deposit')co.contract.country_deposit_auto=false;if(k==='insurance_option'){var o=CT_INS[v];co.contract.deposit_amount=o?o.dep:null;}drawCO();try{ctAskRefresh();}catch(e){}}
 // ── EXTRA DRIVER FEE ───────────────────────────────────────────────────────
 // N$280 once-off per additional driver, taken at collection. Counted from the drivers
 // actually captured, so nobody has to remember to add it up — and it is flagged red
@@ -4813,6 +4813,37 @@ function ctGot(c,key){
   var v=c[key]===true;
   return '<div style="display:flex;gap:6px;">'+ctBtn(v,v?'✓ Received':'Tap when received',"ctSet('"+key+"',"+(v?'false':'true')+")")+'</div>';
 }
+// ── Section 2.1: extra N$7,500 security deposit by country of citizenship/residency ──
+// No extra deposit for the countries listed in the agreement; everyone else pays N$7,500 on top.
+var CT_XDEP_CODES=('USA US CAN CA CHE CH GBR GB UK AUS AU NZL NZ JPN JP SGP SG RUS RU '
+  +'AUT BEL BGR HRV CYP CZE DNK EST FIN FRA DEU D GRC HUN IRL ITA LVA LTU LUX MLT NLD POL PRT ROU SVK SVN ESP SWE ISL LIE NOR '
+  +'AT BE BG HR CY CZ DK EE FI FR DE GR HU IE IT LV LT LU MT NL PL PT RO SK SI ES SE IS LI NO').split(' ');
+var CT_XDEP_WORDS=['united states','america','american','canada','canadian','switzerland','swiss','united kingdom','britain','british','england','english','scotland','scottish','wales','welsh','northern ireland',
+  'australia','australian','new zealand','new zealander','japan','japanese','singapore','singaporean','russia','russian','russian federation',
+  'austria','austrian','belgium','belgian','bulgaria','bulgarian','croatia','croatian','cyprus','cypriot','czech','czechia','czech republic','denmark','danish','estonia','estonian','finland','finnish',
+  'france','french','germany','german','deutsch','deutschland','greece','greek','hungary','hungarian','ireland','irish','italy','italian','latvia','latvian','lithuania','lithuanian',
+  'luxembourg','luxembourgish','malta','maltese','netherlands','dutch','holland','poland','polish','portugal','portuguese','romania','romanian','slovakia','slovak','slovenia','slovenian','slovene',
+  'spain','spanish','sweden','swedish','iceland','icelandic','liechtenstein','norway','norwegian','eu','european union'];
+// true = listed country (no extra deposit) · false = not listed · null = unknown / empty
+function ctCountryExempt(n){
+  n=String(n||'').trim();if(!n)return null;
+  var up=n.toUpperCase().replace(/[^A-Z]/g,'');
+  if(up.length<=3&&CT_XDEP_CODES.indexOf(up)>=0)return true;
+  var lo=n.toLowerCase().replace(/[^a-z ]/g,' ').replace(/\s+/g,' ').trim();
+  if(CT_XDEP_WORDS.indexOf(lo)>=0)return true;
+  for(var i=0;i<CT_XDEP_WORDS.length;i++){var w=CT_XDEP_WORDS[i];if(w.length>4&&(' '+lo+' ').indexOf(' '+w+' ')>=0)return true;}
+  return false;
+}
+function ctNat(){try{var d=co.drivers&&co.drivers[0];return (d&&d.nationality)||(co.v&&(co.v.nationality||co.v.nat))||'';}catch(e){return '';}}
+function ctXdepButtons(c){
+  var v=c.country_deposit,nat=ctNat(),ex=ctCountryExempt(nat);
+  return '<div style="display:flex;flex-wrap:wrap;gap:6px;">'
+    +ctBtn(v==='received',(v==='received'?'✓ ':'')+'N$7,500 received',"ctSet('country_deposit','received')")
+    +ctBtn(v==='exempt',(v==='exempt'?'✓ ':'')+'Not needed — listed country'+(c.country_deposit_auto&&v==='exempt'?' (from passport)':''),"ctSet('country_deposit','exempt')",'no')
+    +'</div><div style="font-size:12px;color:var(--g5);margin-top:5px;">Nationality: <strong>'+_bx(nat||'not read yet')+'</strong>'
+    +(ex===false?' · <span style="color:var(--re);font-weight:900;">not on the list — N$7,500 applies unless a permanent resident of a listed country</span>':'')
+    +' · No extra deposit for USA, Canada, Switzerland, EU/EEA, UK, Australia, NZ, Japan, Singapore, Russia.</div>';
+}
 // The open contract questions, each with its own buttons (for the box below)
 function ctOpenQuestions(){
   var c=co.contract=co.contract||{},q=[],days=ctDays();
@@ -4821,6 +4852,7 @@ function ctOpenQuestions(){
   if(c.addon_windscreen!==true&&c.addon_windscreen!==false)q.push({s:'Windscreen cover',t:'🛞 Windscreen & Tyre cover — N$184/day × '+days+' = '+ctMoney(184*days),h:ctYesNo(c,'addon_windscreen')});
   if(ctCampingBooked()&&c.addon_equipment!==true&&c.addon_equipment!==false)q.push({s:'Camping cover',t:'🏕 Camping Equipment cover — N$103.50/day × '+days+' = '+ctMoney(103.5*days),h:ctYesNo(c,'addon_equipment')});
   if(!c.fuel_deposit_received)q.push({s:'Fuel deposit',t:'⛽ Fuel & Admin deposit N$2,500 (every rental)',h:ctGot(c,'fuel_deposit_received')});
+  if(c.country_deposit!=='received'&&c.country_deposit!=='exempt')q.push({s:'Country deposit',t:'🛂 Extra security deposit N$7,500 by country (section 2.1)',h:ctXdepButtons(c)});
   if((co.v.xb||c.cross_border)&&c.cross_border_deposit!==true)q.push({s:'Cross-border deposit',t:'🌍 Cross-border deposit N$30,000 ('+_bx(co.v.xb||c.cross_border)+')',h:ctGot(c,'cross_border_deposit')});
   var n=extraDriverCount();if(n&&c.extra_driver_paid!==true)q.push({s:'Extra driver fee',t:'👤 Extra driver fee '+ctMoney(extraDriverFee())+' ('+n+' × N$280)',h:ctGot(c,'extra_driver_paid')});
   if(!c.deposit_method)q.push({s:'Deposit method',t:'💳 How was the deposit paid?',h:ctMethodButtons(c)});
@@ -4936,6 +4968,7 @@ function ctDepositsHTML(){
     +tick('ct-fdr',!!c.fuel_deposit_received,'⛽ Fuel &amp; Admin deposit — N$2,500.00','Required for every rental · refunded within 7 days after return',c.fuel_deposit_received?'✓ Received':'Required','req')
     +tick('ct-xbd',c.cross_border_deposit===true,'🌍 Cross-border/Damage deposit — N$30,000.00',need?'Required: this booking goes cross-border ('+_bx(co.v.xb||c.cross_border)+')':'Only for travel outside Namibia',c.cross_border_deposit===true?'✓ Received':(need?'Required':'Not needed'),need?'req':'opt')
     +((function(){var n=extraDriverCount();if(!n)return '';return tick('ct-edf',c.extra_driver_paid===true,'\uD83D\uDC64 Extra driver fee \u2014 '+ctMoney(extraDriverFee()),n+' extra driver'+(n===1?'':'s')+' \u00d7 N$280 once-off \u00b7 take this at collection',c.extra_driver_paid?'\u2713 Received':'TAKE PAYMENT','req');})())
+    +'<div id="ct-xdep" style="margin-bottom:8px;padding:10px 12px;border-radius:10px;border:2px solid '+((c.country_deposit==='received'||c.country_deposit==='exempt')?'var(--gb)':'var(--re)')+';background:'+((c.country_deposit==='received'||c.country_deposit==='exempt')?'var(--sg)':'var(--rg)')+';"><div style="font-size:15px;font-weight:900;color:var(--tx);margin-bottom:6px;">🛂 Extra security deposit by country — N$7,500.00 *</div>'+ctXdepButtons(c)+'</div>'
     +'<div class="fi" id="ct-dmethod" style="margin-bottom:8px;padding:10px 12px;border-radius:10px;border:2px solid '+(c.deposit_method?'var(--gb)':'var(--re)')+';background:'+(c.deposit_method?'var(--sg)':'var(--rg)')+';"><label style="font-size:15px;font-weight:900;color:var(--tx);">💳 How was the deposit paid? *</label>'
       +ctMethodButtons(c)
     +'</div>';
@@ -5028,6 +5061,7 @@ function gatherContract(){
   co.contract.client_licence=pd.licNo||'';
   co.contract.client_licence_expiry=pd.licExpiry||'';
   co.contract.client_passport_expiry=pd.ppExpiry||'';
+  if(!co.contract.country_deposit&&ctCountryExempt(pd.nationality||ctNat())===true){co.contract.country_deposit='exempt';co.contract.country_deposit_auto=true;}
   co.contract.fleet_no=co.fn;
   co.contract.vehicle_reg=co.v.reg;
   co.contract.pickup_date=coPickupDate();
@@ -5068,6 +5102,7 @@ function ctMissing(c){
   if(c.addon_windscreen!==true&&c.addon_windscreen!==false)m.push('🛞 Windscreen & Tyre cover: Taken or Declined?');
   if(ctCampingBooked()&&c.addon_equipment!==true&&c.addon_equipment!==false)m.push('🏕 Camping Equipment cover: Taken or Declined?');
   if(!c.fuel_deposit_received)m.push('⛽ N$2,500 Fuel & Admin deposit not ticked (compulsory)');
+  if(c.country_deposit!=='received'&&c.country_deposit!=='exempt')m.push('🛂 N$7,500 country deposit: Received or Not needed?');
   if(!c.deposit_method)m.push('💳 Deposit method not selected (Adumo, Swipe, Cash…)');
   if((co.v.xb||c.cross_border)&&c.cross_border_deposit!==true)m.push('🌍 N$30,000 Cross-border deposit not ticked (travel to '+(co.v.xb||c.cross_border)+')');
   (function(){var n=extraDriverCount();
@@ -5152,6 +5187,15 @@ function _previewAndSignContract(){
         </div>
       </div>
 
+      <!-- Initials (go into every INITIAL HERE box) -->
+      <div style="background:#f9f9f9;border-bottom:2px solid #e0e0e0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px 4px;border-bottom:1px solid #e0e0e0;">
+          <div style="font-size:14px;font-weight:700;color:#333;text-transform:uppercase;letter-spacing:.4px;">✍️ Your initials <span style="font-weight:600;text-transform:none;color:#777;">— placed in every "Initial here" box</span></div>
+          <button onclick="window._ctIniClr&&window._ctIniClr()" style="background:#f5f5f5;border:1px solid #ccc;border-radius:6px;padding:5px 12px;font-size:14px;font-weight:700;color:#555;cursor:pointer;">Clear</button>
+        </div>
+        <canvas id="ct-ini-canvas" style="display:block;width:260px;max-width:100%;height:120px;margin:6px 14px;border:2px dashed #bbb;border-radius:8px;cursor:crosshair;touch-action:none;background:#fff;"></canvas>
+      </div>
+
       <!-- Signature canvas -->
       <div style="background:#f9f9f9;border-bottom:2px solid #e0e0e0;">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px 4px;border-bottom:1px solid #e0e0e0;">
@@ -5176,6 +5220,9 @@ function _previewAndSignContract(){
   // Top bar shortcut to the signature
   (function(){var top=modal.firstElementChild;if(!top)return;var b=document.createElement('button');b.textContent='Go to signature ↓';b.setAttribute('style','background:#3ddc84;border:none;border-radius:8px;color:#052010;padding:8px 12px;font-weight:800;font-size:14px;margin-left:auto;margin-right:8px;cursor:pointer;');b.onclick=function(){var bar=document.getElementById('ct-sig-bar');if(bar)bar.scrollIntoView({behavior:'smooth',block:'start'});};var last=top.lastElementChild;top.insertBefore(b,last);})();
 
+  // Init initials pad (strokes kept on the check-out, like the signature)
+  try{var _ip=ctPad(document.getElementById('ct-ini-canvas'),(co._iniStrokes=Array.isArray(co._iniStrokes)?co._iniStrokes:[]));
+    window._ctHasIni=_ip.has;window._ctGetIni=_ip.get;window._ctIniClr=_ip.clr;}catch(e){console.error('initials pad',e);}
   // Init signature canvas
   const cv=document.getElementById('ct-sig-canvas');
   const DPR=window.devicePixelRatio||1;
@@ -5283,6 +5330,41 @@ function _previewAndSignContract(){
 
 function clrContractSig(){ window._ctClr&&window._ctClr(); }
 
+// Small drawing pad (used for the initials). Keeps the strokes as points so it can be
+// repainted whenever iOS throws the picture away; saves the writing trimmed to its size.
+function ctPad(cv,strokes){
+  if(!cv)return {has:function(){return false;},get:function(){return null;},clr:function(){}};
+  var DPR=window.devicePixelRatio||1,ctx=cv.getContext('2d'),cur=null,drawing=false;
+  function fit(){var w=Math.round((cv.offsetWidth||260)*DPR),h=Math.round((cv.offsetHeight||120)*DPR);if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h;}}
+  function paint(){fit();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,cv.width,cv.height);ctx.scale(DPR,DPR);
+    ctx.strokeStyle='#1d6b3d';ctx.lineWidth=2.6;ctx.lineCap='round';ctx.lineJoin='round';
+    for(var s=0;s<strokes.length;s++){var p=strokes[s];if(!p.length)continue;ctx.beginPath();ctx.moveTo(p[0].x,p[0].y);
+      if(p.length===1)ctx.lineTo(p[0].x+0.1,p[0].y);else for(var i=1;i<p.length;i++)ctx.lineTo(p[i].x,p[i].y);ctx.stroke();}}
+  function pt(x,y){var r=cv.getBoundingClientRect();return {x:x-r.left,y:y-r.top};}
+  function begin(p){drawing=true;cur=[p];strokes.push(cur);paint();}
+  function ext(p){if(!drawing||!cur)return;cur.push(p);paint();}
+  function end(){drawing=false;cur=null;}
+  cv.addEventListener('mousedown',function(e){e.preventDefault();begin(pt(e.clientX,e.clientY));});
+  cv.addEventListener('mousemove',function(e){ext(pt(e.clientX,e.clientY));});
+  cv.addEventListener('mouseup',end);cv.addEventListener('mouseleave',end);
+  cv.addEventListener('touchstart',function(e){e.preventDefault();var t=e.touches[0];begin(pt(t.clientX,t.clientY));},{passive:false});
+  cv.addEventListener('touchmove',function(e){e.preventDefault();var t=e.touches[0];ext(pt(t.clientX,t.clientY));},{passive:false});
+  cv.addEventListener('touchend',end,{passive:false});
+  setTimeout(paint,0);
+  var iv=setInterval(function(){if(!document.body.contains(cv)){clearInterval(iv);return;}if(!drawing&&strokes.length)paint();},400);
+  return {
+    has:function(){return strokes.length>0;},
+    clr:function(){strokes.length=0;cur=null;paint();},
+    get:function(){paint();
+      var minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+      strokes.forEach(function(a){a.forEach(function(q){if(q.x<minX)minX=q.x;if(q.x>maxX)maxX=q.x;if(q.y<minY)minY=q.y;if(q.y>maxY)maxY=q.y;});});
+      if(minX>maxX)return cv.toDataURL('image/png');
+      var pad=6,cw=cv.width/DPR,ch=cv.height/DPR;minX=Math.max(0,minX-pad);minY=Math.max(0,minY-pad);maxX=Math.min(cw,maxX+pad);maxY=Math.min(ch,maxY+pad);
+      var w=Math.max(1,Math.round((maxX-minX)*DPR)),h=Math.max(1,Math.round((maxY-minY)*DPR)),o=document.createElement('canvas');o.width=w;o.height=h;
+      o.getContext('2d').drawImage(cv,Math.round(minX*DPR),Math.round(minY*DPR),w,h,0,0,w,h);return o.toDataURL('image/png');}
+  };
+}
+
 // Typed name must match the client (ignores capitals, spaces, dashes and accents)
 // Does the name the client typed look like the name on their passport?
 // Deliberately forgiving: clients mistype, keyboards autocorrect, and the passport
@@ -5369,6 +5451,12 @@ async function submitContractSig(){
     setTimeout(()=>{nameInput.style.border='2px solid #1e8449';},2500);
     return;
   }
+  if(window._ctHasIni&&!window._ctHasIni()){
+    const ic=document.getElementById('ct-ini-canvas');
+    if(ic){try{ic.scrollIntoView({behavior:'smooth',block:'center'});}catch(e){}ic.style.outline='3px solid #e74c3c';setTimeout(()=>ic.style.outline='',1500);}
+    toast('Please write your initials in the small box first','err');
+    return;
+  }
   if(!window._ctHasSig||!window._ctHasSig()){
     const cv=document.getElementById('ct-sig-canvas');
     if(cv){try{cv.scrollIntoView({behavior:'smooth',block:'center'});}catch(e){}cv.style.outline='3px solid #e74c3c';setTimeout(()=>cv.style.outline='',1200);}
@@ -5380,6 +5468,7 @@ async function submitContractSig(){
   // Store the typed name for the contract record
   co.contract=co.contract||{};
   co.contract.client_name_confirmed=typedName;
+  try{if(window._ctGetIni)co.contract.client_initials_url=window._ctGetIni();}catch(e){}
   const sigData=window._ctGetSig();
   document.getElementById('contract-modal').remove();
   await signContract(sigData);
@@ -5400,7 +5489,7 @@ async function signContract(sigData){
   // Build final HTML
   const finalHTML=buildContractHTML(co.contract,sigData);
   co.contract.contract_html=finalHTML;
-  try{co._sigStrokes=[];}catch(e){}   // signed and filed: the working copy of the strokes is done with
+  try{co._sigStrokes=[];co._iniStrokes=[];}catch(e){}   // signed and filed: the working copy of the strokes is done with
   // Upload sig
   const sigBlob=await(await fetch(sigData)).blob();
   const cln=(co.clientName||'unknown').replace(/[^a-zA-Z0-9]/g,'_');
@@ -9841,6 +9930,10 @@ var GR_SIG='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAaQAAABxCAYAAACayNcdAA
 // GoRent Namibia logo (contract letterhead)
 var GR_LOGO='data:image/jpeg;base64,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';
 function buildContractHTML(c,sigUrl){
+  // "INITIAL HERE" — one per page of the paper agreement, with the client's initials once signed
+  const ini=()=>`<div style="display:flex;justify-content:flex-end;margin:6px 0 14px;"><div style="border:1.5px solid #111;border-radius:4px;min-width:120px;height:46px;padding:2px 8px;display:flex;align-items:center;justify-content:center;gap:8px;background:#fff;">
+      <span style="font-size:10px;font-weight:800;color:#111;letter-spacing:.4px;">INITIAL HERE</span>
+      ${c.client_initials_url?`<img src="${c.client_initials_url}" alt="Renter initials" style="max-height:40px;max-width:90px;display:block;">`:''}</div></div>`;
   const fD=d=>d?new Date(d+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}):'';
   const fDT=d=>d?new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
   const days=c.total_days||0;
@@ -10003,6 +10096,12 @@ function buildContractHTML(c,sigUrl){
         <div style="font-size:10.5px;line-height:1.5;"><strong>Fuel &amp; Admin Deposit (N$2,500.00) received</strong>${c.deposit_method?' — paid by <strong>'+c.deposit_method+'</strong>':''}<br>
         <span style="font-size:9.5px;color:#555;">Refunded within 7 days of the vehicle's return. Any fuel shortage (fill-up cost) and admin costs (fill-up fee) will be deducted from this deposit before the balance is refunded.</span></div>
       </div>
+      <!-- Country deposit (2.1) -->
+      <div style="display:flex;align-items:flex-start;gap:6px;padding:7px 8px;border:1px solid #ccc;border-radius:4px;background:${c.country_deposit==='received'?'#f0f9f4;border-color:#1e8449':'#fff'};margin-bottom:5px;">
+        ${chkBox(c.country_deposit==='received')}
+        <div style="font-size:10.5px;line-height:1.5;"><strong>Additional Security Deposit by Country (N$7,500.00) received</strong><br>
+        <span style="font-size:9.5px;color:#555;">${c.country_deposit==='exempt'?'Not applicable — citizen or permanent resident of a country listed in Section 2.1'+(c.client_nationality?' ('+c.client_nationality+')':'')+'.':'See Section 2.1. Fully refunded once the vehicle is returned undamaged and all return conditions are met.'}</span></div>
+      </div>
     </div>
     <div>
       <!-- Windscreen add-on -->
@@ -10037,6 +10136,7 @@ function buildContractHTML(c,sigUrl){
     <strong>No additional deposit:</strong> citizens or permanent residents of the United States of America, Canada, Switzerland, European Union member states &amp; EEA countries, the United Kingdom, Australia, New Zealand, Japan, Singapore and the Russian Federation.<br>
     <strong>All other countries — additional N$7,500.00 security deposit</strong> (on top of the N$2,500.00 Fuel &amp; Admin Deposit). Fully refunded once the vehicle is returned undamaged and all return conditions are met.
   </div>
+  ${ini()}
 
   <!-- 3. EXCLUSIONS SUMMARY -->
   <div style="font-size:15px;font-weight:800;border-bottom:2px solid #000;padding-bottom:3px;margin:0 0 10px;">3. VEHICLE INSURANCE EXCLUSIONS — ALWAYS THE RENTER'S COST</div>
@@ -10091,6 +10191,7 @@ function buildContractHTML(c,sigUrl){
   <div style="background:#fff8e6;border:1px solid #e8a000;border-radius:4px;padding:8px 12px;margin-bottom:14px;font-size:13px;line-height:1.5;font-weight:700;">
     IMPORTANT: Namibian insurance covers TWO-VEHICLE COLLISIONS ONLY — both vehicles identifiable. It is NOT fully comprehensive, and must not be confused with the "fully comprehensive" or "all-inclusive" cover common in Europe and other countries — cover here is materially narrower. It does NOT cover single-vehicle incidents, negligence, rollovers, hitting animals or objects, getting stuck, incorrect drive mode selection, or any event in Sections 3 and 5.1 — regardless of insurance option. All such events are entirely the Renter's cost and defined as negligence under Section 5.3.
   </div>
+  ${ini()}
 
   <!-- 5. EXCLUSIONS DETAIL -->
   <div style="font-size:15px;font-weight:800;border-bottom:2px solid #000;padding-bottom:3px;margin:0 0 10px;">5. DETAILED EXCLUSIONS &amp; RENTER RESPONSIBILITIES</div>
@@ -10177,6 +10278,7 @@ function buildContractHTML(c,sigUrl){
     • The vehicle and all associated risk remain the Renter's responsibility until Go Rent formally records the return.<br>
     • After-hours returns: keys must be secured. Risk continues with the Renter until next-business-day GR inspection.
   </div>
+  ${ini()}
 
   <!-- 6. NO-GO AREAS -->
   <div style="font-size:15px;font-weight:800;border-bottom:2px solid #000;padding-bottom:3px;margin:0 0 10px;">6. NO-GO AREAS &amp; TRAVEL OUTSIDE NAMIBIA</div>
@@ -10223,7 +10325,10 @@ function buildContractHTML(c,sigUrl){
     <strong>7.3 EARLY RETURN</strong><br>
     No refund or credit for early return under any circumstances.<br>
     <strong>7.4 FUEL</strong><br>
-    Vehicle must be returned with a full tank of fuel. Failure results in a N$250 fee plus shortfall fuel cost. Wrong fuel (e.g. petrol in diesel) = negligence — Renter bears all repair and recovery costs.<br>
+    Vehicle must be returned with a full tank of fuel. Failure results in a N$250 fee plus shortfall fuel cost. Wrong fuel (e.g. petrol in diesel) = negligence — Renter bears all repair and recovery costs.
+  </div>
+  ${ini()}
+  <div style="font-size:13px;line-height:1.6;margin-bottom:14px;">
     <strong>7.5 CLEANLINESS &amp; FEES</strong><br>
     Excessively dirty vehicle: N$1,750 valet fee. Heavy scratches requiring paint correction: N$3,500 polishing fee. No smoking or vaping inside the vehicle. Burn marks or ash damage: full interior repair cost. Unauthorised stickers, decals or signage: N$400 removal fee per item.<br>
     <strong>7.6 CLAIMS HANDLING FEE</strong><br>
@@ -10274,6 +10379,7 @@ function buildContractHTML(c,sigUrl){
       ${[
         ['Rental period', days?days+' days':'—'],
         ['Fuel & admin deposit', 'N$ 2,500.00'],
+        ['Country security deposit (2.1)', c.country_deposit==='received'?'N$ 7,500.00 received':(c.country_deposit==='exempt'?'Not applicable':'—')],
         ['Cross-border deposit', c.cross_border_deposit?'N$ 30,000.00 received':(c.cross_border?'Not received':'N/A')],
         ['Windscreen & Tyre add-on', c.addon_windscreen?'Selected':'Not selected'],
         ['Camping Equipment cover', !ctCampingBooked()?'N/A — no camping':(c.addon_equipment?'Selected':'Not selected')],
@@ -10324,6 +10430,7 @@ function buildContractHTML(c,sigUrl){
     </div>
   </div>
 
+  ${ini()}
   <div style="text-align:center;margin-top:16px;padding-top:10px;border-top:1px solid #ccc;font-size:13px;color:#777;">
     GO RENT 4X4 RENTALS AND TOURS CC · CC/2021/04371 · Windhoek, Namibia · gorent4x4.com · WhatsApp: +264 81 861 8085
   </div>
