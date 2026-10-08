@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Set new password · Pilot</title>
+<style>
+  :root{--bg:#f4f6f8;--card:#fff;--ink:#14212b;--muted:#5d6b78;--green:#1f7a3a;--red:#b42318;--line:#d5dce3}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:16px}
+  .card{background:var(--card);width:100%;max-width:400px;border-radius:14px;padding:28px 24px;box-shadow:0 4px 24px rgba(0,0,0,.08)}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 20px}
+  label{display:block;font-size:14px;font-weight:600;margin:14px 0 6px}
+  input{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;font-size:16px}
+  input[readonly]{background:#eef1f4;color:var(--muted)}
+  button{margin-top:20px;width:100%;padding:13px;border:0;border-radius:10px;background:var(--green);color:#fff;font-size:16px;font-weight:600;cursor:pointer}
+  button:disabled{opacity:.5;cursor:default}
+  .msg{margin-top:16px;font-size:14px}
+  .err{color:var(--red)}.ok{color:var(--green);font-weight:600}
+  .hint{color:var(--muted);font-size:13px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Set a new password</h1>
+  <p class="sub" id="who">Checking your reset link…</p>
+  <form id="f" autocomplete="on" hidden>
+    <label for="u">Email</label>
+    <input id="u" name="username" type="email" autocomplete="username" readonly>
+    <label for="p1">New password</label>
+    <input id="p1" name="new-password" type="password" autocomplete="new-password" minlength="10" required>
+    <label for="p2">Repeat new password</label>
+    <input id="p2" name="confirm-password" type="password" autocomplete="new-password" minlength="10" required>
+    <div class="hint">In Safari, click into the first box and choose “Use Strong Password”.</div>
+    <button id="b" type="submit">Save new password</button>
+  </form>
+  <div class="msg" id="m"></div>
+</div>
+<script src="supabase.js?v=9e5a9107eb"></script>
+<script>
+(function(){
+  var SB_URL='https://rfzcemsyrcntsunbdvdh.supabase.co';
+  var SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJmemNlbXN5cmNudHN1bmJkdmRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NzY4OTQsImV4cCI6MjA5NjA1Mjg5NH0.8-1uYwEnwAV5_NjCsniLn3iAnsNf8dn8HNCevHKNDRE';
+  // Separate, in-memory session: never touches the tablet's own sign-in on this device.
+  var sb=supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:false,storageKey:'pilot-setpw',detectSessionInUrl:true,autoRefreshToken:false}});
+  var f=document.getElementById('f'),m=document.getElementById('m'),who=document.getElementById('who');
+  function say(t,c){m.className='msg '+(c||'');m.textContent=t;}
+  var h=new URLSearchParams(location.hash.slice(1)),q=new URLSearchParams(location.search);
+  var bad=h.get('error_description')||q.get('error_description');
+  if(bad){who.textContent='This reset link cannot be used.';say(bad.replace(/\+/g,' ')+' — ask for a new reset email.','err');return;}
+  var done=false;
+  function ready(s){
+    if(done||!s||!s.user)return;done=true;
+    who.textContent='For the account below.';
+    document.getElementById('u').value=s.user.email||'';
+    f.hidden=false;document.getElementById('p1').focus();
+    try{history.replaceState(null,'',location.pathname);}catch(e){}
+  }
+  sb.auth.onAuthStateChange(function(ev,s){ready(s);});
+  var code=q.get('code');
+  (code?sb.auth.exchangeCodeForSession(code).then(function(r){return r.data&&r.data.session;}):sb.auth.getSession().then(function(r){return r.data&&r.data.session;}))
+    .then(ready).catch(function(){});
+  setTimeout(function(){if(!done){who.textContent='No valid reset link found.';say('Open this page from the password-reset email. Links work once and expire after about an hour.','err');}},4000);
+  f.addEventListener('submit',function(e){
+    e.preventDefault();
+    var a=document.getElementById('p1').value,b=document.getElementById('p2').value;
+    if(a!==b){say('The two passwords are not the same.','err');return;}
+    if(a.length<10){say('Use at least 10 characters.','err');return;}
+    var btn=document.getElementById('b');btn.disabled=true;say('Saving…');
+    sb.auth.updateUser({password:a}).then(function(r){
+      if(r.error){btn.disabled=false;say(r.error.message,'err');return;}
+      f.querySelectorAll('input').forEach(function(i){i.readOnly=true;});
+      say('✓ Password saved. Sign in on the tablets with this email and the new password.','ok');
+      sb.auth.signOut({scope:'local'}).catch(function(){});
+    });
+  });
+})();
+</script>
+</body>
+</html>
