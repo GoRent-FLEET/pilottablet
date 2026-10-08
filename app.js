@@ -9161,10 +9161,11 @@ async function _thRun(){
   if(_THBusy)return;_THBusy=true;
   try{
     while(_THQ.length){
-      if(photoBusy()){await new Promise(function(r){setTimeout(r,400);});continue;}   // camera / shrinking first
+      if(photoBusy()&&Date.now()-window._photoAt<45000){await new Promise(function(r){setTimeout(r,400);});continue;}   // camera / shrinking first (a cancelled camera no longer holds tiles back for 3 min)
       var k=_THQ.shift(),t=_TH[k];if(!t||t.url||!t.src)continue;
       var u='';
-      try{var b=drDataToBlob(t.src),sm=b&&await compressImg(b,480,0.7);if(sm)u=URL.createObjectURL(sm);}catch(e){}
+      // Never wait for ever: on the Blackview a thumbnail could hang, and then every tile after it stayed dark
+      try{var b=drDataToBlob(t.src),sm=b&&await withTimeout(compressImg(b,480,0.7),6000);if(sm)u=URL.createObjectURL(sm);}catch(e){}
       t.url=u||t.src;t.src=null;
       document.querySelectorAll('img[data-th="'+k+'"]').forEach(function(im){im.src=t.url;im.style.background='';});
       await new Promise(function(r){setTimeout(r,25);});
@@ -9260,35 +9261,58 @@ async function jpegSize(file){
 // The Blackview camera takes very large pictures: decoding one at full size (≈200 MB in memory)
 // froze the tablet for seconds and could crash it. Where the browser can, the picture is now
 // decoded straight at the smaller size, and the canvas memory is handed back right away.
+// Resolve to null if a promise takes longer than ms (some Android browsers never finish a decode).
+function withTimeout(pr,ms){return Promise.race([pr,new Promise(function(r){setTimeout(function(){r(null);},ms);})]);}
+// The fast decode (createImageBitmap at reduced size, 6 Oct) gives an all-black picture in the
+// Blackview's browser: passport and licence photos showed as a black box. Every result is now
+// checked; a black one is thrown away and the picture is decoded the old way, and the fast decode
+// is switched off for the rest of the session on that tablet.
+var IMG_FAST_OK=true;
 async function compressImg(file,maxW,q,byW){
   function lim(w,h){return byW?w:Math.max(w,h);}
-  function toJpeg(src,w,h){
+  // true when the drawn picture is (almost) entirely black
+  function isBlack(cv){
+    try{
+      var t=document.createElement('canvas');t.width=t.height=12;
+      var x=t.getContext('2d');x.drawImage(cv,0,0,12,12);
+      var d=x.getImageData(0,0,12,12).data,mx=0;
+      for(var i=0;i<d.length;i+=4){mx=Math.max(mx,d[i],d[i+1],d[i+2]);if(mx>10)break;}
+      t.width=t.height=0;return mx<=10;
+    }catch(e){return false;}
+  }
+  function toJpeg(src,w,h,check){
     return new Promise(function(res){
       try{
         var r=Math.min(maxW/lim(w,h),1),cv=document.createElement('canvas');
         cv.width=Math.round(w*r);cv.height=Math.round(h*r);
+        if(!cv.width||!cv.height){res(null);return;}
         cv.getContext('2d').drawImage(src,0,0,cv.width,cv.height);
-        cv.toBlob(function(b){cv.width=cv.height=0;res(b);},'image/jpeg',q);
+        if(check&&isBlack(cv)){cv.width=cv.height=0;res(null);return;}
+        cv.toBlob(function(b){cv.width=cv.height=0;res(b&&b.size>0?b:null);},'image/jpeg',q);
       }catch(err){res(null);}
     });
   }
-  if(typeof createImageBitmap==='function'){
+  if(IMG_FAST_OK&&typeof createImageBitmap==='function'){
     try{
-      var sz=await jpegSize(file),opt={imageOrientation:'from-image'};
-      // decode at about twice the target (EXIF rotation can swap width and height); the canvas does the rest
-      if(sz&&lim(sz.w,sz.h)>maxW*1.3){opt.resizeWidth=Math.max(1,Math.round(sz.w*Math.min(1,(maxW*1.4)/Math.min(sz.w,sz.h))));opt.resizeQuality='high';}
-      var bmp=await createImageBitmap(file,opt);
-      var out=await toJpeg(bmp,bmp.width,bmp.height);
-      try{bmp.close();}catch(e){}
+      var out=await withTimeout((async function(){
+        var sz=await jpegSize(file),opt={imageOrientation:'from-image'};
+        // decode at about twice the target (EXIF rotation can swap width and height); the canvas does the rest
+        if(sz&&lim(sz.w,sz.h)>maxW*1.3){opt.resizeWidth=Math.max(1,Math.round(sz.w*Math.min(1,(maxW*1.4)/Math.min(sz.w,sz.h))));opt.resizeQuality='high';}
+        var bmp=await createImageBitmap(file,opt);
+        var o=await toJpeg(bmp,bmp.width,bmp.height,true);
+        try{bmp.close();}catch(e){}
+        return o;
+      })(),8000);
       if(out)return out;
-    }catch(e){}
+      IMG_FAST_OK=false;   // black, empty or too slow: use the old way from now on
+    }catch(e){IMG_FAST_OK=false;}
   }
-  return new Promise(function(res){
+  return withTimeout(new Promise(function(res){
     var img=new Image(),url=URL.createObjectURL(file);
-    img.onload=function(){toJpeg(img,img.naturalWidth||img.width,img.naturalHeight||img.height).then(function(b){URL.revokeObjectURL(url);img.src='';res(b);});};
+    img.onload=function(){toJpeg(img,img.naturalWidth||img.width,img.naturalHeight||img.height,false).then(function(b){URL.revokeObjectURL(url);img.src='';res(b);});};
     img.onerror=function(){URL.revokeObjectURL(url);res(null);};
     img.src=url;
-  });
+  }),30000);
 }
 function showImg(src){
   const m=document.createElement('div');
