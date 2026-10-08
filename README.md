@@ -1,6 +1,6 @@
 # Go Rent 4×4 — Tablet App
 
-Live: https://gorent-fleet.github.io/pilottablet/
+Live: https://selfdrive4x4.github.io/pilottablet/
 
 Files:
 - `index.html` — the page (menus, sign-in screens)
