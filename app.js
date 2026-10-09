@@ -3092,7 +3092,7 @@ function drawCO(){
     else if(coStep===3){_stepLine=5; body=coStepMech();}    // Mechanical
     else if(coStep===4){_stepLine=6; body=coStep4_dmg();}   // Vehicle inspection
     else if(coStep===5){_stepLine=7; body=coStep1()+'<div style="height:14px"></div>'+coStep2();} // Client ID + the contract itself
-    else{_stepLine=8; if(coStep>6)coStep=6; body=coStep5_client();} // Handover & release (Management is part of it now)
+    else{_stepLine=8; if(coStep>6)coStep=6; body=payPanelHTML(co.v)+coStep5_client();} // Handover & release (Management is part of it now)
     _stepLine=9;
     if(!body||body.length<10) body='<div style="padding:20px;color:orange;">Step '+coStep+' returned empty</div>';
   }catch(stepErr){
@@ -3145,6 +3145,7 @@ function drawCO(){
         return '<div class="fh-grid">'
           +nameEditBtn(bkKey(_cov),co.clientName||_cov.cl,'drawCO')
           +(waChip(_cov)||'')
+          +payChip(_cov)
           +'<span onclick="editQuoteNo()" title="Tap to change the quote number"><span class="fh-t">📋 '+_bx(co.quoteNo||_cov.quote||'Add quote no.')+' ✎</span></span>'
           +_fhChip('📅 '+_fhDate(_cov.pu)+' → '+_fhDate(_cov.rt),'','title="'+_bx((_cov.pu||'?')+' → '+(_cov.rt||'?'))+'"')
           +(rentalDays(_cov)?_fhChip('⏱ '+rentalDays(_cov)+' days'):'')
@@ -6517,8 +6518,170 @@ function coFinishCheck(refresh){
     +'</div></div>';
   document.body.appendChild(box);
 }
+// ── PAYMENTS at check-out (owner 2026-10-09) ─────────────────────────────────
+// The client must have paid the full rental before the vehicle is released. Check-out staff
+// (Jo-Jo, Peter, Christina) see what is paid / still owing, record a payment taken at the office
+// (Adumo, Card or Cash) or send a new Adumo payment link. Everything goes through the edge function
+// tablet-payments (status without PIN; record/link need the staff member's PIN). Peter alone can release
+// with money still owing, with a reason — management is alerted.
+var PAY_ST={};
+var PAY_STAFF=['Jo-Jo','Peter','Christina'];
+function payFmt(n){return 'N$ '+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+async function payLoad(bid,force){
+  if(!bid)return null;
+  if(!force&&PAY_ST[bid]&&Date.now()-PAY_ST[bid]._at<60000)return PAY_ST[bid];
+  var res;
+  try{
+    var r=await SB.functions.invoke('tablet-payments',{body:{action:'status',booking_id:String(bid)}});
+    res=r.data; if(r.error){try{res=await r.error.context.json();}catch(_){res={ok:false,error:r.error.message||'Could not reach the server'};}}
+  }catch(e){res={ok:false,error:(e&&e.message)||'Could not reach the server'};}
+  res=res||{ok:false,error:'No answer'}; res._at=Date.now(); PAY_ST[bid]=res;
+  return res;
+}
+function payState(st){
+  if(!st)return {txt:'💳 Checking payment…',col:'#475569',bg:'#f1f5f9',key:'load'};
+  if(!st.ok)return {txt:'💳 Payment: not checked',col:'#92400e',bg:'#fef3c7',key:'err'};
+  if(!st.found||!(st.total>0))return {txt:'💳 Total unknown — check',col:'#92400e',bg:'#fef3c7',key:'unknown'};
+  if(st.owing>0.5)return {txt:'💳 '+payFmt(st.owing)+' NOT PAID',col:'#fff',bg:'#d13636',key:'owing'};
+  return {txt:'💳 Fully paid ✓',col:'#fff',bg:'#12803c',key:'paid'};
+}
+function payChip(v){
+  if(!v||!v.bid)return '';
+  var st=PAY_ST[v.bid], s=payState(st);
+  if(!st)payLoad(v.bid).then(function(){var el=document.getElementById('pay-chip');if(el)el.outerHTML=payChip(v);var p=document.getElementById('co-pay');if(p)p.innerHTML=payPanelInner(v);});
+  return '<span id="pay-chip" onclick="coGoStep(6)" title="Payments — tap to open on the Handover step" class="'+(s.key==='owing'?'disc-flash':'')+'" style="cursor:pointer;background:'+s.bg+';color:'+s.col+';border:1px solid '+s.bg+';font-weight:900;"><span class="fh-t">'+_bx(s.txt)+'</span></span>';
+}
+function payPanelHTML(v){ return '<div id="co-pay" style="margin-bottom:14px;">'+payPanelInner(v)+'</div>'; }
+function payPanelInner(v){
+  var st=PAY_ST[v.bid], s=payState(st);
+  var box='background:#fff;border:3px solid '+(s.key==='paid'?'#12803c':s.key==='owing'?'#d13636':'#e0a400')+';border-radius:14px;padding:14px 16px;';
+  var h='<div style="'+box+'"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><div style="font-size:19px;font-weight:900;flex:1;">💳 Payments — '+_bx((st&&st.client)||v.cl||'')+'</div>'
+    +'<button onclick="payRefresh(\''+_bx(v.bid)+'\')" style="padding:8px 14px;border-radius:10px;border:2px solid var(--g3);background:var(--g0);font-size:14px;font-weight:800;cursor:pointer;">↻ Refresh</button></div>';
+  if(!st)return h+'<div style="font-size:15px;color:#475569;">Checking payments…</div></div>';
+  if(!st.ok)return h+'<div style="font-size:15px;color:#92400e;font-weight:800;">Could not check payments ('+_bx(st.error||'')+'). Check with the office before releasing the vehicle.</div></div>';
+  if(!st.live)h+='<div style="background:#fde68a;color:#78350f;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:800;margin-bottom:8px;">TEST MODE — Adumo is not connected yet; payment links do not take real money.</div>';
+  var cell=function(l,v2,c){return '<div style="flex:1;min-width:130px;background:var(--g0);border-radius:10px;padding:8px 10px;text-align:center;"><div style="font-size:12px;font-weight:800;color:#475569;">'+l+'</div><div style="font-size:20px;font-weight:900;color:'+(c||'#111')+';">'+v2+'</div></div>';};
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">'
+    +cell('Rental total',st.total>0?payFmt(st.total):'unknown')
+    +cell('Paid',payFmt(st.paid),'#12803c')
+    +cell('Still to pay',st.owing==null?'?':st.owing>0.5?payFmt(st.owing):'0 ✓',st.owing>0.5?'#d13636':'#12803c')
+    +cell('Deposits held',payFmt(st.security_held),'#1d4ed8')+'</div>';
+  if(st.paid_source==='booking record')h+='<div style="font-size:13px;color:#92400e;margin-bottom:8px;">Paid amount is from the booking record (deposit typed on the booking'+(st.deposit_via?', '+_bx(st.deposit_via):'')+') — not confirmed by the payment history.</div>';
+  if(st.owing>0.5)h+='<div style="background:#fee2e2;border:2px solid #d13636;border-radius:10px;padding:10px 12px;font-size:16px;font-weight:900;color:#991b1b;margin-bottom:10px;">⛔ '+payFmt(st.owing)+' must be paid before the vehicle is released.</div>';
+  else if(st.total>0)h+='<div style="background:#dcfce7;border:2px solid #12803c;border-radius:10px;padding:10px 12px;font-size:16px;font-weight:900;color:#14532d;margin-bottom:10px;">✅ Rental fully paid — the vehicle can be released.</div>';
+  if(st.link){var ls=st.link.status;h+='<div style="font-size:13px;color:#475569;margin-bottom:8px;">Last payment link: '+(st.link.kind==='balance'?'balance':'deposit')+' '+payFmt(st.link.amount)+' — <b>'+(ls==='open'?'open (not paid yet)':ls==='expired'?'EXPIRED':ls==='paid'?'PAID':ls)+'</b></div>';}
+  var can=APP_USER&&PAY_STAFF.indexOf(APP_USER.name)>=0;
+  if(st.owing>0.5||!(st.total>0)){
+    h+=can?'<div style="display:flex;gap:10px;flex-wrap:wrap;">'
+      +'<button onclick="payRecordOpen(\''+_bx(v.bid)+'\')" style="flex:1;min-width:200px;padding:16px;border-radius:12px;border:none;background:#12803c;color:#fff;font-size:17px;font-weight:900;cursor:pointer;">💵 Client paid at the office</button>'
+      +(st.has_quote?'<button onclick="payLinkOpen(\''+_bx(v.bid)+'\')" style="flex:1;min-width:200px;padding:16px;border-radius:12px;border:2px solid #1d4ed8;background:#eff6ff;color:#1d4ed8;font-size:17px;font-weight:900;cursor:pointer;">🔗 Send Adumo payment link</button>':'')
+      +'</div>':'<div style="font-size:14px;font-weight:800;color:#475569;">Only '+PAY_STAFF.join(', ')+' can take payments — call one of them.</div>';
+  }
+  if(st.rows&&st.rows.length){
+    var CAT={booking_deposit:'Booking deposit',rental_payment:'Balance',security_fuel:'Fuel & admin deposit',security_cross_border:'Cross-border deposit',security_other:'Deposit',other:'Other'};
+    var MET={adumo_link:'Adumo link',adumo:'Adumo',card_swipe:'Card',cash:'Cash',eft:'EFT',other:'Other'};
+    h+='<div style="margin-top:12px;font-size:12px;font-weight:800;color:#475569;">PAYMENT HISTORY</div><table style="width:100%;border-collapse:collapse;font-size:14px;">'
+      +st.rows.map(function(r){return '<tr style="border-top:1px solid var(--g2);"><td style="padding:6px 4px;">'+new Date(r.at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})+'</td><td style="padding:6px 4px;">'+(r.dir==='out'?'<b style="color:#d13636">Refund</b> ':'')+_bx(CAT[r.cat]||r.cat)+(r.test?' <b style="color:#92400e">TEST</b>':'')+'</td><td style="padding:6px 4px;">'+_bx(MET[r.method]||r.method)+'</td><td style="padding:6px 4px;text-align:right;font-weight:900;color:'+(r.dir==='out'?'#d13636':'#12803c')+';">'+(r.dir==='out'?'−':'')+payFmt(r.amount)+'</td></tr>';}).join('')+'</table>';
+  }
+  return h+'</div>';
+}
+async function payRefresh(bid){
+  var p=document.getElementById('co-pay'); if(p)p.innerHTML='<div style="padding:14px;color:#475569;font-size:15px;">Checking payments…</div>';
+  await payLoad(bid,true);
+  if(co&&co.v&&co.v.bid===bid){ if(p)p.innerHTML=payPanelInner(co.v); var c=document.getElementById('pay-chip'); if(c)c.outerHTML=payChip(co.v); }
+}
+// Small full-screen form (amount, method, reference, PIN)
+function payForm(o){
+  return new Promise(function(done){
+    var old=document.getElementById('pay-form');if(old)old.remove();
+    var w=document.createElement('div');w.id='pay-form';
+    w.setAttribute('style','position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;');
+    var inp='width:100%;box-sizing:border-box;font-size:22px;font-weight:900;padding:12px;border-radius:10px;border:2px solid var(--g3);';
+    var meth=o.methods?'<div style="font-size:14px;font-weight:800;margin:12px 0 6px;">How did the client pay?</div><div style="display:flex;gap:8px;">'
+      +[['adumo','Adumo'],['card','Card'],['cash','Cash']].map(function(m){return '<button data-m="'+m[0]+'" class="pf-m" style="flex:1;padding:16px;border-radius:12px;border:2px solid #cbd5e1;background:#f8fafc;font-size:18px;font-weight:900;cursor:pointer;">'+m[1]+'</button>';}).join('')+'</div>':'';
+    w.innerHTML='<div style="background:#fff;color:#111;border-radius:16px;max-width:520px;width:100%;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.4);border-top:6px solid #12803c;">'
+      +'<div style="font-size:19px;font-weight:900;margin-bottom:6px;">'+_bx(o.title)+'</div><div style="font-size:14px;color:#475569;margin-bottom:10px;white-space:pre-line;">'+_bx(o.text||'')+'</div>'
+      +'<div style="font-size:14px;font-weight:800;margin-bottom:6px;">Amount (N$)</div><input id="pf-amt" type="number" inputmode="decimal" step="0.01" value="'+(o.amount||'')+'" style="'+inp+'">'
+      +meth
+      +(o.reference?'<div style="font-size:14px;font-weight:800;margin:12px 0 6px;">Slip / reference number (optional)</div><input id="pf-ref" style="'+inp+'font-size:18px;">':'')
+      +'<div style="font-size:14px;font-weight:800;margin:12px 0 6px;">'+_bx((APP_USER&&APP_USER.name)||'')+' — your PIN</div><input id="pf-pin" type="password" inputmode="numeric" autocomplete="off" style="'+inp+'letter-spacing:6px;">'
+      +'<div id="pf-err" style="color:#d13636;font-weight:900;min-height:22px;margin-top:8px;"></div>'
+      +'<div style="display:flex;gap:10px;margin-top:6px;"><button id="pf-no" style="flex:1;padding:16px;border-radius:12px;border:2px solid #cbd5e1;background:#f8fafc;font-size:16px;font-weight:800;">Cancel</button>'
+      +'<button id="pf-yes" style="flex:1.4;padding:16px;border-radius:12px;border:none;background:#12803c;color:#fff;font-size:16px;font-weight:900;">'+_bx(o.ok)+'</button></div></div>';
+    document.body.appendChild(w);
+    var method='';
+    w.querySelectorAll('.pf-m').forEach(function(b){b.onclick=function(){method=b.dataset.m;w.querySelectorAll('.pf-m').forEach(function(x){var on=x===b;x.style.background=on?'#12803c':'#f8fafc';x.style.color=on?'#fff':'#111';x.style.borderColor=on?'#0a5c2a':'#cbd5e1';});};});
+    w.querySelector('#pf-no').onclick=function(){w.remove();done(null);};
+    var busy=false, yes=w.querySelector('#pf-yes');
+    yes.onclick=async function(){
+      if(busy)return;
+      var a=Math.round(Number(w.querySelector('#pf-amt').value)*100)/100, pin=String(w.querySelector('#pf-pin').value||'').trim(), err=w.querySelector('#pf-err');
+      if(!(a>0)){err.textContent='Enter the amount';return;}
+      if(o.methods&&!method){err.textContent='Choose Adumo, Card or Cash';return;}
+      if(!pin){err.textContent='Type your PIN';return;}
+      var ref=w.querySelector('#pf-ref');
+      var f={amount:a,method:method,pin:pin,reference:ref?ref.value.trim():''};
+      busy=true; yes.disabled=true; err.style.color='#475569'; err.textContent=o.busyText||'Saving…';
+      var r=await o.submit(f);
+      busy=false; yes.disabled=false; err.style.color='#d13636';
+      if(!r||!r.ok){ err.textContent=(r&&r.error)||'Not saved'; var pi=w.querySelector('#pf-pin'); if(/PIN/i.test(err.textContent)&&pi){pi.value='';pi.focus();} return; }
+      w.remove(); done({form:f,res:r});
+    };
+    setTimeout(function(){try{w.querySelector('#pf-amt').focus();}catch(e){}},60);
+  });
+}
+async function payCall(body){
+  var res;
+  try{var r=await SB.functions.invoke('tablet-payments',{body:body});res=r.data;if(r.error){try{res=await r.error.context.json();}catch(_){res={ok:false,error:r.error.message||'Could not reach the server'};}}}
+  catch(e){res={ok:false,error:(e&&e.message)||'Could not reach the server'};}
+  return res||{ok:false,error:'No answer'};
+}
+async function payRecordOpen(bid){
+  var st=PAY_ST[bid]||await payLoad(bid,true);
+  var x=await payForm({title:'💵 Client paid at the office',text:'Record money the client paid here (card machine, cash, or Adumo at the office).',amount:st&&st.owing>0?st.owing:'',methods:true,reference:true,ok:'Save payment',
+    submit:function(f){return payCall({action:'record',booking_id:bid,name:APP_USER.name,pin:f.pin,amount:f.amount,method:f.method,reference:f.reference});}});
+  if(!x)return;
+  x.res._at=Date.now(); PAY_ST[bid]=x.res;
+  toast('Payment of '+payFmt(x.form.amount)+' saved','ok');
+  if(co&&co.v&&co.v.bid===bid)drawCO();
+}
+async function payLinkOpen(bid){
+  var st=PAY_ST[bid]||await payLoad(bid,true);
+  var x=await payForm({title:'🔗 Send Adumo payment link',text:'A new secure link (valid 24 h) for the balance.'+(st&&st.email?'\nIt is emailed to '+st.email+'.':'\nThere is no email address — you can send it by WhatsApp next.'),amount:st&&st.owing>0?st.owing:'',ok:'Make link',busyText:'Making the link…',
+    submit:function(f){return payCall({action:'link',booking_id:bid,name:APP_USER.name,pin:f.pin,amount:f.amount});}});
+  if(!x)return;
+  var f=x.form, res=x.res; res._at=Date.now(); PAY_ST[bid]=res;
+  var phone=String((res.phone||(co&&co.v&&co.v.phone)||'')).replace(/[^\d]/g,'');
+  var msg=(res.test?'[TEST — no real payment] ':'')+'Hello '+String(res.client||'').split(' ')[0]+', please pay the remaining balance of '+payFmt(f.amount)+' for your Go Rent rental here: '+res.new_link;
+  var a=await askBox({title:res.emailed?'✅ Link emailed to '+res.emailed:'🔗 Payment link made',text:(res.test?'TEST MODE — no real money.\n\n':'')+res.new_link+'\n\nSend it by WhatsApp too?',ok:'Open WhatsApp',cancel:'Done'});
+  if(a.ok)window.open('https://wa.me/'+(phone.length>=8?phone:'')+'?text='+encodeURIComponent(msg),'_blank');
+  if(co&&co.v&&co.v.bid===bid)drawCO();
+}
+// Called by completeCO before anything is saved: true = go ahead
+async function payGate(){
+  if(!co||!co.v||!co.v.bid)return true;
+  var st=await payLoad(co.v.bid,true);
+  if(!st||!st.ok){
+    var a0=await askBox({title:'💳 Payment could not be checked',text:'Payments could not be checked ('+((st&&st.error)||'no answer')+').\n\nOnly release the vehicle if you are sure the client has paid in full.',ok:'Client has paid — continue',cancel:'Go back'});
+    return a0.ok;
+  }
+  if(!(st.total>0)||!(st.owing>0.5))return true;
+  if(!isPeter()){
+    await askBox({title:'⛔ Not fully paid',danger:true,cancel:false,ok:'OK',text:payFmt(st.owing)+' is still to pay.\n\nRecord the payment ("Client paid at the office") or send a new Adumo payment link on the Handover step. Only Peter can release a vehicle that is not fully paid.'});
+    coGoStep(6); return false;
+  }
+  var a=await askBox({title:'⚠ Release with '+payFmt(st.owing)+' unpaid?',danger:true,ok:'Release anyway',text:'The rental is not fully paid. Management is alerted.',reason:'Why is the vehicle released before payment?',minReason:5});
+  if(!a.ok)return false;
+  co.payOverride={by:APP_USER.name,at:new Date().toISOString(),reason:a.reason,owing:st.owing};
+  try{SB.from('management_alerts').insert({booking_id:bkKey(co.v),fleet_no:co.fn,client:co.v.cl,received_by:APP_USER.name,
+    message:'RELEASED NOT FULLY PAID — '+co.fn+'/'+co.v.cl+' ('+co.v.bid+'): '+payFmt(st.owing)+' still to pay. Released by '+APP_USER.name+': '+a.reason,
+    created_at:new Date().toISOString()}).then(function(){},function(){});}catch(e){}
+  return true;
+}
+
 async function completeCO(){
   if(!drOnline()){askBox({title:'📶 No internet',cancel:false,ok:'OK',text:'Everything captured is kept safe on this device and sent to the office automatically once connected.\n\nFinish the check-out when the internet is back.'});return;}
+  if(!(await payGate()))return;   // the rental must be paid in full before release (Peter can override)
   var _stBefore=co.v.st;
   co._done=true;
   try{localStorage.removeItem(ipKey(co.fn));}catch(e){}
