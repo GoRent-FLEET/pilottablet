@@ -4786,9 +4786,18 @@ var EXTRA_DRIVER_FEE=220, EXTRA_DRIVER_FREE=1;
 function extraDriverCount(){
   try{ return (co.drivers||[]).slice(1).filter(function(d){return d&&d.name;}).length; }catch(e){ return 0; }
 }
+// Driver fee and free drivers follow the office Price list (app_settings.price_list) when it can be read.
+function loadDriverPrices(){
+  try{ SB.from('app_settings').select('value').eq('key','price_list').maybeSingle().then(function(r){
+    var v=r&&r.data&&r.data.value; if(!v) return;
+    var f=Number(v.driverFee), n=Number(v.driversFree);
+    if(isFinite(f)&&f>=0) EXTRA_DRIVER_FEE=f; if(isFinite(n)&&n>=0) EXTRA_DRIVER_FREE=Math.floor(n);
+  },function(){}); }catch(e){}
+}
+setTimeout(loadDriverPrices,3000); setInterval(loadDriverPrices,30*60*1000);
 function extraDriverCharged(n){ if(n===undefined)n=extraDriverCount(); return Math.max(0,n-EXTRA_DRIVER_FREE); }
 function extraDriverFee(){ return extraDriverCharged()*EXTRA_DRIVER_FEE; }
-function extraDriverTxt(){ var n=extraDriverCount(),k=extraDriverCharged(n); return n+' extra driver'+(n===1?'':'s')+' · first free · '+k+' × N$'+EXTRA_DRIVER_FEE; }
+function extraDriverTxt(){ var n=extraDriverCount(),k=extraDriverCharged(n); return n+' extra driver'+(n===1?'':'s')+(EXTRA_DRIVER_FREE?' · first '+(EXTRA_DRIVER_FREE===1?'':EXTRA_DRIVER_FREE+' ')+'free':'')+' · '+k+' × N$'+EXTRA_DRIVER_FEE; }
 
 // ── Contract questions as big buttons ──
 // Staff kept getting stuck at the contract: the insurance and deposit-method dropdowns were easy
@@ -10220,7 +10229,7 @@ function buildContractHTML(c,sigUrl){
   <div style="font-size:14px;font-weight:700;margin-bottom:4px;">1.5 ADDITIONAL DRIVERS</div>
   <div style="font-size:13px;color:#333;margin-bottom:6px;line-height:1.5;">
     Only persons listed below — plus the Renter — may drive the vehicle. Each must present a valid licence at pick-up. The Renter remains fully liable for any breach by an additional driver.<br>
-    ${(c.extra_driver_fee!==undefined&&c.extra_driver_count&&c.extra_driver_fee===c.extra_driver_count*280)?'Go Rent charges <strong>N$280.00 per additional driver</strong> (once-off fee per rental period), payable at vehicle collection.':'The first additional driver is <strong>free</strong>. Go Rent charges <strong>N$'+EXTRA_DRIVER_FEE+'.00 for each further additional driver</strong> (once-off fee per rental period), payable at vehicle collection.'}
+    ${(c.extra_driver_fee!==undefined&&c.extra_driver_count&&c.extra_driver_fee===c.extra_driver_count*280)?'Go Rent charges <strong>N$280.00 per additional driver</strong> (once-off fee per rental period), payable at vehicle collection.':(EXTRA_DRIVER_FREE?(EXTRA_DRIVER_FREE===1?'The first additional driver is <strong>free</strong>. ':'The first '+EXTRA_DRIVER_FREE+' additional drivers are <strong>free</strong>. '):'')+'Go Rent charges <strong>N$'+EXTRA_DRIVER_FEE+'.00 for each '+(EXTRA_DRIVER_FREE?'further ':'')+'additional driver</strong> (once-off fee per rental period), payable at vehicle collection.'}
   </div>
   ${addlDrivers}
   ${(function(){
