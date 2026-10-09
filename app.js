@@ -4778,14 +4778,17 @@ function ctMoney(n){return 'N$ '+Number(n||0).toLocaleString('en-US',{minimumFra
 function ctDays(){var _pu=coPickupDate();return _pu&&co.v.rt?Math.max(1,Math.round((new Date(co.v.rt)-new Date(_pu))/86400000)):0;}
 function ctSet(k,v){(co.contract=co.contract||{})[k]=v;if(k==='country_deposit')co.contract.country_deposit_auto=false;if(k==='insurance_option'){var o=CT_INS[v];co.contract.deposit_amount=o?o.dep:null;}drawCO();try{ctAskRefresh();}catch(e){}}
 // ── EXTRA DRIVER FEE ───────────────────────────────────────────────────────
-// N$280 once-off per additional driver, taken at collection. Counted from the drivers
-// actually captured, so nobody has to remember to add it up — and it is flagged red
-// until the money has been taken.
-var EXTRA_DRIVER_FEE=280;
+// The first additional driver (the second driver on the contract) is FREE; every further
+// additional driver is N$220 once-off per rental, taken at collection (owner 2026-10-09; was
+// N$280 for every additional driver). Counted from the drivers actually captured, so nobody
+// has to remember to add it up — and it is flagged red until the money has been taken.
+var EXTRA_DRIVER_FEE=220, EXTRA_DRIVER_FREE=1;
 function extraDriverCount(){
   try{ return (co.drivers||[]).slice(1).filter(function(d){return d&&d.name;}).length; }catch(e){ return 0; }
 }
-function extraDriverFee(){ return extraDriverCount()*EXTRA_DRIVER_FEE; }
+function extraDriverCharged(n){ if(n===undefined)n=extraDriverCount(); return Math.max(0,n-EXTRA_DRIVER_FREE); }
+function extraDriverFee(){ return extraDriverCharged()*EXTRA_DRIVER_FEE; }
+function extraDriverTxt(){ var n=extraDriverCount(),k=extraDriverCharged(n); return n+' extra driver'+(n===1?'':'s')+' · first free · '+k+' × N$'+EXTRA_DRIVER_FEE; }
 
 // ── Contract questions as big buttons ──
 // Staff kept getting stuck at the contract: the insurance and deposit-method dropdowns were easy
@@ -4855,7 +4858,7 @@ function ctOpenQuestions(){
   if(!c.fuel_deposit_received)q.push({s:'Fuel deposit',t:'⛽ Fuel & Admin deposit N$2,500 (every rental)',h:ctGot(c,'fuel_deposit_received')});
   if(c.country_deposit!=='received'&&c.country_deposit!=='exempt')q.push({s:'Country deposit',t:'🛂 Extra security deposit N$7,500 by country (section 2.1)',h:ctXdepButtons(c)});
   if((co.v.xb||c.cross_border)&&c.cross_border_deposit!==true)q.push({s:'Cross-border deposit',t:'🌍 Cross-border deposit N$30,000 ('+_bx(co.v.xb||c.cross_border)+')',h:ctGot(c,'cross_border_deposit')});
-  var n=extraDriverCount();if(n&&c.extra_driver_paid!==true)q.push({s:'Extra driver fee',t:'👤 Extra driver fee '+ctMoney(extraDriverFee())+' ('+n+' × N$280)',h:ctGot(c,'extra_driver_paid')});
+  var n=extraDriverCharged();if(n&&c.extra_driver_paid!==true)q.push({s:'Extra driver fee',t:'👤 Extra driver fee '+ctMoney(extraDriverFee())+' ('+extraDriverTxt()+')',h:ctGot(c,'extra_driver_paid')});
   if(!c.deposit_method)q.push({s:'Deposit method',t:'💳 How was the deposit paid?',h:ctMethodButtons(c)});
   if(rl&&rl!==GR_HQ&&(!c.return_address||!c.return_place_time))q.push({s:'Return place & time',t:'📍 Vehicle returned at '+_bx(rl)+' — exact place and time',
     h:'<textarea placeholder="Lodge name, street, GPS or directions" oninput="(co.contract=co.contract||{}).return_address=this.value" style="width:100%;min-height:56px;padding:9px 11px;border-radius:9px;border:2px solid '+(c.return_address?'var(--gb)':'var(--re)')+';background:var(--g0);color:var(--tx);font-size:15px;margin-bottom:6px;">'+_bx(c.return_address||'')+'</textarea>'
@@ -4968,7 +4971,7 @@ function ctDepositsHTML(){
 
     +tick('ct-fdr',!!c.fuel_deposit_received,'⛽ Fuel &amp; Admin deposit — N$2,500.00','Required for every rental · refunded within 7 days after return',c.fuel_deposit_received?'✓ Received':'Required','req')
     +tick('ct-xbd',c.cross_border_deposit===true,'🌍 Cross-border/Damage deposit — N$30,000.00',need?'Required: this booking goes cross-border ('+_bx(co.v.xb||c.cross_border)+')':'Only for travel outside Namibia',c.cross_border_deposit===true?'✓ Received':(need?'Required':'Not needed'),need?'req':'opt')
-    +((function(){var n=extraDriverCount();if(!n)return '';return tick('ct-edf',c.extra_driver_paid===true,'\uD83D\uDC64 Extra driver fee \u2014 '+ctMoney(extraDriverFee()),n+' extra driver'+(n===1?'':'s')+' \u00d7 N$280 once-off \u00b7 take this at collection',c.extra_driver_paid?'\u2713 Received':'TAKE PAYMENT','req');})())
+    +((function(){var n=extraDriverCharged();if(!n)return '';return tick('ct-edf',c.extra_driver_paid===true,'\uD83D\uDC64 Extra driver fee \u2014 '+ctMoney(extraDriverFee()),extraDriverTxt()+' once-off \u00b7 take this at collection',c.extra_driver_paid?'\u2713 Received':'TAKE PAYMENT','req');})())
     +'<div id="ct-xdep" style="margin-bottom:8px;padding:10px 12px;border-radius:10px;border:2px solid '+((c.country_deposit==='received'||c.country_deposit==='exempt')?'var(--gb)':'var(--re)')+';background:'+((c.country_deposit==='received'||c.country_deposit==='exempt')?'var(--sg)':'var(--rg)')+';"><div style="font-size:15px;font-weight:900;color:var(--tx);margin-bottom:6px;">🛂 Extra security deposit by country — N$7,500.00 *</div>'+ctXdepButtons(c)+'</div>'
     +'<div class="fi" id="ct-dmethod" style="margin-bottom:8px;padding:10px 12px;border-radius:10px;border:2px solid '+(c.deposit_method?'var(--gb)':'var(--re)')+';background:'+(c.deposit_method?'var(--sg)':'var(--rg)')+';"><label style="font-size:15px;font-weight:900;color:var(--tx);">💳 How was the deposit paid? *</label>'
       +ctMethodButtons(c)
@@ -5106,8 +5109,8 @@ function ctMissing(c){
   if(c.country_deposit!=='received'&&c.country_deposit!=='exempt')m.push('🛂 N$7,500 country deposit: Received or Not needed?');
   if(!c.deposit_method)m.push('💳 Deposit method not selected (Adumo, Swipe, Cash…)');
   if((co.v.xb||c.cross_border)&&c.cross_border_deposit!==true)m.push('🌍 N$30,000 Cross-border deposit not ticked (travel to '+(co.v.xb||c.cross_border)+')');
-  (function(){var n=extraDriverCount();
-    if(n&&c.extra_driver_paid!==true)m.push('👤 Extra driver fee '+ctMoney(extraDriverFee())+' not taken ('+n+' extra driver'+(n===1?'':'s')+' × N$280)');
+  (function(){var n=extraDriverCharged();
+    if(n&&c.extra_driver_paid!==true)m.push('👤 Extra driver fee '+ctMoney(extraDriverFee())+' not taken ('+extraDriverTxt()+')');
   })();
   return m;
 }
@@ -6491,8 +6494,8 @@ function coMissing(){
   if(!co.contractSigned&&ctCampingBooked()&&c.addon_equipment!==true&&c.addon_equipment!==false)m.push('🏕 Camping Equipment cover not taken/declined');
   if(!c.fuel_deposit_received)m.push('⛽ Fuel & admin deposit not ticked');
   if(v.xb&&!c.cross_border_deposit)m.push('🌍 Cross-border deposit not ticked');
-  (function(){var n=extraDriverCount();
-    if(n&&c.extra_driver_paid!==true)m.push('👤 Extra driver fee '+ctMoney(extraDriverFee())+' NOT TAKEN ('+n+' × N$280)');
+  (function(){var n=extraDriverCharged();
+    if(n&&c.extra_driver_paid!==true)m.push('👤 Extra driver fee '+ctMoney(extraDriverFee())+' NOT TAKEN ('+extraDriverTxt()+')');
   })();
   if(!co.contractSigned)m.push('✍️ Rental contract NOT SIGNED');
   if(d.wifi!=='ok')m.push('📶 WiFi device not handed over');
@@ -10217,16 +10220,20 @@ function buildContractHTML(c,sigUrl){
   <div style="font-size:14px;font-weight:700;margin-bottom:4px;">1.5 ADDITIONAL DRIVERS</div>
   <div style="font-size:13px;color:#333;margin-bottom:6px;line-height:1.5;">
     Only persons listed below — plus the Renter — may drive the vehicle. Each must present a valid licence at pick-up. The Renter remains fully liable for any breach by an additional driver.<br>
-    Go Rent charges <strong>N$280.00 per additional driver</strong> (once-off fee per rental period), payable at vehicle collection.
+    ${(c.extra_driver_fee!==undefined&&c.extra_driver_count&&c.extra_driver_fee===c.extra_driver_count*280)?'Go Rent charges <strong>N$280.00 per additional driver</strong> (once-off fee per rental period), payable at vehicle collection.':'The first additional driver is <strong>free</strong>. Go Rent charges <strong>N$'+EXTRA_DRIVER_FEE+'.00 for each further additional driver</strong> (once-off fee per rental period), payable at vehicle collection.'}
   </div>
   ${addlDrivers}
   ${(function(){
-    var n=0,paid=false;
-    try{n=(c.extra_driver_count!==undefined)?c.extra_driver_count:extraDriverCount();paid=c.extra_driver_paid===true;}catch(e){}
+    var n=0,paid=false,fee=null;
+    try{n=(c.extra_driver_count!==undefined)?c.extra_driver_count:extraDriverCount();paid=c.extra_driver_paid===true;fee=(c.extra_driver_fee!==undefined)?Number(c.extra_driver_fee):null;}catch(e){}
     if(!n)return '';
-    var tot='N$ '+(n*280).toFixed(2);
+    // Contracts signed before 9 Oct 2026 stored N$280 × every extra driver; keep showing what was signed.
+    var old=fee!==null&&fee===n*280&&fee>0;
+    var k=old?n:Math.max(0,n-EXTRA_DRIVER_FREE), unit=old?280:EXTRA_DRIVER_FEE, amt=fee!==null?fee:k*unit;
+    if(!amt)return '<div style="margin-top:6px;padding:8px 10px;border:1px solid #145c30;border-radius:4px;background:#f2f9f4;font-size:13px;"><strong>Additional driver fee:</strong> none — the first additional driver is free.</div>';
+    var tot='N$ '+amt.toFixed(2);
     return '<div style="margin-top:6px;padding:8px 10px;border:1px solid #145c30;border-radius:4px;background:#f2f9f4;font-size:13px;">'
-      +'<strong>Additional driver fee:</strong> '+n+' \u00d7 N$280.00 = <strong>'+tot+'</strong> (once-off) \u2014 '
+      +'<strong>Additional driver fee:</strong> '+(old?'':'first driver free, ')+k+' \u00d7 N$'+unit+'.00 = <strong>'+tot+'</strong> (once-off) \u2014 '
       +(paid?'<span style="color:#145c30;font-weight:700;">received at collection</span>':'<span style="color:#b91c1c;font-weight:700;">payable at collection</span>')
       +'</div>';
   })()}
