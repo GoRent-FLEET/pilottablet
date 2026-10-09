@@ -4782,7 +4782,7 @@ function ctSet(k,v){(co.contract=co.contract||{})[k]=v;if(k==='country_deposit')
 // additional driver is N$220 once-off per rental, taken at collection (owner 2026-10-09; was
 // N$280 for every additional driver). Counted from the drivers actually captured, so nobody
 // has to remember to add it up — and it is flagged red until the money has been taken.
-var EXTRA_DRIVER_FEE=220, EXTRA_DRIVER_FREE=1;
+var EXTRA_DRIVER_FEE=350, EXTRA_DRIVER_FREE=1; // owner 2026-10-09 11:10: 2 drivers free (renter + 1), 3rd driver onwards N$350 admin fee each
 function extraDriverCount(){
   try{ return (co.drivers||[]).slice(1).filter(function(d){return d&&d.name;}).length; }catch(e){ return 0; }
 }
@@ -10229,7 +10229,7 @@ function buildContractHTML(c,sigUrl){
   <div style="font-size:14px;font-weight:700;margin-bottom:4px;">1.5 ADDITIONAL DRIVERS</div>
   <div style="font-size:13px;color:#333;margin-bottom:6px;line-height:1.5;">
     Only persons listed below — plus the Renter — may drive the vehicle. Each must present a valid licence at pick-up. The Renter remains fully liable for any breach by an additional driver.<br>
-    ${(c.extra_driver_fee!==undefined&&c.extra_driver_count&&c.extra_driver_fee===c.extra_driver_count*280)?'Go Rent charges <strong>N$280.00 per additional driver</strong> (once-off fee per rental period), payable at vehicle collection.':(EXTRA_DRIVER_FREE?(EXTRA_DRIVER_FREE===1?'The first additional driver is <strong>free</strong>. ':'The first '+EXTRA_DRIVER_FREE+' additional drivers are <strong>free</strong>. '):'')+'Go Rent charges <strong>N$'+EXTRA_DRIVER_FEE+'.00 for each '+(EXTRA_DRIVER_FREE?'further ':'')+'additional driver</strong> (once-off fee per rental period), payable at vehicle collection.'}
+    ${(c.extra_driver_fee!==undefined&&c.extra_driver_count&&c.extra_driver_fee===c.extra_driver_count*280)?'Go Rent charges <strong>N$280.00 per additional driver</strong> (once-off fee per rental period), payable at vehicle collection.':(EXTRA_DRIVER_FREE?(EXTRA_DRIVER_FREE===1?'The first additional driver is <strong>free</strong>. ':'The first '+EXTRA_DRIVER_FREE+' additional drivers are <strong>free</strong>. '):'')+'Go Rent charges an <strong>admin fee of N$'+EXTRA_DRIVER_FEE+'.00 for each '+(EXTRA_DRIVER_FREE?'further ':'')+'additional driver</strong> (once-off fee per rental period), payable at vehicle collection.'}
   </div>
   ${addlDrivers}
   ${(function(){
